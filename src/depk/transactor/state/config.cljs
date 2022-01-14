@@ -1,0 +1,30 @@
+(ns depk.transactor.state.config
+  (:require
+   [macchiato.env   :as config]
+   [mount.core      :as mount]
+   [taoensso.timbre :as log]
+   [clojure.string  :as str]))
+
+(def env (atom :local))
+
+(defn use-env
+  [env-kw]
+  (reset! env env-kw))
+
+;; quick and dirty hack
+(defn build-config
+  "build configuration map based on current env."
+  []
+  (let [conf (config/env)
+        e    (str (name @env) "-")]
+    (log/infof "Current environment: %s" @env)
+    (->> (for [[k v] conf]
+           (if (str/starts-with? (name k) e)
+             [(keyword (str/replace-first (name k) e ""))
+              v]
+             [k v]))
+         (into {}))))
+
+(mount/defstate config
+  :start
+  (build-config))

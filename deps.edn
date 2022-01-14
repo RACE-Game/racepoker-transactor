@@ -1,0 +1,29 @@
+{:paths   ["src" "test"],
+
+ :deps    {org.clojure/clojure         {:mvn/version "1.10.3"},
+           org.clojure/clojurescript   {:mvn/version "1.10.879"},
+           org.clojure/core.async      {:mvn/version "1.5.640"},
+           solana-clj/solana-clj       {:local/root "../solana-clj"},
+           com.taoensso/timbre         {:mvn/version "4.10.0"},
+           com.cognitect/transit-clj   {:mvn/version "1.0.324"},
+           macchiato/env               {:mvn/version "0.0.6"},
+           macchiato/core              {:mvn/version "0.2.22"},
+           com.taoensso/sente          {:mvn/version "1.16.2"},
+           org.clojure/spec.alpha      {:mvn/version "0.2.194"},
+           ring-transit/ring-transit   {:mvn/version "0.1.6"},
+           ring/ring-core              {:mvn/version "1.9.0"},
+           ring/ring-defaults          {:mvn/version "0.3.2"},
+           mount/mount                 {:mvn/version "0.1.16"},
+           metosin/reitit              {:mvn/version "0.5.13"},
+           thheller/shadow-cljs        {:mvn/version "2.15.3"},
+           ring-cors/ring-cors         {:mvn/version "0.1.13"},
+           binaryage/devtools          {:mvn/version "1.0.4"},
+           pjstadig/humane-test-output {:mvn/version "0.11.0"}},
+
+ :aliases {:cljs {:jvm-opts ["--add-opens" "java.base/jdk.internal.misc=ALL-UNNAMED"
+                             "-XX:-OmitStackTraceInFastThrow"
+                             "-XX:+TieredCompilation"
+                             "-XX:TieredStopAtLevel=1"
+                             "-Dio.netty.tryReflectionSetAccessible=true"
+                             "-Dorg.slf4j.simpleLogger.defaultLogLevel=debug"
+                             "-Xmx1G"]}}}

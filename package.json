@@ -1,0 +1,36 @@
+{
+  "dependencies": {
+    "@peculiar/webcrypto": "^1.2.3",
+    "@solana/spl-token": "^0.1.8",
+    "@solana/web3.js": "^1.31.0",
+    "aes-js": "^3.1.2",
+    "bn.js": "^5.2.0",
+    "concat-stream": "^2.0.0",
+    "content-type": "^1.0.4",
+    "cookies": "^0.8.0",
+    "crypto": "^1.0.1",
+    "encoding": "^0.1.13",
+    "etag": "^1.8.1",
+    "lru": "^3.1.0",
+    "multiparty": "^4.2.1",
+    "qs": "^6.10.2",
+    "random-bytes": "^1.0.0",
+    "simple-encryptor": "^3.0.0",
+    "tweetnacl": "^1.0.3",
+    "url": "^0.11.0",
+    "uuid": "^8.3.2",
+    "ws": "^7.3.0",
+    "xregexp": "^4.3.0"
+  },
+  "scripts": {
+    "start": "node ./target/main.js",
+    "watch": "shadow-cljs watch app",
+    "compile": "shadow-cljs compile app",
+    "release": "shadow-cljs release app"
+  },
+  "devDependencies": {
+    "@vercel/ncc": "^0.33.0",
+    "rollup": "^2.61.1",
+    "shadow-cljs": "^2.15.10"
+  }
+}
