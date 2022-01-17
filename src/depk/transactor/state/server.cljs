@@ -8,10 +8,12 @@
 
 (defn start-server
   [endpoint]
-  (let [{:keys [host port]} (:server @config)
+  (let [{:keys [host port]} (:transactor @config)
+        host (or host "0.0.0.0")
+        port (or port 3000)
         opts {:handler    endpoint,
-              :host       (or host "0.0.0.0")
-              :port       (or port 3000)
+              :host       host,
+              :port       port,
               :on-success #(info "Server started on " host ":" port)}]
     (http/start opts)))
 
