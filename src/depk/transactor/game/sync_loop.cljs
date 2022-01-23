@@ -18,9 +18,6 @@
       (let [state      (<! (api/fetch-game-account chain-api game-id))
             {:keys [players]} state
             player-cnt (count (filter some? players))]
-        ;; (.debug js/console "sync state:"
-        ;;         (map :chips (:players prev))
-        ;;         (map :chips (:players state)))
         (if (pos? player-cnt)
           (do (when (not= prev state)
                 (let [event (m/make-event :system/sync-state

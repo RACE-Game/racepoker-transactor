@@ -36,7 +36,7 @@
                       state
                       {:players [{:pubkey "100", :chips 1000} nil {:pubkey "101", :chips 10000}]})]
       (t/is (= {:player-map      player-map,
-                :dispatch-events {5000 (m/make-event :system/start-game state {:btn 2})}}
+                :dispatch-events {1000 (m/make-event :system/start-game state {:btn 2})}}
                (-> (sut/handle-event state event)
                    (select-keys [:player-map :dispatch-events])))))))
 

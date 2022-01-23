@@ -469,6 +469,30 @@
                                                      102 -1000}}]}
              (sut/single-player-win state 101)))
 
+    ;; with blind bets
+    (let [state-with-bet-map (assoc state
+                                    :bet-map {100 50, 101 100}
+                                    :pots    [])]
+      (t/is (= {:player-map       {100 {:status :player-status/fold,
+                                        :chips  10000},
+                                   101 {:status :player-status/acted,
+                                        :chips  10150},
+                                   102 {:status :player-status/fold,
+                                        :chips  10000}},
+                :prize-map        {101 150},
+                :chips-change-map {100 -50,
+                                   101 50,
+                                   102 0},
+                :bet-map          nil,
+                :pots             [(m/make-pot #{100 101} 150 #{101})],
+                :status           :game-status/init,
+                :api-requests     [{:api-request/type :settle-finished-game,
+                                    :chips-change-map {100 -50,
+                                                       101 50,
+                                                       102 0}}]}
+               (sut/single-player-win state-with-bet-map 101))))
+
+    ;; with normal bets
     (let [state-with-bet-map (assoc state
                                     :bet-map
                                     {100 500,
@@ -486,7 +510,8 @@
                                    102 -1500},
                 :bet-map          nil,
                 :pots             [(m/make-pot #{100 101 102} 3000 #{101})
-                                   (m/make-pot #{101} 2000 #{101})],
+                                   (m/make-pot #{101} 2000 #{101})
+                                   (m/make-pot #{100 101 102} 2000 #{101})],
                 :status           :game-status/init,
                 :api-requests     [{:api-request/type :settle-finished-game,
                                     :chips-change-map {100 -1500,
