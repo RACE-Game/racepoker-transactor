@@ -66,7 +66,7 @@
    bb
    btn
    size
-   ;; game status: init shuffle encrypt key-share play showdown
+   ;; game status: init shuffle encrypt key-share play showdown settle
    status
    ;; street: preflop flop turn river
    street

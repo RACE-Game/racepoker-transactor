@@ -585,10 +585,10 @@
         (update-chips-change-map)
         ;; Append a pot collected from current street
         (cond-> (pos? bet-sum)
-          (update :pots conj (m/make-pot (set (keys bet-map)) bet-sum #{player-id})))
+                (update :pots conj (m/make-pot (set (keys bet-map)) bet-sum #{player-id})))
         (update-in [:chips-change-map player-id] (fnil + 0) bet-sum)
         (submit-game-result)
-        (assoc :status  :game-status/init
+        (assoc :status  :game-status/settle
                :bet-map nil))))
 
 (defn change-street

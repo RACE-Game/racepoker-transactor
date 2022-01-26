@@ -461,7 +461,7 @@
                                  102 -1000},
               :pots             [(m/make-pot #{100 101 102} 3000 #{101})
                                  (m/make-pot #{101} 2000 #{101})],
-              :status           :game-status/init,
+              :status           :game-status/settle,
               :bet-map          nil,
               :api-requests     [{:api-request/type :settle-finished-game,
                                   :chips-change-map {100 -1000,
@@ -485,7 +485,7 @@
                                    102 0},
                 :bet-map          nil,
                 :pots             [(m/make-pot #{100 101} 150 #{101})],
-                :status           :game-status/init,
+                :status           :game-status/settle,
                 :api-requests     [{:api-request/type :settle-finished-game,
                                     :chips-change-map {100 -50,
                                                        101 50,
@@ -512,7 +512,7 @@
                 :pots             [(m/make-pot #{100 101 102} 3000 #{101})
                                    (m/make-pot #{101} 2000 #{101})
                                    (m/make-pot #{100 101 102} 2000 #{101})],
-                :status           :game-status/init,
+                :status           :game-status/settle,
                 :api-requests     [{:api-request/type :settle-finished-game,
                                     :chips-change-map {100 -1500,
                                                        101 3000,

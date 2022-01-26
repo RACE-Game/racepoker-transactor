@@ -23,7 +23,7 @@
 (defmethod handle-event :system/sync-state
   [state {{:keys [players game-account-state]} :data, :as event}]
 
-  (when-not (#{:game-status/init :game-status/showdown} (:status state))
+  (when-not (#{:game-status/init :game-status/settle :game-status/showdown} (:status state))
     (misc/invalid-game-status! state event))
 
   (-> state
