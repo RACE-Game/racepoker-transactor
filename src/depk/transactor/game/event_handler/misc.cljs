@@ -425,8 +425,7 @@
                      rest-steps))))
         into-vec (fnil into [])]
     (-> state
-        (update :pots into-vec pots)
-        (assoc :bet-map nil))))
+        (update :pots into-vec pots))))
 
 (defn prepare-showdown
   "Player showdown hole cards."
@@ -565,7 +564,8 @@
      (info "winner-id-sets:" winner-id-sets)
 
      (-> state
-         (assoc :showdown-map showdown)
+         (assoc :showdown-map showdown
+                :bet-map nil)
          (assign-winner-to-pots winner-id-sets)
          (update-prize-map)
          (update-chips-change-map)
@@ -609,8 +609,7 @@
          :street          street
          :player-map      new-player-map
          :min-raise       bb
-         :street-bet      nil
-         :bet-map         nil)
+         :street-bet      nil)
         (update-require-key-idents))))
 
 (defn next-street

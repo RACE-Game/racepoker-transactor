@@ -152,7 +152,8 @@
 
       (= :init-street after-key-share)
       (-> new-state
-          (assoc :status :game-status/play)
+          (assoc :status :game-status/play
+                 :bet-map nil)
           (misc/next-state))
 
       (= :runner after-key-share)

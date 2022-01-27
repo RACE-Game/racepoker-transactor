@@ -316,18 +316,19 @@
              (sut/assign-winner-to-pots state [#{102} #{101} #{100}])))))
 
 (t/deftest collect-bet-to-pots
-  (let [state {:player-map {100 {:status :player-status/acted},
+  (let [bet-map {100 500,
+                            101 500,
+                            102 800,
+                            103 600,
+                            104 600,
+                            105 700}
+        state {:player-map {100 {:status :player-status/acted},
                             101 {:status :player-status/acted},
                             102 {:status :player-status/acted},
                             103 {:status :player-status/acted},
                             104 {:status :player-status/fold},
                             105 {:status :player-status/fold}},
-               :bet-map    {100 500,
-                            101 500,
-                            102 800,
-                            103 600,
-                            104 600,
-                            105 700}}]
+               :bet-map    bet-map}]
 
     (t/is (= {:player-map {100 {:status :player-status/acted},
                            101 {:status :player-status/acted},
@@ -335,7 +336,7 @@
                            103 {:status :player-status/acted},
                            104 {:status :player-status/fold},
                            105 {:status :player-status/fold}},
-              :bet-map    nil,
+              :bet-map    bet-map,
               :pots       [(m/make-pot #{100 101 102 103} 3000)
                            (m/make-pot #{103 102} 400)
                            (m/make-pot #{102} 300)]}
@@ -348,7 +349,7 @@
                            103 {:status :player-status/acted},
                            104 {:status :player-status/fold},
                            105 {:status :player-status/fold}},
-              :bet-map    nil,
+              :bet-map    bet-map,
               :pots       [(m/make-pot #{100 101 102 103} 200)
                            (m/make-pot #{100 101 102 103} 3000)
                            (m/make-pot #{103 102} 400)
