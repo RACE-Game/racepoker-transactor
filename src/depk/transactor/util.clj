@@ -37,16 +37,13 @@
                 log# (nil? (get depk.transactor.util/request-log-ignores uri#))]
             (when-not
               (try
-                (when log# (log-group-collapsed "request[%s]" (:uri req#)))
-                (when log# (info "params:" (:body req#)))
+                (when log# (info "request[%s]" (:uri req#)))
+                (when log# (info "params:[%s]" (prn-str (:body req#))))
                 (let [resp# (do ~@body)]
-                  (when log# (info "success:" resp#))
                   (callback# resp#))
                 (catch js/Error e#
-                  (when log# (warn "error:" e#))
-                  (callback# {:status 500, :body {:error (ex-message e#)}}))
-                (finally
-                 (when log# (log-group-end)))))))))))
+                  (when log# (warn "error:[%s]" (ex-message e#)))
+                  (callback# {:status 500, :body {:error (ex-message e#)}}))))))))))
 
 (defmacro go-try
   [& body]

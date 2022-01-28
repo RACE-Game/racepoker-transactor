@@ -18,15 +18,14 @@
       (let [state      (<! (api/fetch-game-account chain-api game-id))
             {:keys [players]} state
             player-cnt (count (filter some? players))]
-        (if (pos? player-cnt)
-          (do (when (not= prev state)
+
+        ;; closing `input` here will shutdown all loops
+        ;; currently, we do not shutdown even there's no players
+        (do (when (not= prev state)
                 (let [event (m/make-event :system/sync-state
                                           (game-handle/get-snapshot game-handle)
                                           {:players            players,
                                            :game-account-state state})]
                   (>! input event)))
               (<! (timeout 1000))
-              (recur state))
-          (do (log/infof "stop state sync for game[%s]" game-id)
-              (swap! (:status game-handle) assoc :sync-loop :stopped)
-              (close! input)))))))
+              (recur state))))))

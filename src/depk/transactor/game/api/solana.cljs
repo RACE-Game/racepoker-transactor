@@ -54,9 +54,9 @@
 (extend-type SolanaApi
  p/IChainApi
  (-settle-finished-game [this game-id chips-change-map player-status-map]
-   (.debug js/console "game-id:" game-id)
-   (.debug js/console "chips-change-map:" chips-change-map)
-   (.debug js/console "player-status-map:" player-status-map)
+   (log/infof "settle game result on Solana: game[%s]" game-id)
+   (log/infof "chips-change-map: %s" (prn-str chips-change-map))
+   (log/infof "player-status-map: %s" (prn-str player-status-map))
    (go-try
     (let [fee-payer (load-private-key)
 
@@ -66,7 +66,12 @@
                                      :data
                                      (parse-state-data))
 
+          _ (when-not (some? game-account-state)
+              (log/errorf "game account not found: game[%s]" game-id))
+
           dealer-program-id (pubkey/make-public-key (get @config :dealer-program-address))
+
+          _ (log/infof "dealer program: %s" (get @config :dealer-program-address))
 
           {:keys [players]} game-account-state
           player-ids (->> players
@@ -82,6 +87,8 @@
                             [(js/Math.abs chip-change) 4]]))
                        (mapcat identity))
 
+          _ (log/infof "settle instruction body: %s" (prn-str ix-body))
+
           ix-data (apply ib/make-instruction-data (cons c/instruction-header-settle ix-body))
 
           ix
@@ -96,20 +103,29 @@
             :data      ix-data})
           tx
           (doto (transaction/make-transaction)
-           (transaction/add ix))]
+            (transaction/add ix))]
 
-      (conn/send-transaction conn tx [fee-payer]))))
+      (log/infof "sending settle transaction: game[%s]" game-id)
+
+      (let [sig (<! (conn/send-transaction conn tx [fee-payer]))]
+
+        (log/infof "confirming settle transaction: game[%s]" game-id)
+
+        (<! (conn/confirm-transaction conn sig))
+
+        (log/infof "settle succeed: game[%s]" game-id)))))
 
  (-settle-failed-game [this game-id player-state-map])
 
  (-fetch-game-account [this game-id]
    (go-try
-    ;; (log/infof "fetch game account state for game[%s]" game-id)
+    (log/infof "fetch game account state for game[%s]" game-id)
     (let [conn (conn/make-connection (get @config :solana-rpc-endpoint))
           game-account-pubkey (pubkey/make-public-key game-id)
-          game-account-state (some-> (<!? (conn/get-account-info conn game-account-pubkey))
+          game-account-state (some-> (<!? (conn/get-account-info conn game-account-pubkey "processed"))
                                      :data
                                      (parse-state-data))]
+      (log/infof "game state for [%s]: %s" game-id (prn-str game-account-state))
       game-account-state))))
 
 (comment

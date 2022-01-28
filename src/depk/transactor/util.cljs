@@ -2,7 +2,8 @@
   (:require-macros depk.transactor.util)
   (:require [taoensso.timbre :as log]
             [cljs.core.async :refer [<! >! go-loop chan close!]]
-            [depk.transactor.state.config :refer [config]]))
+            [depk.transactor.state.config :refer [config]]
+            [clojure.walk :as walk]))
 
 (goog-define disable-log false)
 

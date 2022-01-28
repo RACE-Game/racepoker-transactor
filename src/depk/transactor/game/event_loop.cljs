@@ -5,8 +5,7 @@
    [depk.transactor.game.event-handler :as event-handler]
    ["uuid" :as uuid]
    [taoensso.timbre :as log]
-   [depk.transactor.util :refer [go-try <!?
-                                 info warn log-group-collapsed log-group-end]]))
+   [depk.transactor.util :refer [go-try <!? log-group-collapsed log-group-end]]))
 
 (defn expired-event!
   [state event]
@@ -18,32 +17,30 @@
   Expired event will be dropped."
   [state event]
   (go
-   (log-group-collapsed "handle event[%s]" (str (:type event)))
    (if (not= (:state-id state) (:state-id event))
      (do
-       (info js/console "drop expired event[%s]" (:type event))
+       (log/infof "drop expired event[%s]" (name (:type event)))
        {:result :err, :state state, :error (expired-event! state event)})
      (try
-       (info "event:" event)
-       (info "state:" state)
+       (log/infof "event: %s" (prn-str event))
+       ;; (info "state:" state)
        (let [new-state-id (uuid/v4)
              new-state    (event-handler/handle-event (assoc state :state-id new-state-id) event)]
          (if (map? new-state)
            (do
-             (info "sync result:" new-state)
+             ;; (info "sync result:" new-state)
              {:result :ok, :state new-state})
            (let [v (<! new-state)]
              (if (map? v)
                (do
-                 (info "async result:" v)
+                 ;; (info "async result:" v)
                  {:result :ok, :state v})
                (do
-                 (warn "error:" (ex-message v))
+                 (log/errorf "error from event handler: %s" (ex-message v))
                  {:result :err, :state state, :error v})))))
        (catch ExceptionInfo e
-         (warn e)
-         {:result :err, :state state, :error e})
-       (finally (log-group-end))))))
+         (log/errorf "error in event loop: %s" (ex-message e))
+         {:result :err, :state state, :error e})))))
 
 (defn dispatch-delay-event
   "dispatch delayed event"
