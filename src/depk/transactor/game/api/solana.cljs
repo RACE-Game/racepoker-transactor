@@ -45,7 +45,7 @@
               (bl/array 6 (bl/option player-layout)) ; players
               :pubkey                                ; stack_account_pubkey
               :pubkey                                ; mint_pubkey
-              (bl/enum :NL10 :NL20 :NL50 :NL100)     ; game_level
+              (bl/enum :NL100 :NL200 :NL500 :NL1000) ; game_level
               :u8                                    ; mint_decimals
              ]))
 
@@ -129,7 +129,7 @@
     (let [conn (conn/make-connection (get @config :solana-rpc-endpoint))
           game-account-pubkey (pubkey/make-public-key game-id)
           game-account-state (some-> (<!?
-                                      (conn/get-account-info conn game-account-pubkey "processed"))
+                                      (conn/get-account-info conn game-account-pubkey "confirmed"))
                                      :data
                                      (parse-state-data))]
       (log/infof "game state for [%s]: %s" game-id (prn-str game-account-state))

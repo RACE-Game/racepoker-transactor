@@ -308,10 +308,10 @@
                                         $
                                         winner-ids))))
                           (->> (for [[pid] player-map]
-                                 [pid (js/BigInt 0)])
+                                 [pid 0])
                                (into {}))
                           pots)
-        chips-change-map (merge-with (fnil - (js/BigInt 0))
+        chips-change-map (merge-with (fnil - 0)
                                      chips-change-map
                                      bet-map)]
     (assoc state :chips-change-map chips-change-map)))
@@ -402,7 +402,7 @@
                       sort)
         pots
         (loop [ret     []
-               counted (js/BigInt 0)
+               counted 0
                [step & rest-steps] steps]
           (if-not step
             ret
@@ -417,7 +417,7 @@
                   total     (->> bet-map
                                  (map (fn [[_ bet]]
                                         (min bet step)))
-                                 (reduce + (js/BigInt 0)))
+                                 (reduce + 0))
                   amount    (- total counted)
                   pot       (m/make-pot owner-ids amount)]
               (recur (if (= (count owner-ids) (count (:owner-ids (peek ret))))
@@ -577,8 +577,8 @@
 (defn single-player-win
   "Single player win the game."
   [{:keys [pots bet-map], :as state} player-id]
-  (let [bet-sum   (reduce + (js/BigInt 0) (map val bet-map))
-        prize-map {player-id (+ (transduce (map :amount) + (js/BigInt 0) pots)
+  (let [bet-sum   (reduce + 0 (map val bet-map))
+        prize-map {player-id (+ (transduce (map :amount) + 0 pots)
                                 bet-sum)}]
     (-> state
         (assign-winner-to-pots [#{player-id}])
@@ -588,7 +588,7 @@
         ;; Append a pot collected from current street
         (cond-> (pos? bet-sum)
                 (update :pots conj (m/make-pot (set (keys bet-map)) bet-sum #{player-id})))
-        (update-in [:chips-change-map player-id] (fnil + (js/BigInt 0)) bet-sum)
+        (update-in [:chips-change-map player-id] (fnil + 0) bet-sum)
         (submit-game-result)
         (assoc :status  :game-status/settle
                :bet-map nil))))
@@ -639,7 +639,7 @@
 
         ;; next action player is who haven't bet or bet less than street-bet
         next-action-player (->> players-to-act
-                                (filter #(or (< (get bet-map (:player-id %) (js/BigInt 0)) street-bet)
+                                (filter #(or (< (get bet-map (:player-id %) 0) street-bet)
                                              (= :player-status/wait (:status %))))
                                 first)
 
@@ -694,8 +694,8 @@
   (let [{:keys [level mint-decimals]} game-account-state
         {:keys [sb bb]} (get c/level-info-map level)
         base (js/Math.pow 10 mint-decimals)]
-    [(js/BigInt (* base sb))
-     (js/BigInt (* base bb))]))
+    [(* base sb)
+     (* base bb)]))
 
 (defn merge-sync-state
   "Merge players data(from blockchain) into player-map."

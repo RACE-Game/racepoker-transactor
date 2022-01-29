@@ -84,7 +84,7 @@
   [game-manager game-id player-id amount]
   {:pre [(string? game-id)
          (string? player-id)
-         (pos-int? amount)]}
+         (> amount 0)]}
   (go-try
    (log/infof "player[%s] bet" player-id)
    (if-let [game-handle (manager/find-game game-manager game-id)]
@@ -100,7 +100,7 @@
   [game-manager game-id player-id amount]
   {:pre [(string? game-id)
          (string? player-id)
-         (pos-int? amount)]}
+         (> amount 0)]}
   (go-try
    (log/infof "player[%s] raise" player-id)
    (if-let [game-handle (manager/find-game game-manager game-id)]

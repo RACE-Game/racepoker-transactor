@@ -231,10 +231,12 @@
   (when (get bet-map player-id)
     (misc/player-cant-bet! state event))
 
-  (when-not (zero? street-bet)
+  (when-not (or
+             (nil? street-bet)
+             (zero? street-bet))
     (misc/player-cant-bet! state event))
 
-  (when-not (pos-int? amount)
+  (when-not (> amount 0)
     (misc/invalid-amount! state event))
 
   (when (< amount min-raise)
@@ -268,7 +270,7 @@
     (when (zero? street-bet)
       (misc/player-cant-raise! state event))
 
-    (when-not (pos-int? amount)
+    (when-not (> amount 0)
       (misc/invalid-amount! state event))
 
     (when (< (+ curr-bet amount) (+ street-bet min-raise))
