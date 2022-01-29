@@ -3,8 +3,9 @@
                  :source-map true,
                  :main       depk.transactor.main/main,
                  :devtools   {:preloads [devtools.preload]},
-                 :output-to  "target/main.js",
-                 :release    {:closure-defines
+                 :output-to  "target/transactor.dev.js",
+                 :release    {:output-to "target/transactor.release.js"
+                              :closure-defines
                               {depk.transactor.util.disable-log true}}},
           :test {:target          :node-test,
                  :output-to       "target/tests.js",

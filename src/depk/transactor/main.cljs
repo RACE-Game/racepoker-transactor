@@ -6,7 +6,14 @@
    [depk.transactor.state.game-manager]
    [mount.core :as mount]
    [cljs.core.async :as a]
-   [cljs.core.async.interop :refer [<p!]]))
+   [cljs.core.async.interop :refer [<p!]]
+   [devtools.core :as devtools]))
+
+(try
+  (let [{:keys [cljs-land-style]} (devtools/get-prefs)]
+    (devtools/set-pref! :cljs-land-style (str "filter:invert(1);" cljs-land-style)))
+  (devtools/install!)
+  (catch js/Error e))
 
 ;; Global error handler
 

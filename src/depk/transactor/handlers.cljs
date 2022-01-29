@@ -23,7 +23,8 @@
 (def-async-handler alive-handler
   [_]
   {:status 200,
-   :body   {:message "RACE transactor is running"}})
+   :body   {:message "RACE transactor is running"
+            :v (js/BigInt 1)}})
 
 (def-async-handler attach-game
   [{:keys [body]}]

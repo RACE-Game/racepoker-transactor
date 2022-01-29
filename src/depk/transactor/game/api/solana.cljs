@@ -11,7 +11,8 @@
    [depk.transactor.constant :as c]
    [depk.transactor.state.config :refer [config]]
    [taoensso.timbre :as log]
-   ["fs" :as fs]))
+   ["fs" :as fs]
+   ["bn.js" :as bn]))
 
 (def settle-type-no-update 0)
 (def settle-type-chip-add 1)
@@ -32,18 +33,23 @@
 
 (defrecord Player [pubkey chips])
 
-(def player-layout (bl/struct ->Player [:pubkey :u32]))
+(def player-layout (bl/struct ->Player [:pubkey :u64]))
 
-(defrecord GameState [is-initialized game-no players stack-account-pubkey mint-pubkey level])
+(defrecord GameState [is-initialized game-no players stack-account-pubkey mint-pubkey level
+                      mint-decimals])
 
 (def game-state-layout
   (bl/struct ->GameState
-             [:bool
-              :u32
-              (bl/array 6 (bl/option player-layout))
-              :pubkey
-              :pubkey
-              (bl/enum :NL10 :NL20 :NL50 :NL100)]))
+             [:bool                                  ; is_initialized
+              :u32                                   ; game_no
+              (bl/array 6 (bl/option player-layout)) ; players
+              :pubkey                                ; stack_account_pubkey
+              :pubkey                                ; mint_pubkey
+              (bl/enum :NL10 :NL20 :NL50 :NL100)     ; game_level
+              :u8                                    ; mint_decimals
+             ]))
+
+(bl/size game-state-layout)
 
 (defn parse-state-data
   [data]
@@ -84,7 +90,7 @@
                                (pos? chip-change)  settle-type-chip-add
                                :else               settle-type-chip-sub)
                              1]
-                            [(js/Math.abs chip-change) 4]]))
+                            [(js/Math.abs chip-change) 8]]))
                        (mapcat identity))
 
           _ (log/infof "settle instruction body: %s" (prn-str ix-body))
@@ -103,7 +109,7 @@
             :data      ix-data})
           tx
           (doto (transaction/make-transaction)
-            (transaction/add ix))]
+           (transaction/add ix))]
 
       (log/infof "sending settle transaction: game[%s]" game-id)
 
@@ -122,11 +128,15 @@
     (log/infof "fetch game account state for game[%s]" game-id)
     (let [conn (conn/make-connection (get @config :solana-rpc-endpoint))
           game-account-pubkey (pubkey/make-public-key game-id)
-          game-account-state (some-> (<!? (conn/get-account-info conn game-account-pubkey "processed"))
+          game-account-state (some-> (<!?
+                                      (conn/get-account-info conn game-account-pubkey "processed"))
                                      :data
                                      (parse-state-data))]
       (log/infof "game state for [%s]: %s" game-id (prn-str game-account-state))
       game-account-state))))
+
+
+(js/Uint8Array.of)
 
 (comment
   (.log js/console

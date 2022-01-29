@@ -6,6 +6,7 @@
            solana-clj/solana-clj       {:local/root "../solana-clj"},
            com.taoensso/timbre         {:mvn/version "4.10.0"},
            com.cognitect/transit-clj   {:mvn/version "1.0.324"},
+           com.cognitect/transit-cljs  {:mvn/version "0.8.269"},
            macchiato/env               {:mvn/version "0.0.6"},
            macchiato/core              {:mvn/version "0.2.22"},
            com.taoensso/sente          {:mvn/version "1.16.2"},

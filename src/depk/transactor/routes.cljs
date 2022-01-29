@@ -8,7 +8,9 @@
    [depk.transactor.cors :refer [wrap-cors]]
    [depk.transactor.handlers :as h]
    [depk.transactor.state.config :as config]
-   [depk.transactor.util :as u]))
+   [depk.transactor.util :as u]
+   [cognitect.transit :as transit]))
+
 
 (defn make-game-routes
   []
@@ -38,6 +40,16 @@
     (make-game-routes)
     (make-action-routes)]])
 
+(def transit-opts
+  {:writer
+   {:opts
+    {:handlers
+     {js/BigInt (transit/write-handler (constantly "N") str)}}}
+   :reader
+   {:opts
+    {:handlers
+     {"N" (transit/read-handler js/BigInt)}}}})
+
 (defn make-endpoint
   []
   (ring/ring-handler
@@ -47,7 +59,8 @@
                           :access-control-allow-origin #".*"
                           :access-control-allow-methods [:get :post :put :delete]]
                          [wrap-restful-format
-                          {:keywordize? true}]
+                          {:keywordize? true
+                           :transit-opts transit-opts}]
                          wrap-params
                          wrap-keyword-params]}})
    (ring/create-default-handler)))
