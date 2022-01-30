@@ -176,11 +176,17 @@
 
 (defn dispatch-start-game
   [state btn]
-  (-> state
-      (update :dispatch-events
-              assoc
-              1000
-              (m/make-event :system/start-game state {:btn btn}))))
+  (let [{:keys [next-start-ts]} state]
+    (-> state
+        (update :dispatch-events
+                assoc
+                ;; start at next-start-ts
+                ;; or 1 seconds later if next-start-ts is nil
+                (max
+                 1000
+                 (- (or next-start-ts 0)
+                    (.getTime (js/Date.))))
+                (m/make-event :system/start-game state {:btn btn})))))
 
 (defn try-start-game
   [state]
@@ -536,6 +542,11 @@
           (group-by first)
           (update-vals #(mapv last %))))))
 
+(defn- set-next-start-ts
+  "Set next start timestamp with `delay-ms`."
+  [state delay-ms]
+  (assoc state :next-start-ts (+ delay-ms (.getTime (js/Date.)))))
+
 (defn- submit-game-result
   "Add request to :api-requests, submit game result."
   [{:keys [chips-change-map], :as state}]
@@ -571,6 +582,7 @@
          (assign-winner-to-pots winner-id-sets)
          (update-prize-map)
          (update-chips-change-map)
+         (set-next-start-ts 10000)      ; at least 10 seconds before next start
          (submit-game-result)
          (assoc :status :game-status/showdown)))))
 
@@ -589,6 +601,7 @@
         (cond-> (pos? bet-sum)
                 (update :pots conj (m/make-pot (set (keys bet-map)) bet-sum #{player-id})))
         (update-in [:chips-change-map player-id] (fnil + 0) bet-sum)
+        (set-next-start-ts 10000)      ; at least 6 seconds before next start
         (submit-game-result)
         (assoc :status  :game-status/settle
                :bet-map nil))))
@@ -700,17 +713,17 @@
 (defn merge-sync-state
   "Merge players data(from blockchain) into player-map."
   [state players game-account-state]
-  (let [player-map      (->> players
-                             (keep-indexed
-                              (fn [idx p]
-                                (when p
-                                  (let [player-id (str (:pubkey p))]
-                                    (m/make-player-state player-id
-                                                         (:chips p)
-                                                         idx)))))
-                             (map (juxt :player-id identity))
-                             (into {}))
-        [sb bb] (get-blind-bet game-account-state)]
+  (let [player-map (->> players
+                        (keep-indexed
+                         (fn [idx p]
+                           (when p
+                             (let [player-id (str (:pubkey p))]
+                               (m/make-player-state player-id
+                                                    (:chips p)
+                                                    idx)))))
+                        (map (juxt :player-id identity))
+                        (into {}))
+        [sb bb]    (get-blind-bet game-account-state)]
     (assoc state
            :player-map player-map
            :sb         sb

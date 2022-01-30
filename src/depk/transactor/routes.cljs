@@ -11,7 +11,6 @@
    [depk.transactor.util :as u]
    [cognitect.transit :as transit]))
 
-
 (defn make-game-routes
   []
   ["/game"
