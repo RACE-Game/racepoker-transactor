@@ -27,7 +27,7 @@
     (misc/invalid-game-status! state event))
 
   (-> state
-      (misc/reset-game-state)
+      (misc/reset-game-state :system/sync-state)
       (misc/merge-sync-state players game-account-state)
       (misc/try-start-game)))
 
@@ -48,6 +48,7 @@
          data    (-> (<! (encrypt/encrypt-ciphers-with-default-shuffle-key ciphers))
                      (encrypt/ciphers->hex))]
      (-> state
+         (misc/reset-game-state :system/start-game)
          (assoc :prepare-cards [{:data      data,
                                  :op        :init,
                                  :player-id nil}]

@@ -143,26 +143,33 @@
                        (+ 10000 position))))))))
 
 (defn reset-game-state
-  [state]
-  (assoc
-   state
-   :status             :game-status/init
-   :player-map         nil
-   :street             nil
-   :player-events      []
-   :card-ciphers       []
-   :after-keyshare     nil
-   :require-key-idents nil
-   :share-key-map      nil
-   :community-cards    nil
-   :pots               []
-   :min-raise          nil
-   :street-bet         nil
-   :bet-map            nil
-   :showdown-map       nil
-   :prize-map          nil
-   :dispatch-events    nil
-   :api-requests       nil))
+  "Reset game state based on `event-type`."
+  [state event-type]
+  (case event-type
+    :system/sync-state
+    (assoc
+     state
+     :status             :game-status/init
+     :player-map         nil
+     :street             nil
+     :player-events      []
+     :card-ciphers       []
+     :after-keyshare     nil
+     :require-key-idents nil
+     :share-key-map      nil
+     :community-cards    nil
+     :min-raise          nil
+     :street-bet         nil
+     :bet-map            nil
+     :dispatch-events    nil
+     :api-requests       nil)
+
+    :system/start-game
+    (assoc
+     state
+     :pots               []
+     :showdown-map       nil
+     :prize-map          nil)))
 
 (defn get-player-hole-card-indices
   [{:keys [btn player-map], :as state}]
