@@ -352,8 +352,6 @@
                                 (reverse players)
                                 players)
 
-        _ (js/console.log "bb: " bb)
-        _ (js/console.log "sb: " sb)
         [bb-bet new-bb-player] (take-bet-from-player bb-player bb)
         [sb-bet new-sb-player] (take-bet-from-player sb-player sb)
 
@@ -549,11 +547,6 @@
           (group-by first)
           (update-vals #(mapv last %))))))
 
-(defn- set-next-start-ts
-  "Set next start timestamp with `delay-ms`."
-  [state delay-ms]
-  (assoc state :next-start-ts (+ delay-ms (.getTime (js/Date.)))))
-
 (defn- submit-game-result
   "Add request to :api-requests, submit game result."
   [{:keys [chips-change-map], :as state}]
@@ -589,7 +582,6 @@
          (assign-winner-to-pots winner-id-sets)
          (update-prize-map)
          (update-chips-change-map)
-         (set-next-start-ts 10000)      ; at least 10 seconds before next start
          (submit-game-result)
          (assoc :status :game-status/showdown)))))
 
@@ -608,7 +600,6 @@
         (cond-> (pos? bet-sum)
                 (update :pots conj (m/make-pot (set (keys bet-map)) bet-sum #{player-id})))
         (update-in [:chips-change-map player-id] (fnil + 0) bet-sum)
-        (set-next-start-ts 10000)      ; at least 6 seconds before next start
         (submit-game-result)
         (assoc :status  :game-status/settle
                :bet-map nil))))

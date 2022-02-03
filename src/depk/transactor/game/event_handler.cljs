@@ -237,7 +237,7 @@
              (zero? street-bet))
     (misc/player-cant-bet! state event))
 
-  (when-not (> amount 0)
+  (when-not (pos-int? amount)
     (misc/invalid-amount! state event))
 
   (when (< amount min-raise)

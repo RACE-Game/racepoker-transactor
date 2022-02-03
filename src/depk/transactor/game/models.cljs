@@ -122,9 +122,6 @@
 
    ;; api requests
    api-requests
-
-   ;; timestamp for last settlement
-   next-start-ts
    ])
 
 (defn make-game-state
