@@ -31,7 +31,7 @@
        :showdown-map :prize-map :state-id :prepare-cards
        :shuffle-player-id :encrypt-player-id
        :btn :sb :bb :require-key-idents :share-key-map
-       :card-ciphers]))))
+       :card-ciphers :player-actions]))))
 
 ;; Shuffle Cards
 

@@ -16,7 +16,7 @@
 
 ;; implementations
 
-;; system/sync-players
+;; system/sync-state
 ;; receiving this event when game account reflect there's a new player
 ;; will only success when game is in prepare status.
 ;; will start game after a few seconds.
@@ -27,7 +27,7 @@
     (misc/invalid-game-status! state event))
 
   (-> state
-      (misc/reset-game-state :system/sync-state)
+      (misc/reset-game-state)
       (misc/merge-sync-state players game-account-state)
       (misc/try-start-game)))
 
@@ -48,7 +48,6 @@
          data    (-> (<! (encrypt/encrypt-ciphers-with-default-shuffle-key ciphers))
                      (encrypt/ciphers->hex))]
      (-> state
-         (misc/reset-game-state :system/start-game)
          (assoc :prepare-cards [{:data      data,
                                  :op        :init,
                                  :player-id nil}]
@@ -153,7 +152,7 @@
 
       (= :init-street after-key-share)
       (-> new-state
-          (assoc :status :game-status/play
+          (assoc :status  :game-status/play
                  :bet-map nil)
           (misc/next-state))
 
@@ -177,6 +176,7 @@
 
   (-> state
       (assoc-in [:player-map player-id :status] :player-status/fold)
+      (update :player-actions conj {:action :fold, :player-id player-id})
       (misc/next-state)))
 
 (defmethod handle-event :player/call
@@ -198,6 +198,7 @@
         (assoc-in [:player-map player-id] player)
         (update-in [:bet-map player-id] (fnil + 0) bet)
         (assoc-in [:player-map player-id :status] status)
+        (update :player-actions conj {:action :call, :amount bet, :player-id player-id})
         (misc/next-state))))
 
 (defmethod handle-event :player/check
@@ -215,6 +216,7 @@
 
   (-> state
       (assoc-in [:player-map player-id :status] :player-status/acted)
+      (update :player-actions conj {:action :check, :player-id player-id})
       (misc/next-state)))
 
 (defmethod handle-event :player/bet
@@ -252,6 +254,7 @@
                   (if allin? :player-status/allin :player-status/acted))
         (assoc :min-raise  bet
                :street-bet bet)
+        (update :player-actions conj {:action :bet, :amount amount, :player-id player-id})
         (misc/next-state))))
 
 (defmethod handle-event :player/raise
@@ -288,4 +291,5 @@
                     (if allin? :player-status/allin :player-status/acted))
           (assoc :min-raise  new-min-raise
                  :street-bet new-street-bet)
+          (update :player-actions conj {:action :raise, :amount amount, :player-id player-id})
           (misc/next-state)))))

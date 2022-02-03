@@ -38,7 +38,7 @@
             (when-not
               (try
                 (when log# (info "request[%s]" (:uri req#)))
-                (when log# (info "params:[%s]" (prn-str (:body req#))))
+                ;; (when log# (info "params:[%s]" (prn-str (:body req#))))
                 (let [resp# (do ~@body)]
                   (callback# resp#))
                 (catch js/Error e#

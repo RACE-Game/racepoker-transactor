@@ -1,6 +1,7 @@
 (ns depk.transactor.game.api.solana
   (:require
    [depk.transactor.util :refer [go-try <!?]]
+   [cljs.core.async :refer [<! timeout]]
    [depk.transactor.game.api.protocols :as p]
    [solana-clj.connection :as conn]
    [solana-clj.publickey :as pubkey]
@@ -133,6 +134,8 @@
                                      :data
                                      (parse-state-data))]
       (log/infof "game state for [%s]: %s" game-id (prn-str game-account-state))
+      ;; FIXME need improve
+      (<! (timeout 1000))
       game-account-state))))
 
 

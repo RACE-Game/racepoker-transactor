@@ -120,6 +120,9 @@
    ;; uuid, updated whenever state changes
    state-id
 
+   ;; a list of player actions in this game
+   player-actions
+
    ;; api requests
    api-requests
    ])
