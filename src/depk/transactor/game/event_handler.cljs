@@ -148,7 +148,7 @@
       new-state
 
       (= :settle after-key-share)
-      (misc/settle new-state)
+      (misc/settle new-state :showdown)
 
       (= :init-street after-key-share)
       (-> new-state
@@ -159,7 +159,7 @@
       (= :runner after-key-share)
       (-> new-state
           (assoc :street :street/showdown)
-          (misc/settle))
+          (misc/settle :runner))
 
       :else
       (throw (ex-info "Invalid after-key-share" {:after-key-share after-key-share})))))

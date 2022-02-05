@@ -26,12 +26,12 @@
    (when-let [game-handle (manager/find-game game-manager game-id)]
      (select-keys
       (handle/get-snapshot game-handle)
-      [:status :street :player-map :pots :min-raise
+      [:game-no :status :street :player-map :pots :min-raise
        :street-bet :bet-map :action-player-id
        :showdown-map :prize-map :state-id :prepare-cards
        :shuffle-player-id :encrypt-player-id
        :btn :sb :bb :require-key-idents :share-key-map
-       :card-ciphers :player-actions]))))
+       :card-ciphers :player-actions :winning-type]))))
 
 ;; Shuffle Cards
 

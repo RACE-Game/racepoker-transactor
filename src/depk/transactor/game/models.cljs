@@ -62,6 +62,8 @@
    ;; game type: cash-game, sng
    game-type
    game-id
+   ;; a serial number, read from blockchain
+   game-no
    sb
    bb
    btn
@@ -125,6 +127,9 @@
 
    ;; api requests
    api-requests
+
+   ;; winning type: last-player showdown runner
+   winning-type
    ])
 
 (defn make-game-state

@@ -550,7 +550,7 @@
     (update state :api-requests conj request)))
 
 (defn settle
-  [{:keys [community-cards], :as state}]
+  [{:keys [community-cards], :as state} winning-type]
   (go-try
    (let [showdown-card-map (<!? (decrypt-showdown-card-map state))
          community-cards   (or community-cards (<!? (decrypt-community-cards state)))
@@ -578,6 +578,7 @@
          (update-prize-map)
          (update-chips-change-map)
          (submit-game-result)
+         (assoc :winning-type winning-type)
          (assoc :status :game-status/showdown)))))
 
 (defn single-player-win
@@ -596,8 +597,9 @@
                 (update :pots conj (m/make-pot (set (keys bet-map)) bet-sum #{player-id})))
         (update-in [:chips-change-map player-id] (fnil + 0) bet-sum)
         (submit-game-result)
-        (assoc :status  :game-status/settle
-               :bet-map nil))))
+        (assoc :status       :game-status/settle
+               :winning-type :last-player
+               :bet-map      nil))))
 
 (defn change-street
   "Goto to street and reset some states."
@@ -721,4 +723,5 @@
            :player-map player-map
            :sb         sb
            :bb         bb
+           :game-no    (:game-no game-account-state)
            :game-account-state game-account-state)))

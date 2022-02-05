@@ -463,6 +463,7 @@
               :pots             [(m/make-pot #{100 101 102} 3000 #{101})
                                  (m/make-pot #{101} 2000 #{101})],
               :status           :game-status/settle,
+              :winning-type     :last-player
               :bet-map          nil,
               :api-requests     [{:api-request/type :settle-finished-game,
                                   :chips-change-map {100 -1000,
@@ -487,6 +488,7 @@
                 :bet-map          nil,
                 :pots             [(m/make-pot #{100 101} 150 #{101})],
                 :status           :game-status/settle,
+                :winning-type     :last-player
                 :api-requests     [{:api-request/type :settle-finished-game,
                                     :chips-change-map {100 -50,
                                                        101 50,
@@ -514,6 +516,7 @@
                                    (m/make-pot #{101} 2000 #{101})
                                    (m/make-pot #{100 101 102} 2000 #{101})],
                 :status           :game-status/settle,
+                :winning-type     :last-player
                 :api-requests     [{:api-request/type :settle-finished-game,
                                     :chips-change-map {100 -1500,
                                                        101 3000,
@@ -704,6 +707,6 @@
                                   :player-id  101,
                                   :hole-cards [[:s :q] [:d :q]]}},
           :pots             [(m/make-pot #{100 101} 2000 #{100})]}
-         (let [state (<! (sut/settle state))]
+         (let [state (<! (sut/settle state nil))]
            (select-keys state [:showdown-map :pots :prize-map :chips-change-map])))))
      (done))))
