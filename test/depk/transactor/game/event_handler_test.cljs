@@ -346,6 +346,51 @@
                    (sut/handle-event event-3)
                    (select-keys [:share-key-map :status])))))))
 
+(t/deftest client-leave
+  (t/testing "success, not the player in action"
+    (let [state (-> (m/make-game-state {:btn 0} {})
+                    (assoc :player-map       {100 {:status    :player-status/acted,
+                                                   :player-id 100},
+                                              200 {:status    :player-status/in-action,
+                                                   :player-id 200}}
+                           :status           :game-status/play
+                           :action-player-id 200))]
+      (t/is (= {:player-map {100 {:status        :player-status/fold,
+                                  :player-id     100,
+                                  :online-status :leave},
+                             200 {:status    :player-status/in-action,
+                                  :player-id 200}}}
+               (-> state
+                   (sut/handle-event (m/make-event :client/leave
+                                                   state
+                                                   {}
+                                                   100))
+                   (select-keys [:player-map]))))))
+
+  (t/testing "success, the player in action"
+    (let [state (-> (m/make-game-state {:btn 0} {})
+                    (assoc :player-map
+                           {100 {:status    :player-status/in-action,
+                                 :player-id 100},
+                            200 {:status    :player-status/wait,
+                                 :player-id 200},
+                            300 {:status    :player-status/wait,
+                                 :player-id 300}}))]
+      (t/is (= {:player-map       {100 {:status        :player-status/fold,
+                                        :player-id     100,
+                                        :online-status :leave},
+                                   200 {:status    :player-status/in-action,
+                                        :player-id 200},
+                                   300 {:status    :player-status/wait,
+                                        :player-id 300}},
+                :action-player-id 200}
+               (-> state
+                   (sut/handle-event (m/make-event :client/leave
+                                                   state
+                                                   {}
+                                                   100))
+                   (select-keys [:player-map :action-player-id])))))))
+
 (t/deftest player-fold
   (t/testing "success, ask next wait player for action"
     (let [state (-> (m/make-game-state {:btn 0} {})

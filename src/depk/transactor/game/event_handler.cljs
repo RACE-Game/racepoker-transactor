@@ -164,6 +164,26 @@
       :else
       (throw (ex-info "Invalid after-key-share" {:after-key-share after-key-share})))))
 
+;; Leave
+;; A event receive when a player leave game
+;; The player must share all the necessary keys for current game
+;; Otherwise this event will not success.
+(defmethod handle-event :client/leave
+  [{:keys [status after-key-share player-map], :as state}
+   {{:keys [share-keys]} :data,
+    player-id :player-id,
+    :as       event}]
+  (cond-> state
+    true
+    (update-in [:player-map player-id]
+               assoc
+               :online-status :leave
+               :status        :player-status/fold)
+
+    ;; The in action player leave
+    (= :player-status/in-action (get-in player-map [player-id :status]))
+    (misc/next-state)))
+
 (defmethod handle-event :player/fold
   [{:keys [status action-player-id], :as state}
    {player-id :player-id, :as event}]

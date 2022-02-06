@@ -61,6 +61,9 @@
 (extend-type SolanaApi
  p/IChainApi
  (-settle-finished-game [this game-id chips-change-map player-status-map]
+   (when-not (transduce (map val) + 0 chips-change-map)
+     (throw (ex-info "Invalid chips change!" {:chips-change-map chips-change-map})))
+
    (log/infof "settle game result on Solana: game[%s]" game-id)
    (log/infof "chips-change-map: %s" (prn-str chips-change-map))
    (log/infof "player-status-map: %s" (prn-str player-status-map))
@@ -84,8 +87,12 @@
           player-ids (->> players
                           (map (comp str :pubkey)))
           ix-body (->> (for [pid player-ids]
-                         (let [chip-change (get chips-change-map pid 0)]
-                           [[settle-status-normal 1]
+                         (let [chip-change (get chips-change-map pid 0)
+                               status      (get player-status-map pid :normal)]
+                           [[(case status
+                               :normal settle-status-normal
+                               :leave  settle-status-leave)
+                             1]
                             [(cond
                                (zero? chip-change) settle-type-no-update
                                (pos? chip-change)  settle-type-chip-add
@@ -126,16 +133,14 @@
 
  (-fetch-game-account [this game-id]
    (go-try
-    (log/infof "fetch game account state for game[%s]" game-id)
+    ;; (log/infof "fetch game account state for game[%s]" game-id)
     (let [conn (conn/make-connection (get @config :solana-rpc-endpoint))
           game-account-pubkey (pubkey/make-public-key game-id)
           game-account-state (some-> (<!?
                                       (conn/get-account-info conn game-account-pubkey "confirmed"))
                                      :data
                                      (parse-state-data))]
-      (log/infof "game state for [%s]: %s" game-id (prn-str game-account-state))
-      ;; FIXME need improve
-      (<! (timeout 1000))
+      ;; (log/infof "game state for [%s]: %s" game-id (prn-str game-account-state))
       game-account-state))))
 
 

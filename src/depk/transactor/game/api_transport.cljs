@@ -14,7 +14,6 @@
       (case (:api-request/type req)
         :settle-finished-game
         (let [{:keys [chips-change-map player-status-map]} req]
-          (.log js/console chain-api)
           (settle-finished-game chain-api game-id chips-change-map player-status-map)
           (recur (<! output)))
 

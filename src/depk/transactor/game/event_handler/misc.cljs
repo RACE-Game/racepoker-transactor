@@ -180,15 +180,7 @@
   [state btn]
   (let [{:keys [next-start-ts]} state]
     (-> state
-        (update :dispatch-events
-                assoc
-                ;; start at next-start-ts
-                ;; or 1 seconds later if next-start-ts is nil
-                (max
-                 1000
-                 (- (or next-start-ts 0)
-                    (.getTime (js/Date.))))
-                (m/make-event :system/start-game state {:btn btn})))))
+        (update :dispatch-events assoc 1000 (m/make-event :system/start-game state {:btn btn})))))
 
 (defn try-start-game
   [state]
@@ -544,9 +536,12 @@
 
 (defn- submit-game-result
   "Add request to :api-requests, submit game result."
-  [{:keys [chips-change-map], :as state}]
+  [{:keys [chips-change-map player-map], :as state}]
   (let [request {:api-request/type :settle-finished-game,
-                 :chips-change-map chips-change-map}]
+                 :chips-change-map chips-change-map
+                 :player-status-map (->> (for [[id p] player-map]
+                                           [id (:online-status p :normal)])
+                                         (into {}))}]
     (update state :api-requests conj request)))
 
 (defn settle
@@ -578,8 +573,8 @@
          (update-prize-map)
          (update-chips-change-map)
          (submit-game-result)
-         (assoc :winning-type winning-type)
-         (assoc :status :game-status/showdown)))))
+         (assoc :status :game-status/showdown
+                :winning-type winning-type)))))
 
 (defn single-player-win
   "Single player win the game."

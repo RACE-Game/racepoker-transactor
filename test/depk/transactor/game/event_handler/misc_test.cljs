@@ -317,18 +317,18 @@
 
 (t/deftest collect-bet-to-pots
   (let [bet-map {100 500,
-                            101 500,
-                            102 800,
-                            103 600,
-                            104 600,
-                            105 700}
-        state {:player-map {100 {:status :player-status/acted},
-                            101 {:status :player-status/acted},
-                            102 {:status :player-status/acted},
-                            103 {:status :player-status/acted},
-                            104 {:status :player-status/fold},
-                            105 {:status :player-status/fold}},
-               :bet-map    bet-map}]
+                 101 500,
+                 102 800,
+                 103 600,
+                 104 600,
+                 105 700}
+        state   {:player-map {100 {:status :player-status/acted},
+                              101 {:status :player-status/acted},
+                              102 {:status :player-status/acted},
+                              103 {:status :player-status/acted},
+                              104 {:status :player-status/fold},
+                              105 {:status :player-status/fold}},
+                 :bet-map    bet-map}]
 
     (t/is (= {:player-map {100 {:status :player-status/acted},
                            101 {:status :player-status/acted},
@@ -463,12 +463,15 @@
               :pots             [(m/make-pot #{100 101 102} 3000 #{101})
                                  (m/make-pot #{101} 2000 #{101})],
               :status           :game-status/settle,
-              :winning-type     :last-player
+              :winning-type     :last-player,
               :bet-map          nil,
-              :api-requests     [{:api-request/type :settle-finished-game,
-                                  :chips-change-map {100 -1000,
-                                                     101 2000,
-                                                     102 -1000}}]}
+              :api-requests     [{:api-request/type  :settle-finished-game,
+                                  :chips-change-map  {100 -1000,
+                                                      101 2000,
+                                                      102 -1000},
+                                  :player-status-map {100 :normal,
+                                                      101 :normal,
+                                                      102 :normal}}]}
              (sut/single-player-win state 101)))
 
     ;; with blind bets
@@ -488,11 +491,14 @@
                 :bet-map          nil,
                 :pots             [(m/make-pot #{100 101} 150 #{101})],
                 :status           :game-status/settle,
-                :winning-type     :last-player
-                :api-requests     [{:api-request/type :settle-finished-game,
-                                    :chips-change-map {100 -50,
-                                                       101 50,
-                                                       102 0}}]}
+                :winning-type     :last-player,
+                :api-requests     [{:api-request/type  :settle-finished-game,
+                                    :chips-change-map  {100 -50,
+                                                        101 50,
+                                                        102 0},
+                                    :player-status-map {100 :normal,
+                                                        101 :normal,
+                                                        102 :normal}}]}
                (sut/single-player-win state-with-bet-map 101))))
 
     ;; with normal bets
@@ -516,11 +522,14 @@
                                    (m/make-pot #{101} 2000 #{101})
                                    (m/make-pot #{100 101 102} 2000 #{101})],
                 :status           :game-status/settle,
-                :winning-type     :last-player
-                :api-requests     [{:api-request/type :settle-finished-game,
-                                    :chips-change-map {100 -1500,
-                                                       101 3000,
-                                                       102 -1500}}]}
+                :winning-type     :last-player,
+                :api-requests     [{:api-request/type  :settle-finished-game,
+                                    :chips-change-map  {100 -1500,
+                                                        101 3000,
+                                                        102 -1500},
+                                    :player-status-map {100 :normal,
+                                                        101 :normal,
+                                                        102 :normal}}]}
                (sut/single-player-win state-with-bet-map 101))))))
 
 (t/deftest next-state-case

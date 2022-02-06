@@ -10,6 +10,10 @@
    [depk.transactor.game.manager :as manager]
    [taoensso.timbre :as log]))
 
+(defn error-game-not-exist!
+  [game-id]
+  (throw (ex-info "game not exist" {:game-id game-id})))
+
 (defn attach-game
   [game-manager game-id player-id]
   {:pre [(string? game-id)]}
@@ -32,6 +36,21 @@
        :shuffle-player-id :encrypt-player-id
        :btn :sb :bb :require-key-idents :share-key-map
        :card-ciphers :player-actions :winning-type]))))
+
+;; Leaving game
+;; Must provides all keys
+(defn leave
+  [game-manager game-id player-id share-keys]
+  {:pre [(string? game-id)]}
+  (go-try
+   (log/infof "player[%s] leave game [%s]" player-id game-id)
+   (if-let [game-handle (manager/find-game game-manager game-id)]
+     (handle/send-event game-handle
+                        (m/make-event :client/leave
+                                      (handle/get-snapshot game-handle)
+                                      {:share-keys share-keys}
+                                      player-id))
+     (throw (ex-info "game not exist" {:game-id game-id})))))
 
 ;; Shuffle Cards
 
@@ -78,7 +97,7 @@
                                       (handle/get-snapshot game-handle)
                                       {:share-keys share-keys}
                                       player-id))
-     (throw (ex-info "game not exist" {:game-id game-id})))))
+     (error-game-not-exist! game-id))))
 
 (defn player-bet
   [game-manager game-id player-id amount]
@@ -93,7 +112,7 @@
                                       (handle/get-snapshot game-handle)
                                       {:amount amount}
                                       player-id))
-     (throw (ex-info "game not exist" {:game-id game-id})))))
+     (error-game-not-exist! game-id))))
 
 
 (defn player-raise
@@ -109,7 +128,7 @@
                                       (handle/get-snapshot game-handle)
                                       {:amount amount}
                                       player-id))
-     (throw (ex-info "game not exist" {:game-id game-id})))))
+     (error-game-not-exist! game-id))))
 
 (defn player-call
   [game-manager game-id player-id]
@@ -123,7 +142,7 @@
                                       (handle/get-snapshot game-handle)
                                       {}
                                       player-id))
-     (throw (ex-info "game not exist" {:game-id game-id})))))
+     (error-game-not-exist! game-id))))
 
 (defn player-fold
   [game-manager game-id player-id]
@@ -137,7 +156,7 @@
                                       (handle/get-snapshot game-handle)
                                       {}
                                       player-id))
-     (throw (ex-info "game not exist" {:game-id game-id})))))
+     (error-game-not-exist! game-id))))
 
 (defn player-check
   [game-manager game-id player-id]
@@ -151,7 +170,7 @@
                                       (handle/get-snapshot game-handle)
                                       {}
                                       player-id))
-     (throw (ex-info "game not exist" {:game-id game-id})))))
+     (error-game-not-exist! game-id))))
 
 (defn player-reveal [])
 

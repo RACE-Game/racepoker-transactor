@@ -36,10 +36,12 @@
 
 (defn make-player-state
   [player-id chips position]
-  (into {} (map->PlayerState {:player-id player-id,
-                              :chips     chips,
-                              :position  position,
-                              :status    :player-status/wait})))
+  (into {}
+        (map->PlayerState {:player-id     player-id,
+                           :chips         chips,
+                           :position      position,
+                           :status        :player-status/wait,
+                           :online-status :normal})))
 
 (defrecord Pot
   [owner-ids amount winner-ids])
@@ -48,9 +50,10 @@
   ([owner-ids amount]
    (make-pot owner-ids amount nil))
   ([owner-ids amount winner-ids]
-   (into {} (map->Pot {:owner-ids  owner-ids,
-                       :amount     amount,
-                       :winner-ids winner-ids}))))
+   (into {}
+         (map->Pot {:owner-ids  owner-ids,
+                    :amount     amount,
+                    :winner-ids winner-ids}))))
 
 (defrecord GameState
   [
@@ -130,13 +133,14 @@
 
    ;; winning type: last-player showdown runner
    winning-type
-   ])
+  ])
 
 (defn make-game-state
   [game-account-state init-state]
   (let [state-id (uuid/v4)]
-    (into {} (map->GameState
-              (merge init-state
-                     {:state-id           state-id,
-                      :status             :game-status/init,
-                      :game-account-state game-account-state})))))
+    (into {}
+          (map->GameState
+           (merge init-state
+                  {:state-id           state-id,
+                   :status             :game-status/init,
+                   :game-account-state game-account-state})))))

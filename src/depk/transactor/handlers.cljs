@@ -40,11 +40,12 @@
     {:status 200,
      :body   {:state resp}}))
 
-(defn dettach-game
-  "Client dettach from game."
-  [req cb]
-  (cb {:status 200,
-       :body   "ok"}))
+(def-async-handler leave
+  [{:keys [body]}]
+  (let [{:keys [game-id player-id sig share-keys]} body]
+    (verify-signature sig player-id game-id)
+    (<!? (game/leave @game-manager game-id player-id share-keys))
+    {:status 200, :body "ok"}))
 
 (def-async-handler shuffle-cards
   [{:keys [body]}]

@@ -15,12 +15,12 @@
   []
   ["/game"
    ["/attach" {:post h/attach-game}]
-   ["/dettach" {:post h/dettach-game}]
    ["/state" {:post h/state}]])
 
 (defn make-action-routes
   []
   ["/action"
+   ["/leave" {:post h/leave}]
    ["/shuffle" {:post h/shuffle-cards}]
    ["/encrypt" {:post h/encrypt-cards}]
    ["/share" {:post h/share-keys}]
