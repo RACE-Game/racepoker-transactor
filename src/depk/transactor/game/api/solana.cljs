@@ -1,12 +1,15 @@
 (ns depk.transactor.game.api.solana
   (:require
-   [depk.transactor.util :refer [go-try <!?]]
-   [cljs.core.async :refer [<! timeout]]
+   [depk.transactor.util :refer [go-try <!? merge-orderly]]
+   [cljs.core.async :as    a
+                    :refer [<! timeout chan]]
    [depk.transactor.game.api.protocols :as p]
    [solana-clj.connection :as conn]
    [solana-clj.publickey :as pubkey]
    [solana-clj.keypair :as keypair]
-   [solana-clj.extra.buffer-layout :as bl]
+   [solana-clj.spl-token :as spl-token]
+   [solana-clj.extra.buffer-layout :as    bl
+                                   :refer [buffer-from]]
    [solana-clj.extra.instruction-builder :as ib]
    [solana-clj.transaction :as transaction]
    [depk.transactor.constant :as c]
@@ -83,7 +86,7 @@
 
           _ (log/infof "dealer program: %s" (get @config :dealer-program-address))
 
-          {:keys [players]} game-account-state
+          {:keys [players stack-account-pubkey mint-pubkey]} game-account-state
           player-ids (->> players
                           (map (comp str :pubkey)))
           ix-body (->> (for [pid player-ids]
@@ -105,14 +108,51 @@
 
           ix-data (apply ib/make-instruction-data (cons c/instruction-header-settle ix-body))
 
+          [pda] (<!? (pubkey/find-program-address #js [(buffer-from "stack")] dealer-program-id))
+
+          ata-key-ch
+          (->> player-ids
+               (keep (fn [id]
+                       (when (= :leave (get player-status-map id))
+                         (a/go
+                          (let [account-pubkey (pubkey/make-public-key id)
+                                ata-pubkey     (<!? (spl-token/get-associated-token-address
+                                                     spl-token/associated-token-program-id
+                                                     spl-token/token-program-id
+                                                     mint-pubkey
+                                                     account-pubkey))]
+                            {:pubkey     ata-pubkey,
+                             :isSigner   false,
+                             :isWritable true})))))
+               (a/map vector))
+
+          ata-keys (<! ata-key-ch)
+
+          ix-keys
+          (into
+           [{:pubkey     (keypair/public-key fee-payer),
+             :isSigner   true,
+             :isWritable false}
+            {:pubkey     game-account-pubkey,
+             :isSigner   false,
+             :isWritable true}
+            {:pubkey     stack-account-pubkey,
+             :isSigner   false,
+             :isWritable true}
+            {:pubkey     pda,
+             :isSigner   false,
+             :isWritable false}
+            {:pubkey     spl-token/token-program-id,
+             :isSigner   false,
+             :isWritable false}]
+           ata-keys)
+
+          _
+          (log/infof "settle instruction keys: %s" ix-keys)
+
           ix
           (transaction/make-transaction-instruction
-           {:keys      [{:pubkey     (keypair/public-key fee-payer),
-                         :isSigner   true,
-                         :isWritable false}
-                        {:pubkey     game-account-pubkey,
-                         :isSigner   false,
-                         :isWritable true}],
+           {:keys      ix-keys,
             :programId (pubkey/make-public-key dealer-program-id),
             :data      ix-data})
           tx

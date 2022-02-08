@@ -10,6 +10,16 @@
 (def request-log-ignores
   #{"/api/v1/game/state"})
 
+(defn merge-orderly
+  [chs]
+  (let [out (chan (count chs))]
+    (go-loop [[ch & chs] chs
+              v []]
+      (if ch
+        (recur chs (conj v (<! ch)))
+        (>! out v)))
+    out))
+
 (defn merge-chs-orderly
   [chs]
   (let [out (chan (count chs))]

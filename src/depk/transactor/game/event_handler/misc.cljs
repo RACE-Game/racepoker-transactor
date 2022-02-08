@@ -537,10 +537,13 @@
 (defn- submit-game-result
   "Add request to :api-requests, submit game result."
   [{:keys [chips-change-map player-map], :as state}]
-  (let [request {:api-request/type :settle-finished-game,
-                 :chips-change-map chips-change-map
+  (let [request {:api-request/type  :settle-finished-game,
+                 :chips-change-map  chips-change-map,
                  :player-status-map (->> (for [[id p] player-map]
-                                           [id (:online-status p :normal)])
+                                           [id
+                                            (if (zero? (:chips p))
+                                              :leave
+                                              (:online-status p :normal))])
                                          (into {}))}]
     (update state :api-requests conj request)))
 
@@ -573,7 +576,7 @@
          (update-prize-map)
          (update-chips-change-map)
          (submit-game-result)
-         (assoc :status :game-status/showdown
+         (assoc :status       :game-status/showdown
                 :winning-type winning-type)))))
 
 (defn single-player-win
