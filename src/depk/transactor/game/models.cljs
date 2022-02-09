@@ -35,13 +35,15 @@
    online-status])
 
 (defn make-player-state
-  [player-id chips position]
-  (into {}
-        (map->PlayerState {:player-id     player-id,
-                           :chips         chips,
-                           :position      position,
-                           :status        :player-status/wait,
-                           :online-status :normal})))
+  ([player-id chips position]
+   (make-player-state player-id chips position :player-status/wait :normal))
+  ([player-id chips position status online-status]
+   (into {}
+         (map->PlayerState {:player-id     player-id,
+                            :chips         chips,
+                            :position      position,
+                            :status        status,
+                            :online-status online-status}))))
 
 (defrecord Pot
   [owner-ids amount winner-ids])

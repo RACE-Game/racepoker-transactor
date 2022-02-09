@@ -9,8 +9,8 @@
   [game-handle chain-api]
   (let [{:keys [output game-id]} game-handle]
     (log/infof "start api transport for game[%s]" game-id)
-    (.debug js/console chain-api)
     (go-loop [req (<! output)]
+      (log/infof "API request[%s] %s" (name (:api-request/type req)) (prn-str req))
       (case (:api-request/type req)
         :settle-finished-game
         (let [{:keys [chips-change-map player-status-map]} req]

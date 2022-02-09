@@ -37,23 +37,28 @@
 ;; generate a default deck of cards
 ;; ask the first player (BTN) to shuffle the cards.
 (defmethod handle-event :system/start-game
-  [{:keys [status], :as state}
+  [{:keys [status player-map], :as state}
    {{:keys [btn]} :data, :as event}]
 
   (when-not (= :game-status/init status)
     (misc/invalid-game-status! state event))
 
-  (go
-   (let [ciphers (encrypt/cards->card-strs misc/default-deck-of-cards)
-         data    (-> (<! (encrypt/encrypt-ciphers-with-default-shuffle-key ciphers))
-                     (encrypt/ciphers->hex))]
-     (-> state
-         (assoc :prepare-cards [{:data      data,
-                                 :op        :init,
-                                 :player-id nil}]
-                :btn           btn
-                :shuffle-player-id (:player-id (misc/get-player-by-position state btn))
-                :status        :game-status/shuffle)))))
+  ;; Start when all players ready
+  ;; otherwise kick all non-ready players
+  (if (every? #(= :normal (:online-status %)) (vals player-map))
+    (go
+     (let [ciphers (encrypt/cards->card-strs misc/default-deck-of-cards)
+           data    (-> (<! (encrypt/encrypt-ciphers-with-default-shuffle-key ciphers))
+                       (encrypt/ciphers->hex))]
+       (-> state
+           (assoc :prepare-cards [{:data      data,
+                                   :op        :init,
+                                   :player-id nil}]
+                  :btn           btn
+                  :shuffle-player-id (:player-id (misc/get-player-by-position state btn))
+                  :status        :game-status/shuffle))))
+    (-> state
+        (misc/kick-dropout-players))))
 
 ;; client/shuffle-cards
 ;; receiving this event when player submit shuffled cards
@@ -164,10 +169,22 @@
       :else
       (throw (ex-info "Invalid after-key-share" {:after-key-share after-key-share})))))
 
+;; Alive
+;; A event received when a client is ready for next game
+;; All client whiout this event will be kicked when game start
+(defmethod handle-event :client/ready
+  [{:keys [status player-map], :as state}
+   {player-id :player-id,
+    :as       event}]
+  ())
+
 ;; Leave
-;; A event receive when a player leave game
+;; A event received when a player leave game
+;; 1. Current game is running
 ;; The player must share all the necessary keys for current game
 ;; Otherwise this event will not success.
+;; 2. Game is not running
+;; Send a claim transaction for player
 (defmethod handle-event :client/leave
   [{:keys [status after-key-share player-map], :as state}
    {{:keys [share-keys]} :data,

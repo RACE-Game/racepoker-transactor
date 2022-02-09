@@ -8,6 +8,9 @@
    [cljs.test :as t
               :include-macros true]))
 
+
+
+
 (t/deftest next-position-player
 
   (t/is (= [1 101]
@@ -220,6 +223,18 @@
                    :status    :player-status/acted},
               102 {:player-id 102,
                    :status    :player-status/fold}}}))))
+
+(t/deftest kick-dropout-player
+  (let [state {:player-map {100 {:player-id 100
+                                 :online-status :dropout}
+                            200 {:player-id 100
+                                 :online-status :normal}}}]
+    (t/is (= {:player-map {200 {:player-id 100
+                                :online-status :normal}}
+              :api-requests [{:api-request/type :settle-failed-game
+                              :player-status-map {100 :leave
+                                                  200 :normal}}]}
+             (sut/kick-dropout-players state)))))
 
 (t/deftest update-prize-map
   (let [state {:pots [(m/make-pot #{100 101 102} 1500 #{100})

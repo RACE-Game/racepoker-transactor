@@ -22,7 +22,7 @@
        (info "drop expired event[%s]" (name (:type event)))
        {:result :err, :state state, :error (expired-event! state event)})
      (try
-       (info "event: %s" (prn-str event))
+       (info "event[%s] %s" (name (:type event)) (prn-str event))
        ;; (info "state:" state)
        (let [new-state-id (uuid/v4)
              new-state    (event-handler/handle-event (assoc state :state-id new-state-id) event)]

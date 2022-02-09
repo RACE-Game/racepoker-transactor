@@ -16,7 +16,8 @@
   (t/testing "success with enough players to start"
     (let [state (-> (m/make-game-state {:btn 0} {})
                     (assoc :status :game-status/init))
-          expected-player-map {"100" (m/make-player-state "100" 1000 0)}
+          expected-player-map
+          {"100" (m/make-player-state "100" 1000 0 :player-status/wait :dropout)}
           event (m/make-event
                  :system/sync-state
                  state
@@ -29,8 +30,8 @@
   (t/testing "success with enough players to start"
     (let [state      (-> (m/make-game-state {:btn 0} {})
                          (assoc :status :game-status/init))
-          player-map {"100" (m/make-player-state "100" 1000 0),
-                      "101" (m/make-player-state "101" 10000 2)}
+          player-map {"100" (m/make-player-state "100" 1000 0 :player-status/wait :dropout),
+                      "101" (m/make-player-state "101" 10000 2 :player-status/wait :dropout)}
           event      (m/make-event
                       :system/sync-state
                       state

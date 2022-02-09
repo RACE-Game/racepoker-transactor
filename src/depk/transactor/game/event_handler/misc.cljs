@@ -81,6 +81,25 @@
 
 (def kinds #{:a :2 :3 :4 :5 :6 :7 :8 :9 :t :j :q :k})
 
+(defn kick-dropout-players
+  "Remove all players who not send alive events"
+  [{:keys [player-map], :as state}]
+  (let [dropout-players (->> player-map
+                             vals
+                             (filter #(not= :normal (:online-status %))))
+        request         {:api-request/type  :settle-failed-game,
+                         :player-status-map (->> (for [[id p] player-map]
+                                                   [id
+                                                    (if (= :normal (:online-status p))
+                                                      :normal
+                                                      :leave)
+                                                    (:online-status p :leave)])
+                                                 (into {}))}]
+    ;; send settlement for leaving players
+    (-> state
+        (update :player-map (fn [m] (apply dissoc m (map :player-id dropout-players))))
+        (update :api-requests conj request))))
+
 (defn valid-card?
   [card]
   (and (vector? card)
@@ -685,7 +704,6 @@
 (defn next-state
   [state]
   (let [[c v :as x] (next-state-case state)]
-    (info "next state:" x)
     (case c
       :blind-bets        (blind-bets state)
       :single-player-win (single-player-win state v)
@@ -713,7 +731,9 @@
                              (let [player-id (str (:pubkey p))]
                                (m/make-player-state player-id
                                                     (:chips p)
-                                                    idx)))))
+                                                    idx
+                                                    :player-status/wait
+                                                    :dropout)))))
                         (map (juxt :player-id identity))
                         (into {}))
         [sb bb]    (get-blind-bet game-account-state)]
