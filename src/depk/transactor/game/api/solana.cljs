@@ -24,6 +24,7 @@
 
 (def settle-status-normal 0)
 (def settle-status-leave 1)
+(def settle-status-empty 2)
 
 (defn load-private-key
   []
@@ -79,7 +80,7 @@
                      1]
                     [(js/Math.abs chip-change) 8]])
                  ;; empty entries
-                 [[settle-status-normal 1] [settle-type-no-update 1] [0 8]])))
+                 [[settle-status-empty 1] [settle-type-no-update 1] [0 8]])))
        (mapcat identity)))
 
 (defn- find-player-ata-keys
