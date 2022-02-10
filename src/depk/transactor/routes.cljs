@@ -21,6 +21,7 @@
   []
   ["/action"
    ["/leave" {:post h/leave}]
+   ["/alive" {:post h/alive}]
    ["/shuffle" {:post h/shuffle-cards}]
    ["/encrypt" {:post h/encrypt-cards}]
    ["/share" {:post h/share-keys}]

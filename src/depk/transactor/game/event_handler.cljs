@@ -172,11 +172,16 @@
 ;; Alive
 ;; A event received when a client is ready for next game
 ;; All client whiout this event will be kicked when game start
-(defmethod handle-event :client/ready
+(defmethod handle-event :client/alive
   [{:keys [status player-map], :as state}
    {player-id :player-id,
     :as       event}]
-  ())
+  (when-not (= status :game-status/init)
+    (misc/invalid-game-status! state event))
+
+  (-> state
+      (assoc-in [:player-map player-id :online-status] :normal)
+      (misc/try-start-game)))
 
 ;; Leave
 ;; A event received when a player leave game
@@ -190,16 +195,17 @@
    {{:keys [share-keys]} :data,
     player-id :player-id,
     :as       event}]
-  (cond-> state
-    true
-    (update-in [:player-map player-id]
-               assoc
-               :online-status :leave
-               :status        :player-status/fold)
-
-    ;; The in action player leave
-    (= :player-status/in-action (get-in player-map [player-id :status]))
-    (misc/next-state)))
+  (let [state (update-in state [:player-map player-id] assoc
+                         :online-status :leave
+                         :status :player-status/fold)]
+    (cond
+      ;; Game is not running, can leave immetdiately
+      (#{:game-status/init :game-status/settle :game-status/showdown} status)
+      (-> state
+          (misc/kick-dropout-players))
+      ;; Game is running, calculate next state
+      true
+      (misc/next-state state))))
 
 (defmethod handle-event :player/fold
   [{:keys [status action-player-id], :as state}

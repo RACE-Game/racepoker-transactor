@@ -2,6 +2,7 @@
   (:require
    [depk.transactor.game.event-handler :as sut]
    [depk.transactor.game.models :as m]
+   [depk.transactor.constant :as c]
    [cljs.core.async :refer [go <!]]
    [cljs.test :as t
               :include-macros true]))
@@ -37,7 +38,7 @@
                       state
                       {:players [{:pubkey "100", :chips 1000} nil {:pubkey "101", :chips 10000}]})]
       (t/is (= {:player-map      player-map,
-                :dispatch-events {1000 (m/make-event :system/start-game state {:btn 2})}}
+                :dispatch-events {c/start-game-delay (m/make-event :system/start-game state {:btn 2})}}
                (-> (sut/handle-event state event)
                    (select-keys [:player-map :dispatch-events])))))))
 

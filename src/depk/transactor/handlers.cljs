@@ -47,6 +47,13 @@
     (<!? (game/leave @game-manager game-id player-id share-keys))
     {:status 200, :body "ok"}))
 
+(def-async-handler alive
+  [{:keys [body]}]
+  (let [{:keys [game-id player-id sig]} body]
+    (verify-signature sig player-id game-id)
+    (<!? (game/alive @game-manager game-id player-id))
+    {:status 200, :body "ok"}))
+
 (def-async-handler shuffle-cards
   [{:keys [body]}]
   (let [{:keys [game-id player-id sig data]} body]

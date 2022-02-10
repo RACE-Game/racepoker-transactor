@@ -18,6 +18,8 @@
    ["fs" :as fs]
    ["bn.js" :as bn]))
 
+(def commitment "confirmed")
+
 (def settle-type-no-update 0)
 (def settle-type-chip-add 1)
 (def settle-type-chip-sub 2)
@@ -116,7 +118,7 @@
 
          conn (conn/make-connection (get @config :solana-rpc-endpoint))
          game-account-pubkey (pubkey/make-public-key game-id)
-         game-account-state (some-> (<!? (conn/get-account-info conn game-account-pubkey "confirmed"))
+         game-account-state (some-> (<!? (conn/get-account-info conn game-account-pubkey commitment))
                                     :data
                                     (parse-state-data))
 
@@ -199,14 +201,11 @@
     (let [conn (conn/make-connection (get @config :solana-rpc-endpoint))
           game-account-pubkey (pubkey/make-public-key game-id)
           game-account-state (some-> (<!?
-                                      (conn/get-account-info conn game-account-pubkey "confirmed"))
+                                      (conn/get-account-info conn game-account-pubkey commitment))
                                      :data
                                      (parse-state-data))]
       ;; (log/infof "game state for [%s]: %s" game-id (prn-str game-account-state))
       game-account-state))))
-
-
-(js/Uint8Array.of)
 
 (comment
   (.log js/console

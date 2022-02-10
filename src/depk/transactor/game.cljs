@@ -52,6 +52,20 @@
                                       player-id))
      (throw (ex-info "game not exist" {:game-id game-id})))))
 
+;; Alive, confirmation before start
+(defn alive
+  [game-manager game-id player-id]
+  {:pre [(string? game-id)]}
+  (go-try
+   (log/infof "player[%s] confirm alive, game [%s]" player-id game-id)
+   (if-let [game-handle (manager/find-game game-manager game-id)]
+     (handle/send-event game-handle
+                        (m/make-event :client/alive
+                                      (handle/get-snapshot game-handle)
+                                      {}
+                                      player-id))
+     (throw (ex-info "game not exist" {:game-id game-id})))))
+
 ;; Shuffle Cards
 
 (defn shuffle-cards

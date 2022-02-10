@@ -1,5 +1,7 @@
 (ns depk.transactor.constant)
 
+(def start-game-delay 3000)
+
 (def instruction-header-settle [3 1])
 
 (def level-info-map

@@ -199,7 +199,9 @@
   [state btn]
   (let [{:keys [next-start-ts]} state]
     (-> state
-        (update :dispatch-events assoc 1000 (m/make-event :system/start-game state {:btn btn})))))
+        (update :dispatch-events assoc
+                c/start-game-delay
+                (m/make-event :system/start-game state {:btn btn})))))
 
 (defn try-start-game
   [state]
