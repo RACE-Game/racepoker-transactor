@@ -28,6 +28,12 @@
                   {:state state,
                    :event event})))
 
+(defn empty-share-keys!
+  [state event]
+  (throw (ex-info "Empty share keys"
+                  {:state state,
+                   :event event})))
+
 (defn decryption-failed!
   []
   (throw (ex-info "Decryption failed" {})))
@@ -199,7 +205,8 @@
   [state btn]
   (let [{:keys [next-start-ts]} state]
     (-> state
-        (update :dispatch-events assoc
+        (update :dispatch-events
+                assoc
                 c/start-game-delay
                 (m/make-event :system/start-game state {:btn btn})))))
 
@@ -210,6 +217,51 @@
           [next-btn _] (next-position-player state btn)]
       (dispatch-start-game state next-btn))
     state))
+
+(defn mark-dropout-players
+  [state player-ids]
+  (reduce (fn [state id]
+            (update-in state
+                       [:player-map id]
+                       assoc
+                       :online-status :dropout
+                       ;; Setting to fold is neccessary for game state flow
+                       :status        :player-status/fold))
+          state
+          player-ids))
+
+
+(defn dispatch-encrypt-timeout
+  [state]
+  (update state
+          :dispatch-events
+          assoc
+          c/encrypt-timeout-delay
+          (m/make-event :system/encrypt-timeout state {})))
+
+(defn dispatch-shuffle-timeout
+  [state]
+  (update state
+          :dispatch-events
+          assoc
+          c/shuffle-timeout-delay
+          (m/make-event :system/shuffle-timeout state {})))
+
+(defn dispatch-key-share-timeout
+  [state]
+  (update state
+          :dispatch-events
+          assoc
+          c/key-share-timeout-delay
+          (m/make-event :system/key-share-timeout state {})))
+
+(defn dispatch-player-action-timeout
+  [state]
+  (update state
+          :dispatch-events
+          assoc
+          c/player-action-timeout-delay
+          (m/make-event :system/player-action-timeout state {})))
 
 (defn valid-key-ident?
   [state key-ident player-id]
@@ -349,7 +401,8 @@
   [state player-id]
   (-> state
       (assoc :action-player-id player-id)
-      (assoc-in [:player-map player-id :status] :player-status/in-action)))
+      (assoc-in [:player-map player-id :status] :player-status/in-action)
+      (dispatch-player-action-timeout)))
 
 (defn blind-bets
   "Make blind bets for SB and BB, ask next player to action."
@@ -586,9 +639,9 @@
                                 (sort-by first >)
                                 (mapv #(set (mapv first (second %)))))]
 
-     (info "showdown-card-map:" showdown-card-map)
-     (info "community-cards:" community-cards)
-     (info "winner-id-sets:" winner-id-sets)
+     ;; (info "showdown-card-map:" showdown-card-map)
+     ;; (info "community-cards:" community-cards)
+     ;; (info "winner-id-sets:" winner-id-sets)
 
      (-> state
          (assoc :showdown-map showdown
@@ -655,7 +708,7 @@
   (let [remain-players     (->> player-map
                                 vals
                                 (filter (comp #{:player-status/allin :player-status/acted
-                                                :player-status/wait}
+                                                :player-status/wait :player-status/in-action}
                                               :status)))
 
         players-to-act     (->>

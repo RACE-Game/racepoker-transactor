@@ -23,17 +23,17 @@
        {:result :err, :state state, :error (expired-event! state event)})
      (try
        (info "event[%s] %s" (name (:type event)) (prn-str event))
-       ;; (info "state:" state)
+       ;; (js/console.log "state: " state)
        (let [new-state-id (uuid/v4)
              new-state    (event-handler/handle-event (assoc state :state-id new-state-id) event)]
          (if (map? new-state)
            (do
-             ;; (info "sync result:" new-state)
+             (info "status:" (name (:status new-state)))
              {:result :ok, :state new-state})
            (let [v (<! new-state)]
              (if (map? v)
                (do
-                 ;; (info "async result:" v)
+                 (info "status:" (name (:status v)))
                  {:result :ok, :state v})
                (do
                  (error "error from event handler: %s" (ex-message v))
@@ -47,7 +47,8 @@
   [dispatch-events input]
   (doseq [[ts event] dispatch-events]
     (when event
-      (log/debugf "dispatch event[%s] at time[%s]" (str (:type event)) (str (js/Date. ts)))
+      (log/debugf "dispatch event[%s] after %sms" (str (:type event))
+                  (str ts))
       (go-try
        (<!? (timeout ts))
        (put! input event)))))

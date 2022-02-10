@@ -72,8 +72,9 @@
                  (let [chip-change (get chips-change-map pid 0)
                        status      (get player-status-map pid)]
                    [[(case status
-                       :normal settle-status-normal
-                       :leave  settle-status-leave)
+                       :dropout settle-status-leave
+                       :normal  settle-status-normal
+                       :leave   settle-status-leave)
                      1]
                     [(cond
                        (zero? chip-change) settle-type-no-update
@@ -91,7 +92,7 @@
    (let [ata-keys-ch (->>
                       player-ids
                       (keep (fn [id]
-                              (when (and id (= :leave (get player-status-map id)))
+                              (when (and id (#{:leave :dropout} (get player-status-map id)))
                                 (a/go
                                  (let [account-pubkey (pubkey/make-public-key id)
                                        ata-pubkey     (<!? (spl-token/get-associated-token-address
@@ -118,7 +119,8 @@
 
          conn (conn/make-connection (get @config :solana-rpc-endpoint))
          game-account-pubkey (pubkey/make-public-key game-id)
-         game-account-state (some-> (<!? (conn/get-account-info conn game-account-pubkey commitment))
+         game-account-state (some-> (<!?
+                                     (conn/get-account-info conn game-account-pubkey commitment))
                                     :data
                                     (parse-state-data))
 

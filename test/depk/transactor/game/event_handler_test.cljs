@@ -37,10 +37,11 @@
                       :system/sync-state
                       state
                       {:players [{:pubkey "100", :chips 1000} nil {:pubkey "101", :chips 10000}]})]
-      (t/is (= {:player-map      player-map,
-                :dispatch-events {c/start-game-delay (m/make-event :system/start-game state {:btn 2})}}
-               (-> (sut/handle-event state event)
-                   (select-keys [:player-map :dispatch-events])))))))
+      (t/is
+       (= {:player-map      player-map,
+           :dispatch-events {c/start-game-delay (m/make-event :system/start-game state {:btn 2})}}
+          (-> (sut/handle-event state event)
+              (select-keys [:player-map :dispatch-events])))))))
 
 (def state-with-players
   (-> (m/make-game-state {:btn 0} {})
@@ -352,16 +353,20 @@
   (t/testing "success, not the player in action"
     (let [state (-> (m/make-game-state {:btn 0} {})
                     (assoc :player-map       {100 {:status    :player-status/acted,
-                                                   :player-id 100},
+                                                   :player-id 100,
+                                                   :chips     200},
                                               200 {:status    :player-status/in-action,
-                                                   :player-id 200}}
+                                                   :player-id 200,
+                                                   :chips     200}}
                            :status           :game-status/play
                            :action-player-id 200))]
       (t/is (= {:player-map {100 {:status        :player-status/fold,
                                   :player-id     100,
-                                  :online-status :leave},
+                                  :online-status :leave,
+                                  :chips         200},
                              200 {:status    :player-status/in-action,
-                                  :player-id 200}}}
+                                  :player-id 200,
+                                  :chips     200}}}
                (-> state
                    (sut/handle-event (m/make-event :client/leave
                                                    state
@@ -371,13 +376,15 @@
 
   (t/testing "success, the player in action"
     (let [state (-> (m/make-game-state {:btn 0} {})
-                    (assoc :player-map
-                           {100 {:status    :player-status/in-action,
-                                 :player-id 100},
-                            200 {:status    :player-status/wait,
-                                 :player-id 200},
-                            300 {:status    :player-status/wait,
-                                 :player-id 300}}))]
+                    (assoc
+                     :status     :game-status/play
+                     :player-map
+                     {100 {:status    :player-status/in-action,
+                           :player-id 100},
+                      200 {:status    :player-status/wait,
+                           :player-id 200},
+                      300 {:status    :player-status/wait,
+                           :player-id 300}}))]
       (t/is (= {:player-map       {100 {:status        :player-status/fold,
                                         :player-id     100,
                                         :online-status :leave},

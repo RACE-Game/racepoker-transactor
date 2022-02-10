@@ -1,6 +1,10 @@
 (ns depk.transactor.constant)
 
 (def start-game-delay 3000)
+(def key-share-timeout-delay 3000)
+(def shuffle-timeout-delay 3000)
+(def encrypt-timeout-delay 3000)
+(def player-action-timeout-delay 30000)
 
 (def instruction-header-settle [3 1])
 

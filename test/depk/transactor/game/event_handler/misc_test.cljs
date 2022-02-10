@@ -4,12 +4,10 @@
    [cljs.core.async.interop :refer [<p!]]
    [depk.transactor.game.event-handler.misc :as sut]
    [depk.transactor.game.models :as m]
+   [depk.transactor.constant :as c]
    [depk.transactor.game.encrypt :as e]
    [cljs.test :as t
               :include-macros true]))
-
-
-
 
 (t/deftest next-position-player
 
@@ -225,14 +223,14 @@
                    :status    :player-status/fold}}}))))
 
 (t/deftest kick-dropout-player
-  (let [state {:player-map {100 {:player-id 100
-                                 :online-status :dropout}
-                            200 {:player-id 100
+  (let [state {:player-map {100 {:player-id     100,
+                                 :online-status :dropout},
+                            200 {:player-id     100,
                                  :online-status :normal}}}]
-    (t/is (= {:player-map {200 {:player-id 100
-                                :online-status :normal}}
-              :api-requests [{:api-request/type :settle-failed-game
-                              :player-status-map {100 :leave
+    (t/is (= {:player-map   {200 {:player-id     100,
+                                  :online-status :normal}},
+              :api-requests [{:api-request/type  :settle-failed-game,
+                              :player-status-map {100 :leave,
                                                   200 :normal}}]}
              (sut/kick-dropout-players state)))))
 
@@ -276,7 +274,8 @@
                             102 (m/make-player-state 102 1000 2)},
                :btn        2,
                :sb         100,
-               :bb         200}]
+               :bb         200,
+               :state-id   1}]
     (t/is (= {:player-map       {100 (m/make-player-state 100 900 0),
                                  101 (m/make-player-state 101 800 1),
                                  102 (assoc (m/make-player-state 102 1000 2)
@@ -289,13 +288,20 @@
               :bb               200,
               :action-player-id 102,
               :street-bet       200,
-              :min-raise        200}
+              :min-raise        200,
+              :state-id         1,
+              :dispatch-events  {c/player-action-timeout-delay
+                                 {:type      :system/player-action-timeout,
+                                  :state-id  1,
+                                  :data      {},
+                                  :player-id nil}}}
              (sut/blind-bets state))))
   (let [state {:player-map {100 (m/make-player-state 100 1000 0),
                             101 (m/make-player-state 101 1000 1)},
                :btn        0,
                :sb         100,
-               :bb         200}]
+               :bb         200,
+               :state-id   1}]
     (t/is (= {:player-map       {100 (assoc (m/make-player-state 100 900 0)
                                             :status
                                             :player-status/in-action),
@@ -307,7 +313,13 @@
               :bb               200,
               :action-player-id 100,
               :street-bet       200,
-              :min-raise        200}
+              :min-raise        200,
+              :state-id         1,
+              :dispatch-events  {c/player-action-timeout-delay
+                                 {:type      :system/player-action-timeout,
+                                  :state-id  1,
+                                  :data      {},
+                                  :player-id nil}}}
              (sut/blind-bets state)))))
 
 (t/deftest apply-prize-map

@@ -147,10 +147,14 @@
     (when-not (misc/valid-key-ident? state key-ident player-id)
       (misc/invalid-share-key! state event)))
 
+  (when-not (seq share-keys)
+    (misc/empty-share-keys! state event))
+
   (let [new-state (update state :share-key-map merge share-keys)]
     (cond
       (seq (misc/list-missing-key-idents new-state))
-      new-state
+      (-> new-state
+          (misc/dispatch-key-share-timeout))
 
       (= :settle after-key-share)
       (misc/settle new-state :showdown)
@@ -168,6 +172,74 @@
 
       :else
       (throw (ex-info "Invalid after-key-share" {:after-key-share after-key-share})))))
+
+;; Receiving this event when key-share is timeout
+;; Players who did not provide their keys, will be marked as dropout.
+(defmethod handle-event :system/key-share-timeout
+  [{:keys [status after-key-share], :as state}
+   {{:keys [share-keys]} :data,
+    player-id :player-id,
+    :as       event}]
+
+  (when-not (= :game-status/key-share status)
+    (misc/invalid-game-status! state event))
+
+  (let [missing-key-idents (misc/list-missing-key-idents state)]
+    (if (seq missing-key-idents)
+      (let [timeout-player-ids (map first missing-key-idents)]
+        (-> state
+            (misc/mark-dropout-players timeout-player-ids)
+            (misc/next-state)))
+      state)))
+
+;; Shuffle Timeout
+;; Receiving this event when shuffling is timeout
+;; Players who did not complete their task, will be marked as dropout.
+;; The game will turn back to init state, since it failed to start in case.
+(defmethod handle-event :system/shuffle-timeout
+  [{:keys [status shuffle-player-id], :as state}
+   {player-id :player-id,
+    :as       event}]
+
+  (when-not (= :game-status/shuffle status)
+    (misc/invalid-game-status! state event))
+
+  (-> state
+      (misc/mark-dropout-players [shuffle-player-id])
+      (misc/kick-dropout-players)
+      (misc/reset-game-state)))
+
+;; Encrypt Timeout
+;; Receiving this event when encrypting is timeout
+;; Players who did not complete their task, will be marked as dropout.
+;; The game will turn back to init state, since it failed to start in case.
+(defmethod handle-event :system/encrypt-timeout
+  [{:keys [status encrypt-player-id], :as state}
+   {player-id :player-id,
+    :as       event}]
+
+  (when-not (= :game-status/encrypt status)
+    (misc/invalid-game-status! state event))
+
+  (-> state
+      (misc/mark-dropout-players [encrypt-player-id])
+      (misc/kick-dropout-players)
+      (misc/reset-game-state)))
+
+;; Action Timeout
+(defmethod handle-event :system/player-action-timeout
+  [{:keys [status action-player-id], :as state}
+   {{:keys [share-keys]} :data,
+    player-id :player-id,
+    :as       event}]
+
+  (when-not (= :game-status/play status)
+    (misc/invalid-game-status! state event))
+
+  (-> state
+      (misc/mark-dropout-players [action-player-id])
+      (misc/kick-dropout-players)
+      (misc/next-state)))
 
 ;; Alive
 ;; A event received when a client is ready for next game
@@ -195,9 +267,11 @@
    {{:keys [share-keys]} :data,
     player-id :player-id,
     :as       event}]
-  (let [state (update-in state [:player-map player-id] assoc
+  (let [state (update-in state
+                         [:player-map player-id]
+                         assoc
                          :online-status :leave
-                         :status :player-status/fold)]
+                         :status        :player-status/fold)]
     (cond
       ;; Game is not running, can leave immetdiately
       (#{:game-status/init :game-status/settle :game-status/showdown} status)
