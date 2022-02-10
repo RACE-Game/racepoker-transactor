@@ -237,8 +237,7 @@
     (misc/invalid-game-status! state event))
 
   (-> state
-      (misc/mark-dropout-players [action-player-id])
-      (misc/kick-dropout-players)
+      (assoc-in [:player-map action-player-id :status] :player-status/fold)
       (misc/next-state)))
 
 ;; Alive
