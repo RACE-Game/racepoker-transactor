@@ -4,6 +4,7 @@
    [depk.transactor.state.server]
    [depk.transactor.state.api]
    [depk.transactor.state.game-manager]
+   [depk.transactor.helpers]
    [mount.core :as mount]
    [cljs.core.async :as a]
    [cljs.core.async.interop :refer [<p!]]))

@@ -247,6 +247,7 @@
   [{:keys [status player-map], :as state}
    {player-id :player-id,
     :as       event}]
+
   (when-not (= status :game-status/init)
     (misc/invalid-game-status! state event))
 

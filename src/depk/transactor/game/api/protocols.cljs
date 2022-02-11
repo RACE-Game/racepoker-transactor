@@ -1,9 +1,8 @@
 (ns depk.transactor.game.api.protocols)
 
 (defprotocol IStoreApi
-  (-save-card-ciphers [this game-id card-ciphers])
-  (-save-key [this game-id player-id key-type key-data])
-  (-save-player-actions [this game-id player-actions]))
+  (-save-game-history [this game-id game-no records])
+  (-fetch-game-histories [this game-id]))
 
 (defprotocol IChainApi
   (-settle-finished-game [this game-id chips-change-map player-status-map])

@@ -5,6 +5,10 @@
 
 (mount/defstate game-manager
   :start
-  (make-game-manager @api/chain-api)
+  (make-game-manager @api/chain-api @api/store-api)
   :stop
   nil)
+
+(comment
+  (keys (get @(:store (:store-api @game-manager)) nil))
+  @(:snapshot (val (first @(:game-handle-map @game-manager)))))

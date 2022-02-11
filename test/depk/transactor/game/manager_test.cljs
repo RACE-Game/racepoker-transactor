@@ -9,12 +9,13 @@
               :include-macros true]))
 
 (def chain-api (api-mock/->MockChainApi))
+(def store-api (api-mock/->MockStoreApi))
 
 (t/deftest load-game
   (t/testing "success"
     (t/async done
       (go
-       (let [manager (sut/make-game-manager chain-api)
+       (let [manager (sut/make-game-manager chain-api store-api)
              game-id "GAME_ID"]
          (<!? (sut/load-game manager game-id))
          (t/is (handle/game-handle? (sut/find-game manager game-id))))
@@ -24,7 +25,7 @@
   (t/testing "fail"
     (t/async done
       (go
-       (let [manager (sut/make-game-manager chain-api)
+       (let [manager (sut/make-game-manager chain-api store-api)
              game-id "NONEXIST GAME ID"]
          (t/is (thrown-with-msg? ExceptionInfo #"Account not found"
                  (<!? (sut/load-game manager game-id)))))
@@ -34,7 +35,7 @@
   (t/testing "success"
     (t/async done
       (go
-       (let [manager (sut/make-game-manager chain-api)
+       (let [manager (sut/make-game-manager chain-api store-api)
              game-id "GAME_ID"]
          (t/is (nil? (sut/find-game manager game-id))))
        (done)))))

@@ -2,6 +2,7 @@
   "APIs for make transaction on Arweave and Solana."
   (:require [depk.transactor.game.api.protocols :as p]
             [depk.transactor.game.api.solana :as solana]
+            [depk.transactor.game.api.mem-store :as mem-store]
             [depk.transactor.util :as u]
             [cljs.core.async :refer [go-loop <!]]))
 
@@ -11,31 +12,21 @@
 
 ;; Arweave - Storage, used for public data
 
-(defn save-card-ciphers
-  "Save encrypted cards for a game.
+(defn save-game-history
+  "Save game history.
+
+  A history is a game-id, game-no and a list of records.
 
   game-id: pubkey, the pubkey of game account.
-  card-ciphers: string, encrypted cards data."
-  [store-api game-id card-ciphers]
-  (p/-save-card-ciphers store-api game-id card-ciphers))
+  game-no: a serial number.
+  records: a list of [event, state]."
+  [store-api game-id game-no records]
+  (p/-save-game-history store-api game-id game-no records))
 
-(defn save-key
-  "Save key for decryption.
-
-  game-id: pubkey, the pubkey of game account.
-  player-id: pubkey, the pubkey of player's account.
-  key-type: keyword, where the key should be used for.
-  key-data: string, encrypted key for RSA decryption."
-  [store-api game-id player-id key-type key-data]
-  (p/-save-key store-api game-id player-id key-type key-data))
-
-(defn save-player-actions
-  "Save all player actions of a game.
-
-  game-id: pubkey, the pubkey of game account.
-  player-actions: [[player-id, player-action]], a list of player-id and its action."
-  [store-api game-id player-actions]
-  (p/-save-player-actions store-api game-id player-actions))
+(defn fetch-game-histories
+  "Get game histories by game-id."
+  [store-api game-id]
+  (p/-fetch-game-histories store-api game-id))
 
 ;; Solana - Blockchain
 
@@ -62,3 +53,6 @@
 
 (defn make-solana-api []
   (solana/->SolanaApi))
+
+(defn make-mem-store-api []
+  (mem-store/make-mem-store-api))

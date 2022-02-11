@@ -25,6 +25,12 @@
   {:status 200,
    :body   {:message "RACE transactor is running"}})
 
+(def-async-handler histories
+  [{:keys [query-params]}]
+  (let [{:strs [game-id]} query-params]
+    {:status 200,
+     :body   (game/fetch-histories @game-manager game-id)}))
+
 (def-async-handler attach-game
   [{:keys [body]}]
   (let [{:keys [game-id player-id sig]} body]

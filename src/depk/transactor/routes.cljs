@@ -17,6 +17,11 @@
    ["/attach" {:post h/attach-game}]
    ["/state" {:post h/state}]])
 
+(defn make-info-routes
+  []
+  ["/info"
+   ["/histories" {:get h/histories}]])
+
 (defn make-action-routes
   []
   ["/action"
@@ -38,6 +43,7 @@
    ["/" {:get h/alive-handler}]
    ["/api/v1"
     (make-game-routes)
+    (make-info-routes)
     (make-action-routes)]])
 
 (defn make-endpoint

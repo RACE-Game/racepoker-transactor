@@ -20,3 +20,10 @@
       :min-buyin            5000,
       :max-buyin            20000
       :is-initialized       true})))
+
+(defrecord MockStoreApi [])
+
+(extend-type MockStoreApi
+  p/IStoreApi
+  (-save-game-history [this game-id game-no records])
+  (-fetch-game-histories [this game-id]))

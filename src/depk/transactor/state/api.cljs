@@ -5,3 +5,7 @@
 (mount/defstate chain-api
   :start
   (api/make-solana-api))
+
+(mount/defstate store-api
+  :start
+  (api/make-mem-store-api))

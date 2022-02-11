@@ -3,7 +3,8 @@
    [depk.transactor.game.models :as m]
    [depk.transactor.game.encrypt :as e]
    [depk.transactor.game.evaluator :as evaluator]
-   [depk.transactor.util :refer [go-try <!? info merge-chs-orderly]]
+   [depk.transactor.util :as    u
+                         :refer [go-try <!? info merge-chs-orderly]]
    [depk.transactor.constant :as c]
    [cljs.core.async :as a]
    [clojure.set :as set]))
@@ -175,7 +176,6 @@
    :status             :game-status/init
    :player-map         nil
    :street             nil
-   :player-events      []
    :card-ciphers       []
    :after-keyshare     nil
    :require-key-idents nil
@@ -614,10 +614,7 @@
   (let [request {:api-request/type  :settle-finished-game,
                  :chips-change-map  chips-change-map,
                  :player-status-map (->> (for [[id p] player-map]
-                                           [id
-                                            (if (zero? (:chips p))
-                                              :leave
-                                              (:online-status p :normal))])
+                                           [id (:online-status p :normal)])
                                          (into {}))}]
     (update state :api-requests conj request)))
 
@@ -638,10 +635,6 @@
                                 (group-by (comp :value second))
                                 (sort-by first >)
                                 (mapv #(set (mapv first (second %)))))]
-
-     ;; (info "showdown-card-map:" showdown-card-map)
-     ;; (info "community-cards:" community-cards)
-     ;; (info "winner-id-sets:" winner-id-sets)
 
      (-> state
          (assoc :showdown-map showdown

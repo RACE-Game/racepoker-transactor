@@ -78,7 +78,6 @@
    ;; street: preflop flop turn river
    street
    player-map
-   player-events
 
    ;; ----------------------------------------------
    ;; encryption data and keys
@@ -134,8 +133,7 @@
    api-requests
 
    ;; winning type: last-player showdown runner
-   winning-type
-  ])
+   winning-type])
 
 (defn make-game-state
   [game-account-state init-state]

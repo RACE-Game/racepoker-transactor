@@ -8,6 +8,7 @@
    [depk.transactor.game.handle :as handle]
    [depk.transactor.game.encrypt :as encrypt]
    [depk.transactor.game.manager :as manager]
+   [depk.transactor.game.api :as api]
    [taoensso.timbre :as log]))
 
 (defn error-game-not-exist!
@@ -190,26 +191,6 @@
 
 (defn player-musk [])
 
-(defn submit-cards
-  "Commit shuffled cards to Arweave."
-  [])
-
-(defn submit-game-events
-  "Submit all player actions of a game."
-  [])
-
-(defn submit-settlement
-  "Submit game settlement, contains:
-  1. update of players' chips;
-  2. Arweave id for game events;
-  3. Arweave id for shuffled cards;
-  4. Arweave ids for encryption keys."
-  [])
-
-(defn submit-force-settlement
-  "Submit settlement for game which is unable to proceed.
-  Mostly due to a player leave.
-
-  This settlement will cancel the game, the left player's chips
-  will be shared by all other players equally."
-  [])
+(defn fetch-histories
+  [game-manager game-id]
+  (manager/fetch-game-histories game-manager game-id))
