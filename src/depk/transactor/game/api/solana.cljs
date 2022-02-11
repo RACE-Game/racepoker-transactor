@@ -14,7 +14,7 @@
    [solana-clj.transaction :as transaction]
    [depk.transactor.constant :as c]
    [depk.transactor.state.config :refer [config]]
-   [taoensso.timbre :as log]
+   [depk.transactor.log :as log]
    ["fs" :as fs]
    ["bn.js" :as bn]))
 

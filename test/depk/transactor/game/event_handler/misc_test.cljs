@@ -290,11 +290,11 @@
               :street-bet       200,
               :min-raise        200,
               :state-id         1,
-              :dispatch-events  {c/player-action-timeout-delay
+              :dispatch-event  [c/player-action-timeout-delay
                                  {:type      :system/player-action-timeout,
                                   :state-id  1,
                                   :data      {},
-                                  :player-id nil}}}
+                                  :player-id nil}]}
              (sut/blind-bets state))))
   (let [state {:player-map {100 (m/make-player-state 100 1000 0),
                             101 (m/make-player-state 101 1000 1)},
@@ -315,11 +315,11 @@
               :street-bet       200,
               :min-raise        200,
               :state-id         1,
-              :dispatch-events  {c/player-action-timeout-delay
+              :dispatch-event  [c/player-action-timeout-delay
                                  {:type      :system/player-action-timeout,
                                   :state-id  1,
                                   :data      {},
-                                  :player-id nil}}}
+                                  :player-id nil}]}
              (sut/blind-bets state)))))
 
 (t/deftest apply-prize-map
@@ -501,11 +501,11 @@
                                   :player-status-map {100 :normal,
                                                       101 :normal,
                                                       102 :normal}}],
-              :dispatch-events  {c/reset-timeout-delay
+              :dispatch-event  [c/reset-timeout-delay
                                  {:type      :system/reset,
                                   :state-id  1,
                                   :data      {},
-                                  :player-id nil}}}
+                                  :player-id nil}]}
              (sut/single-player-win state 101)))
 
     ;; with blind bets
@@ -534,11 +534,11 @@
                                     :player-status-map {100 :normal,
                                                         101 :normal,
                                                         102 :normal}}],
-                :dispatch-events  {c/reset-timeout-delay
+                :dispatch-event  [c/reset-timeout-delay
                                    {:type      :system/reset,
                                     :state-id  1,
                                     :data      {},
-                                    :player-id nil}}}
+                                    :player-id nil}]}
                (sut/single-player-win state-with-bet-map 101))))
 
     ;; with normal bets
@@ -571,11 +571,11 @@
                                     :player-status-map {100 :normal,
                                                         101 :normal,
                                                         102 :normal}}],
-                :dispatch-events  {c/reset-timeout-delay
+                :dispatch-event  [c/reset-timeout-delay
                                    {:type      :system/reset,
                                     :state-id  1,
                                     :data      {},
-                                    :player-id nil}}}
+                                    :player-id nil}]}
                (sut/single-player-win state-with-bet-map 101))))))
 
 (t/deftest next-state-case
@@ -748,11 +748,11 @@
             :state-id        1}]
        (t/is
         (=
-         {:dispatch-events  {c/reset-timeout-delay
+         {:dispatch-event  [c/reset-timeout-delay
                              {:type      :system/reset,
                               :state-id  1,
                               :data      {},
-                              :player-id nil}},
+                              :player-id nil}],
           :prize-map        {100 2000},
           :chips-change-map {100 1000,
                              101 -1000},
@@ -770,5 +770,5 @@
           :pots             [(m/make-pot #{100 101} 2000 #{100})]}
          (let [state (<! (sut/settle state nil))]
            (select-keys state
-                        [:showdown-map :pots :prize-map :chips-change-map :dispatch-events])))))
+                        [:showdown-map :pots :prize-map :chips-change-map :dispatch-event])))))
      (done))))

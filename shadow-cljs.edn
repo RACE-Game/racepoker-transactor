@@ -4,12 +4,12 @@
                  :main       depk.transactor.main/main,
                  :devtools   {:preloads [devtools.preload]},
                  :output-to  "target/transactor.dev.js",
-                 :release    {:output-to "target/transactor.release.js"
+                 :release    {:output-to       "target/transactor.release.js",
                               :closure-defines
-                              {depk.transactor.util.disable-log true}}},
+                              {depk.transactor.log.disable-log false}}},
           :test {:target          :node-test,
                  :output-to       "target/tests.js",
                  :ns-regexp       "-test$",
                  :autorun         true,
-                 :closure-defines {depk.transactor.util.disable-log true},
+                 :closure-defines {depk.transactor.log.disable-log true},
                  :devtools        {:preloads [pjstadig.humane-test-output]}}}}

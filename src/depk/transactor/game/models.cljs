@@ -91,6 +91,10 @@
    ;; handler after key share, can be: init-street settle
    after-key-share
 
+   ;; released keys, keys backup from fold players
+   ;; a nested map, player-id -> key-ident -> key
+   released-key-map
+
    ;; ----------------------------------------------
    ;; prepare states
 
@@ -120,8 +124,9 @@
    ;; player id to chips change
    chips-change-map
 
-   ;; events, delayed event trigger
-   dispatch-events
+   ;; dispatch event [ms, event]
+   ;; an events dispatched with ms as delay
+   dispatch-event
 
    ;; uuid, updated whenever state changes
    state-id
@@ -133,7 +138,12 @@
    api-requests
 
    ;; winning type: last-player showdown runner
-   winning-type])
+   winning-type
+
+   ;; reverse current state id
+   ;; this is for some special events like :client/leave
+   reserve-state-id
+   ])
 
 (defn make-game-state
   [game-account-state init-state]

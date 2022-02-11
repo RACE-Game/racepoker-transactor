@@ -4,8 +4,12 @@
                     :refer [go go-loop <! timeout close! put!]]
    [depk.transactor.game.event-handler :as event-handler]
    ["uuid" :as uuid]
-   [taoensso.timbre :as log]
-   [depk.transactor.util :refer [go-try <!? log-group-collapsed log-group-end info error]]))
+   [depk.transactor.log :as log]
+   [depk.transactor.util :refer [go-try <!?]]))
+
+(def non-expire-event-types
+  "A list of event types, those should never be considered as expired."
+  #{:client/leave :client/release})
 
 (defn expired-event!
   [state event]
@@ -24,49 +28,56 @@
   (go
    (if (not= (:state-id state) (:state-id event))
      (do
-       (info "drop expired event[%s]" (name (:type event)))
+       (log/debugf "drop expired event[%s]" (name (:type event)))
        {:result :err, :state state, :error (expired-event! state event)})
      (try
-       (info "event[%s] %s" (name (:type event)) (prn-str event))
-       ;; (js/console.log "state: " state)
-       (let [new-state-id (uuid/v4)
+       (let [new-state-id (if (get non-expire-event-types (:type event))
+                            (:state-id event)
+                            (uuid/v4))
              new-state    (event-handler/handle-event (assoc state :state-id new-state-id) event)]
          (if (map? new-state)
            (do
-             (info "status:" (name (:status new-state)))
+             (log/debugf "handle event [%s], status: %s -> %s"
+                         (str (:type event))
+                         (str (:status state))
+                         (str (:status new-state)))
              {:result :ok, :state new-state})
            (let [v (<! new-state)]
              (if (map? v)
                (do
-                 (info "status:" (name (:status v)))
+                 (log/debugf "handle event [%s], status: %s -> %s"
+                             (str (:type event))
+                             (str (:status state))
+                             (str (:status v)))
                  {:result :ok, :state v})
                (do
-                 (error "error from event handler: %s" (ex-message v))
+                 (log/warnf "error from event handler: %s" (ex-message v))
                  {:result :err, :state state, :error v})))))
        (catch ExceptionInfo e
-         (error "error in event loop: %s" (ex-message e))
+         (log/warnf "error in event loop: %s" (ex-message e))
          {:result :err, :state state, :error e})))))
 
 (defn dispatch-delay-event
   "Dispatch dispatch-events to input channel.
 
   dispatch-events is a map from timeout millis to event."
-  [dispatch-events input]
-  (doseq [[ms event] dispatch-events]
-    (when event
-      (log/debugf "dispatch event[%s] after %sms"
+  [event dispatch-event input]
+  (when dispatch-event
+    (let [[ms evt] dispatch-event]
+      (log/debugf "event[%s] dispatch event[%s] after %sms"
                   (str (:type event))
+                  (str (:type evt))
                   (str ms))
       (go-try
        (<!? (timeout ms))
-       (put! input event)))))
+       (put! input evt)))))
 
 (defn dispatch-api-request
   "Dispatch api-requests to output channel."
-  [api-requests output]
+  [event api-requests output]
   (doseq [req api-requests]
     (when req
-      (log/debugf "dispatch api request[%s]" (prn-str req))
+      (log/debugf "event[%s] dispatch api request[%s]" (str (:type event)) (prn-str req))
       (put! output req))))
 
 (defn collect-and-dispatch-game-history
@@ -95,14 +106,14 @@
         (if event
           (let [old-state state
                 {:keys [result state]} (<! (handle-event state event))
-                {:keys [dispatch-events api-requests]} state
+                {:keys [dispatch-event api-requests]} state
                 ;; flush dispatch-events & api-requests
-                new-state (dissoc state :dispatch-events :api-requests)]
+                new-state (dissoc state :dispatch-event :api-requests)]
             (if (= result :ok)
               (let [records
                     (collect-and-dispatch-game-history old-state new-state event records output)]
-                (dispatch-delay-event dispatch-events input)
-                (dispatch-api-request api-requests output)
+                (dispatch-delay-event event dispatch-event input)
+                (dispatch-api-request event api-requests output)
                 (reset! snapshot new-state)
                 (recur state records))
               (recur state records)))

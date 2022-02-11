@@ -187,10 +187,12 @@
       :else
       (throw (ex-info "Invalid after-key-share" {:after-key-share after-key-share})))))
 
+;; system/key-share-timeout
 ;; Receiving this event when key-share is timeout
 ;; Players who did not provide their keys, will be marked as dropout.
+;; If it's the first time for key sharing, cancel current game
 (defmethod handle-event :system/key-share-timeout
-  [{:keys [status after-key-share], :as state}
+  [{:keys [status street after-key-share], :as state}
    {{:keys [share-keys]} :data,
     player-id :player-id,
     :as       event}]
@@ -201,12 +203,20 @@
   (let [missing-key-idents (misc/list-missing-key-idents state)]
     (if (seq missing-key-idents)
       (let [timeout-player-ids (map first missing-key-idents)]
-        (-> state
-            (misc/mark-dropout-players timeout-player-ids)
-            (misc/next-state)))
+        (if (= :street/preflop street)
+          ;; preflop street, game should not start
+          (-> state
+              (misc/mark-dropout-players timeout-player-ids)
+              (misc/kick-dropout-players)
+              (misc/reset-game-state))
+          ;; other streets, continue game when possible
+          ;; TODO
+          (-> state
+              (misc/mark-dropout-players timeout-player-ids)
+              (misc/next-state))))
       state)))
 
-;; Shuffle Timeout
+;; system/shuffle-timeout
 ;; Receiving this event when shuffling is timeout
 ;; Players who did not complete their task, will be marked as dropout.
 ;; The game will turn back to init state, since it failed to start in case.
@@ -223,7 +233,7 @@
       (misc/kick-dropout-players)
       (misc/reset-game-state)))
 
-;; Encrypt Timeout
+;; system/encrypt-timeout
 ;; Receiving this event when encrypting is timeout
 ;; Players who did not complete their task, will be marked as dropout.
 ;; The game will turn back to init state, since it failed to start in case.
@@ -240,7 +250,7 @@
       (misc/kick-dropout-players)
       (misc/reset-game-state)))
 
-;; Action Timeout
+;; system/player-action-timeout
 (defmethod handle-event :system/player-action-timeout
   [{:keys [status action-player-id], :as state}
    {{:keys [share-keys]} :data,
@@ -254,7 +264,7 @@
       (assoc-in [:player-map action-player-id :status] :player-status/fold)
       (misc/next-state)))
 
-;; Alive
+;; client/alive
 ;; A event received when a client is ready for next game
 ;; All client whiout this event will be kicked when game start
 (defmethod handle-event :client/alive
@@ -272,7 +282,7 @@
       (assoc-in [:player-map player-id :online-status] :normal)
       (misc/try-start-game)))
 
-;; Leave
+;; client/leave
 ;; A event received when a player leave game
 ;; 1. Current game is running
 ;; The player must share all the necessary keys for current game
@@ -294,13 +304,39 @@
       (#{:game-status/init :game-status/settle :game-status/showdown} status)
       (-> state
           (misc/kick-dropout-players))
+
       ;; Game is running, calculate next state
       true
-      (misc/next-state state))))
+      (-> state
+          (update :released-key-map assoc :player-id share-keys)
+          (misc/next-state)))))
+
+;; ;; client/release
+;; ;; Received when a fold client give up its keys
+;; ;; Can only be sent when status is play
+(defmethod handle-event :client/release
+  [{:keys [status after-key-share player-map], :as state}
+   {{:keys [share-keys]} :data,
+    player-id :player-id,
+    :as       event}]
+
+  (when-not (seq share-keys)
+    (misc/empty-share-keys! state event))
+
+  (when-not (= :game-status/play status)
+    (misc/invalid-game-status! state event))
+
+  (when-not (= :player-status/fold (get-in player-map [player-id :status]))
+    (misc/invalid-player-id! state event))
+
+  (-> state
+      (update :released-key-map assoc player-id share-keys)))
 
 (defmethod handle-event :player/fold
   [{:keys [status action-player-id], :as state}
-   {player-id :player-id, :as event}]
+   {{:keys [share-keys]} :data,
+    player-id :player-id,
+    :as       event}]
 
   (when-not (= :game-status/play status)
     (misc/invalid-game-status! state event))
@@ -311,6 +347,7 @@
   (-> state
       (assoc-in [:player-map player-id :status] :player-status/fold)
       (update :player-actions conj {:action :fold, :player-id player-id})
+      (update :released-key-map assoc player-id share-keys)
       (misc/next-state)))
 
 (defmethod handle-event :player/call

@@ -3,7 +3,7 @@
    [depk.transactor.state.config :refer [config]]
    [depk.transactor.state.endpoint :refer [endpoint]]
    [macchiato.server :as http]
-   [taoensso.timbre  :refer [info]]
+   [depk.transactor.log :as log]
    [mount.core       :as mount]))
 
 (defn start-server
@@ -14,7 +14,7 @@
         opts {:handler    endpoint,
               :host       host,
               :port       port,
-              :on-success #(info "Server started on " host ":" port)}]
+              :on-success #(log/infof "Server started on %s:%s" host port)}]
     (http/start opts)))
 
 (mount/defstate server

@@ -2,7 +2,7 @@
   (:require
    [macchiato.env   :as config]
    [mount.core      :as mount]
-   [taoensso.timbre :as log]
+   [depk.transactor.log :as log]
    [clojure.string  :as str]))
 
 (def env (atom :local))

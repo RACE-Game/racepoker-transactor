@@ -25,6 +25,7 @@
 (defn make-action-routes
   []
   ["/action"
+   ["/release" {:post h/release}]
    ["/leave" {:post h/leave}]
    ["/alive" {:post h/alive}]
    ["/shuffle" {:post h/shuffle-cards}]

@@ -4,7 +4,7 @@
    [depk.transactor.game.api :refer [settle-finished-game
                                      settle-failed-game
                                      save-game-history]]
-   [taoensso.timbre          :as log]))
+   [depk.transactor.log          :as log]))
 
 (defn start-api-transport
   [game-handle chain-api store-api]

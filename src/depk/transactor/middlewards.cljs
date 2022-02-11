@@ -1,5 +1,5 @@
 (ns depk.transactor.middlewards
-  (:require [taoensso.timbre :as log]))
+  (:require [depk.transactor.log :as log]))
 
 (defn wrap-exception [handler]
   (fn [request callback raise]

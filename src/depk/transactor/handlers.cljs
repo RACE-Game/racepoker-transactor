@@ -1,6 +1,6 @@
 (ns depk.transactor.handlers
   (:require
-   [taoensso.timbre :as log]
+   [depk.transactor.log :as log]
    [clojure.string :as str]
    [depk.transactor.util :refer [<!? def-async-handler]]
    [depk.transactor.game :as game]
@@ -81,6 +81,13 @@
     (<!? (game/share-keys @game-manager game-id player-id share-keys))
     {:status 200, :body "ok"}))
 
+(def-async-handler release
+  [{:keys [body]}]
+  (let [{:keys [game-id player-id sig share-keys]} body]
+    (verify-signature sig player-id game-id)
+    (<!? (game/release @game-manager game-id player-id share-keys))
+    {:status 200, :body "ok"}))
+
 (def-async-handler call
   [{:keys [body]}]
   (let [{:keys [game-id player-id sig]} body]
@@ -90,9 +97,9 @@
 
 (def-async-handler fold
   [{:keys [body]}]
-  (let [{:keys [game-id player-id sig]} body]
+  (let [{:keys [game-id player-id sig share-keys]} body]
     (verify-signature sig player-id game-id)
-    (<!? (game/player-fold @game-manager game-id player-id))
+    (<!? (game/player-fold @game-manager game-id player-id share-keys))
     {:status 200, :body "ok"}))
 
 (def-async-handler bet

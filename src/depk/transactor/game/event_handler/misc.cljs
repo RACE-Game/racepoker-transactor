@@ -4,7 +4,7 @@
    [depk.transactor.game.encrypt :as e]
    [depk.transactor.game.evaluator :as evaluator]
    [depk.transactor.util :as    u
-                         :refer [go-try <!? info merge-chs-orderly]]
+                         :refer [go-try <!? merge-chs-orderly]]
    [depk.transactor.constant :as c]
    [cljs.core.async :as a]
    [clojure.set :as set]))
@@ -180,7 +180,7 @@
   (assoc
    state
    :status             :game-status/init
-   ;; :player-map         nil
+   :released-key-map   nil
    :street             nil
    :card-ciphers       []
    :after-keyshare     nil
@@ -190,7 +190,7 @@
    :min-raise          nil
    :street-bet         nil
    :bet-map            nil
-   :dispatch-events    nil
+   :dispatch-event     nil
    :api-requests       nil
    :pots               []
    :showdown-map       nil
@@ -212,20 +212,18 @@
 (defn- dispatch-reset
   "Dispatch reset event."
   [state]
-  (update state
-          :dispatch-events
-          assoc
-          c/reset-timeout-delay
-          (m/make-event :system/reset state {})))
+  (assoc state
+         :dispatch-event
+         [c/reset-timeout-delay
+          (m/make-event :system/reset state {})]))
 
 (defn dispatch-start-game
   [state btn]
   (let [{:keys [next-start-ts]} state]
     (-> state
-        (update :dispatch-events
-                assoc
-                c/start-game-delay
-                (m/make-event :system/start-game state {:btn btn})))))
+        (assoc :dispatch-event
+               [c/start-game-delay
+                (m/make-event :system/start-game state {:btn btn})]))))
 
 (defn try-start-game
   [state]
@@ -247,38 +245,33 @@
           state
           player-ids))
 
-
 (defn dispatch-encrypt-timeout
   [state]
-  (update state
-          :dispatch-events
-          assoc
-          c/encrypt-timeout-delay
-          (m/make-event :system/encrypt-timeout state {})))
+  (assoc state
+         :dispatch-event
+         [c/encrypt-timeout-delay
+          (m/make-event :system/encrypt-timeout state {})]))
 
 (defn dispatch-shuffle-timeout
   [state]
-  (update state
-          :dispatch-events
-          assoc
-          c/shuffle-timeout-delay
-          (m/make-event :system/shuffle-timeout state {})))
+  (assoc state
+         :dispatch-event
+         [c/shuffle-timeout-delay
+          (m/make-event :system/shuffle-timeout state {})]))
 
 (defn dispatch-key-share-timeout
   [state]
-  (update state
-          :dispatch-events
-          assoc
-          c/key-share-timeout-delay
-          (m/make-event :system/key-share-timeout state {})))
+  (assoc state
+         :dispatch-event
+         [c/key-share-timeout-delay
+          (m/make-event :system/key-share-timeout state {})]))
 
 (defn dispatch-player-action-timeout
   [state]
-  (update state
-          :dispatch-events
-          assoc
-          c/player-action-timeout-delay
-          (m/make-event :system/player-action-timeout state {})))
+  (assoc state
+         :dispatch-event
+         [c/player-action-timeout-delay
+          (m/make-event :system/player-action-timeout state {})]))
 
 (defn valid-key-ident?
   [state key-ident player-id]

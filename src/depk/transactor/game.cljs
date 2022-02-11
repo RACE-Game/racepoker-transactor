@@ -9,7 +9,7 @@
    [depk.transactor.game.encrypt :as encrypt]
    [depk.transactor.game.manager :as manager]
    [depk.transactor.game.api :as api]
-   [taoensso.timbre :as log]))
+   [depk.transactor.log :as log]))
 
 (defn error-game-not-exist!
   [game-id]
@@ -114,6 +114,21 @@
                                       player-id))
      (error-game-not-exist! game-id))))
 
+(defn release
+  [game-manager game-id player-id share-keys]
+  {:pre [(string? game-id)
+         (string? player-id)
+         (map? share-keys)]}
+  (go-try
+   (log/infof "player[%s] release keys" player-id)
+   (if-let [game-handle (manager/find-game game-manager game-id)]
+     (handle/send-event game-handle
+                        (m/make-event :client/release
+                                      (handle/get-snapshot game-handle)
+                                      {:share-keys share-keys}
+                                      player-id))
+     (error-game-not-exist! game-id))))
+
 (defn player-bet
   [game-manager game-id player-id amount]
   {:pre [(string? game-id)
@@ -160,7 +175,7 @@
      (error-game-not-exist! game-id))))
 
 (defn player-fold
-  [game-manager game-id player-id]
+  [game-manager game-id player-id share-keys]
   {:pre [(string? game-id)
          (string? player-id)]}
   (go-try
@@ -169,7 +184,7 @@
      (handle/send-event game-handle
                         (m/make-event :player/fold
                                       (handle/get-snapshot game-handle)
-                                      {}
+                                      {:share-keys share-keys}
                                       player-id))
      (error-game-not-exist! game-id))))
 

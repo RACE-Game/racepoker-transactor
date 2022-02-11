@@ -9,7 +9,7 @@
    [depk.transactor.game.sync-loop :as sync-loop]
    [depk.transactor.game.event-loop :as event-loop]
    [depk.transactor.game.api-transport :as api-transport]
-   [taoensso.timbre :as log]))
+   [depk.transactor.log :as log]))
 
 (defn game-not-exist!
   [game-id]

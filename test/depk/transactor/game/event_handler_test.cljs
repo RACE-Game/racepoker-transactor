@@ -23,10 +23,10 @@
                  :system/sync-state
                  state
                  {:players [{:pubkey 100, :chips 1000}]})]
-      (t/is (= {:player-map      expected-player-map,
-                :dispatch-events nil}
+      (t/is (= {:player-map     expected-player-map,
+                :dispatch-event nil}
                (-> (sut/handle-event state event)
-                   (select-keys [:player-map :dispatch-events]))))))
+                   (select-keys [:player-map :dispatch-event]))))))
 
   (t/testing "success with enough players to start"
     (let [state      (-> (m/make-game-state {:btn 0} {})
@@ -60,7 +60,7 @@
 
       (t/is (thrown-with-msg? ExceptionInfo #"Invalid game status"
               (-> (sut/handle-event state event)
-                  (select-keys [:player-map :dispatch-events :shuffle-player-id]))))))
+                  (select-keys [:player-map :dispatch-event :shuffle-player-id]))))))
 
   (t/async done
     (go
@@ -71,13 +71,13 @@
 
          (t/is (= {:player-map        (:player-map state),
                    :shuffle-player-id 101,
-                   :dispatch-events   {3000
+                   :dispatch-event    [3000
                                        {:type      :system/shuffle-timeout,
                                         :state-id  1,
                                         :data      {},
-                                        :player-id nil}}}
+                                        :player-id nil}]}
                   (-> (<! (sut/handle-event state event))
-                      (select-keys [:player-map :dispatch-events :shuffle-player-id]))))))
+                      (select-keys [:player-map :dispatch-event :shuffle-player-id]))))))
      (done))))
 
 
