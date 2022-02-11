@@ -14,7 +14,7 @@
 (defn player-already-alive!
   [state event]
   (throw (ex-info "Player already alive"
-                  {:state state
+                  {:state state,
                    :event event})))
 
 (defn invalid-game-status!
@@ -180,7 +180,7 @@
   (assoc
    state
    :status             :game-status/init
-   :player-map         nil
+   ;; :player-map         nil
    :street             nil
    :card-ciphers       []
    :after-keyshare     nil
@@ -195,7 +195,9 @@
    :pots               []
    :showdown-map       nil
    :prize-map          nil
-   :player-actions     []))
+   :player-actions     []
+   :winning-type       nil
+   :after-key-share    nil))
 
 (defn get-player-hole-card-indices
   [{:keys [btn player-map], :as state}]
@@ -206,6 +208,15 @@
     (->> (for [[pid] player-map]
            [pid (nth idxs (get pid-to-idx pid))])
          (into {}))))
+
+(defn- dispatch-reset
+  "Dispatch reset event."
+  [state]
+  (update state
+          :dispatch-events
+          assoc
+          c/reset-timeout-delay
+          (m/make-event :system/reset state {})))
 
 (defn dispatch-start-game
   [state btn]
@@ -649,6 +660,7 @@
          (update-prize-map)
          (update-chips-change-map)
          (submit-game-result)
+         (dispatch-reset)
          (assoc :status       :game-status/showdown
                 :winning-type winning-type)))))
 
@@ -668,6 +680,7 @@
                 (update :pots conj (m/make-pot (set (keys bet-map)) bet-sum #{player-id})))
         (update-in [:chips-change-map player-id] (fnil + 0) bet-sum)
         (submit-game-result)
+        (dispatch-reset)
         (assoc :status       :game-status/settle
                :winning-type :last-player
                :bet-map      nil))))

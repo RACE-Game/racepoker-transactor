@@ -21,15 +21,24 @@
 ;; will only success when game is in prepare status.
 ;; will start game after a few seconds.
 (defmethod handle-event :system/sync-state
-  [state {{:keys [players game-account-state]} :data, :as event}]
+  [{:keys [status], :as state} {{:keys [players game-account-state]} :data, :as event}]
 
-  (when-not (#{:game-status/init :game-status/settle :game-status/showdown} (:status state))
+  (when-not (= :game-status/init status)
     (misc/invalid-game-status! state event))
 
   (-> state
-      (misc/reset-game-state)
-      (misc/merge-sync-state players game-account-state)
-      (misc/try-start-game)))
+      (misc/merge-sync-state players game-account-state)))
+
+;; system/reset
+;; receiving this event for reset states
+(defmethod handle-event :system/reset
+  [{:keys [status], :as state} event]
+
+  (when-not (#{:game-status/settle :game-status/showdown} status)
+    (misc/invalid-game-status! state event))
+
+  (-> state
+      (misc/reset-game-state)))
 
 ;; system/start-game
 ;; receiving this event when game start.
@@ -56,7 +65,8 @@
                                    :player-id nil}]
                   :btn           btn
                   :shuffle-player-id (:player-id (misc/get-player-by-position state btn))
-                  :status        :game-status/shuffle))))
+                  :status        :game-status/shuffle)
+           (misc/dispatch-shuffle-timeout))))
     (-> state
         (misc/kick-dropout-players))))
 
@@ -85,12 +95,14 @@
           (assoc :prepare-cards new-prepare-cards
                  :shuffle-player-id nil
                  :encrypt-player-id (:player-id (misc/get-player-by-position state btn))
-                 :status        :game-status/encrypt))
+                 :status        :game-status/encrypt)
+          (misc/dispatch-encrypt-timeout))
 
       :else
       (-> state
           (assoc :prepare-cards     new-prepare-cards
-                 :shuffle-player-id new-shuffle-player-id)))))
+                 :shuffle-player-id new-shuffle-player-id)
+          (misc/dispatch-shuffle-timeout)))))
 
 ;; client/encrypt-cards
 ;; receiving this event when player submit encrypted cards
@@ -125,12 +137,14 @@
                     :street            :street/preflop
                     :status            :game-status/key-share
                     :after-key-share   :init-street)
-             (misc/update-require-key-idents)))
+             (misc/update-require-key-idents)
+             (misc/dispatch-key-share-timeout)))
 
        :else
        (-> state
            (assoc :prepare-cards     new-prepare-cards
-                  :encrypt-player-id new-encrypt-player-id))))))
+                  :encrypt-player-id new-encrypt-player-id)
+           (misc/dispatch-encrypt-timeout))))))
 
 ;; client/share-keys
 ;; receiving this event when player share its keys.

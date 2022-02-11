@@ -8,24 +8,28 @@
    [taoensso.timbre          :as log]))
 
 (defn start-game-state-sync
-  "Fetch game state through chain API, send :system/sync-state event to game handle.
-
-  Exit and close game handle's input chan when there's no player in game account."
+  "Fetch game state through chain API, send :system/sync-state event to game handle."
   [game-handle chain-api]
-  (let [{:keys [game-id input]} game-handle]
-    (log/infof "start state sync for game[%s]" game-id)
-    (go-loop [prev nil]
-      (let [state      (<! (api/fetch-game-account chain-api game-id))
-            {:keys [players]} state
-            player-cnt (count (filter some? players))]
+  (let [{:keys [game-id input snapshot]} game-handle]
 
-        ;; closing `input` here will shutdown all loops
-        ;; currently, we do not shutdown even there's no players
-        (do (when (not= prev state)
-                (let [event (m/make-event :system/sync-state
-                                          (game-handle/get-snapshot game-handle)
-                                          {:players            players,
-                                           :game-account-state state})]
-                  (>! input event)))
-              (<! (timeout 1000))
-              (recur state))))))
+    (log/infof "start state sync for game[%s]" game-id)
+
+    (go-loop [prev nil]
+      ;; only fetch state for init status
+      (if (= :game-status/init (:status @snapshot))
+
+        (let [state (<! (api/fetch-game-account chain-api game-id))
+              {:keys [players]} state]
+          (log/infof "fetch game state for game[%s]" game-id)
+          (<! (timeout 1000))
+          (when (not= prev state)
+            (let [event (m/make-event :system/sync-state
+                                      (game-handle/get-snapshot game-handle)
+                                      {:players            players,
+                                       :game-account-state state})]
+              (>! input event)))
+          (recur state))
+
+        (do
+          (<! (timeout 1000))
+          (recur prev))))))

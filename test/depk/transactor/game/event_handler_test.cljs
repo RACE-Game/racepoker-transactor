@@ -38,10 +38,9 @@
                       state
                       {:players [{:pubkey "100", :chips 1000} nil {:pubkey "101", :chips 10000}]})]
       (t/is
-       (= {:player-map      player-map,
-           :dispatch-events {c/start-game-delay (m/make-event :system/start-game state {:btn 2})}}
+       (= {:player-map player-map}
           (-> (sut/handle-event state event)
-              (select-keys [:player-map :dispatch-events])))))))
+              (select-keys [:player-map])))))))
 
 (def state-with-players
   (-> (m/make-game-state {:btn 0} {})
@@ -49,7 +48,8 @@
              {100 (m/make-player-state 100 10000 0),
               101 (m/make-player-state 101 10000 1),
               102 (m/make-player-state 102 10000 2)}
-             :btn        0)))
+             :btn        0
+             :state-id   1)))
 
 (t/deftest system-start-game
 
@@ -71,7 +71,11 @@
 
          (t/is (= {:player-map        (:player-map state),
                    :shuffle-player-id 101,
-                   :dispatch-events   nil}
+                   :dispatch-events   {3000
+                                       {:type      :system/shuffle-timeout,
+                                        :state-id  1,
+                                        :data      {},
+                                        :player-id nil}}}
                   (-> (<! (sut/handle-event state event))
                       (select-keys [:player-map :dispatch-events :shuffle-player-id]))))))
      (done))))

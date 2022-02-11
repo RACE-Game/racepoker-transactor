@@ -2,6 +2,8 @@
   (:require
    [depk.transactor.game.api :as api]
    [depk.transactor.game :as game]
+   [depk.transactor.game.handle :as handle]
+   [depk.transactor.game.manager :as manager]
    [clojure.walk :as walk]
    [depk.transactor.state.game-manager :refer [game-manager]]))
 
@@ -39,5 +41,12 @@
                     (assoc :event evt)
                     (format-vals))])))))
 
+(defn st
+  [game-id]
+  (js/console.log
+   (-> (manager/find-game @game-manager game-id)
+       (handle/get-snapshot))))
+
 (comment
-  (his "3uefwNfjDu7kxwEjQnBsp5qJkaeyBW18jGjydEH5EgyQ"))
+  (his "3uefwNfjDu7kxwEjQnBsp5qJkaeyBW18jGjydEH5EgyQ")
+  (st "3uefwNfjDu7kxwEjQnBsp5qJkaeyBW18jGjydEH5EgyQ"))

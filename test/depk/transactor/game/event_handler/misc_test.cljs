@@ -472,12 +472,14 @@
                  (select-keys [:street :status :after-key-share :require-key-idents]))))))
 
 (t/deftest single-player-win
-  (let [state {:player-map {100 {:status :player-status/fold, :chips 10000},
+  (let [state {:state-id   1,
+               :player-map {100 {:status :player-status/fold, :chips 10000},
                             101 {:status :player-status/acted, :chips 10000},
                             102 {:status :player-status/fold, :chips 10000}},
                :pots       [(m/make-pot #{100 101 102} 3000)
                             (m/make-pot #{101} 2000)]}]
-    (t/is (= {:player-map       {100 {:status :player-status/fold,
+    (t/is (= {:state-id         1,
+              :player-map       {100 {:status :player-status/fold,
                                       :chips  10000},
                                  101 {:status :player-status/acted,
                                       :chips  15000},
@@ -498,14 +500,20 @@
                                                       102 -1000},
                                   :player-status-map {100 :normal,
                                                       101 :normal,
-                                                      102 :normal}}]}
+                                                      102 :normal}}],
+              :dispatch-events  {c/reset-timeout-delay
+                                 {:type      :system/reset,
+                                  :state-id  1,
+                                  :data      {},
+                                  :player-id nil}}}
              (sut/single-player-win state 101)))
 
     ;; with blind bets
     (let [state-with-bet-map (assoc state
                                     :bet-map {100 50, 101 100}
                                     :pots    [])]
-      (t/is (= {:player-map       {100 {:status :player-status/fold,
+      (t/is (= {:state-id         1,
+                :player-map       {100 {:status :player-status/fold,
                                         :chips  10000},
                                    101 {:status :player-status/acted,
                                         :chips  10150},
@@ -525,7 +533,12 @@
                                                         102 0},
                                     :player-status-map {100 :normal,
                                                         101 :normal,
-                                                        102 :normal}}]}
+                                                        102 :normal}}],
+                :dispatch-events  {c/reset-timeout-delay
+                                   {:type      :system/reset,
+                                    :state-id  1,
+                                    :data      {},
+                                    :player-id nil}}}
                (sut/single-player-win state-with-bet-map 101))))
 
     ;; with normal bets
@@ -534,7 +547,8 @@
                                     {100 500,
                                      101 1000,
                                      102 500})]
-      (t/is (= {:player-map       {100 {:status :player-status/fold,
+      (t/is (= {:state-id         1,
+                :player-map       {100 {:status :player-status/fold,
                                         :chips  10000},
                                    101 {:status :player-status/acted,
                                         :chips  17000},
@@ -556,7 +570,12 @@
                                                         102 -1500},
                                     :player-status-map {100 :normal,
                                                         101 :normal,
-                                                        102 :normal}}]}
+                                                        102 :normal}}],
+                :dispatch-events  {c/reset-timeout-delay
+                                   {:type      :system/reset,
+                                    :state-id  1,
+                                    :data      {},
+                                    :player-id nil}}}
                (sut/single-player-win state-with-bet-map 101))))))
 
 (t/deftest next-state-case
@@ -725,10 +744,16 @@
                               101 (assoc (m/make-player-state 101 10000 1)
                                          :status
                                          :player-status/acted)},
-            :btn             1}]
+            :btn             1,
+            :state-id        1}]
        (t/is
         (=
-         {:prize-map        {100 2000},
+         {:dispatch-events  {c/reset-timeout-delay
+                             {:type      :system/reset,
+                              :state-id  1,
+                              :data      {},
+                              :player-id nil}},
+          :prize-map        {100 2000},
           :chips-change-map {100 1000,
                              101 -1000},
           :showdown-map     {100 {:category   :four-of-a-kind,
@@ -744,5 +769,6 @@
                                   :hole-cards [[:s :q] [:d :q]]}},
           :pots             [(m/make-pot #{100 101} 2000 #{100})]}
          (let [state (<! (sut/settle state nil))]
-           (select-keys state [:showdown-map :pots :prize-map :chips-change-map])))))
+           (select-keys state
+                        [:showdown-map :pots :prize-map :chips-change-map :dispatch-events])))))
      (done))))
