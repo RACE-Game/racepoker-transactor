@@ -11,6 +11,12 @@
 
 ;; errors
 
+(defn player-already-alive!
+  [state event]
+  (throw (ex-info "Player already alive"
+                  {:state state
+                   :event event})))
+
 (defn invalid-game-status!
   [state event]
   (throw (ex-info "Invalid game status"

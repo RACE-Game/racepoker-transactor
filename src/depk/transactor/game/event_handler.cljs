@@ -248,6 +248,9 @@
    {player-id :player-id,
     :as       event}]
 
+  (when (= :normal (get-in player-map [player-id :online-status]))
+    (misc/player-already-alive! state event))
+
   (when-not (= status :game-status/init)
     (misc/invalid-game-status! state event))
 
