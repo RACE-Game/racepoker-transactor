@@ -1,9 +1,17 @@
 (ns depk.transactor.log
   #?(:cljs
      (:require
-      [taoensso.timbre :as log]))
+      [taoensso.timbre :as log]
+      [clojure.string :as str]))
   #?(:cljs
      (:require-macros depk.transactor.log)))
+
+#?(:cljs
+   (log/merge-config! {:output-fn (fn [d]
+                                    (str
+                                     (str/upper-case (name (:level d)))
+                                     " "
+                                     (force (:msg_ d))))}))
 
 #?(:cljs
      (goog-define disable-log false))

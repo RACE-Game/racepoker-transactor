@@ -92,8 +92,9 @@
    after-key-share
 
    ;; released keys, keys backup from fold players
-   ;; a nested map, player-id -> key-ident -> key
-   released-key-map
+   ;; a nested map, player-id -> released-keys
+   ;; released-keys is a list of encrypt-key
+   released-keys-map
 
    ;; ----------------------------------------------
    ;; prepare states
@@ -143,7 +144,7 @@
    ;; reverse current state id
    ;; this is for some special events like :client/leave
    reserve-state-id
-   ])
+  ])
 
 (defn make-game-state
   [game-account-state init-state]

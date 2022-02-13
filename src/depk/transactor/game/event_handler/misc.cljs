@@ -41,6 +41,12 @@
                   {:state state,
                    :event event})))
 
+(defn empty-released-keys!
+  [state event]
+  (throw (ex-info "Released keys"
+                  {:state state,
+                   :event event})))
+
 (defn decryption-failed!
   []
   (throw (ex-info "Decryption failed" {})))
@@ -180,7 +186,7 @@
   (assoc
    state
    :status             :game-status/init
-   :released-key-map   nil
+   :released-keys-map  nil
    :street             nil
    :card-ciphers       []
    :after-keyshare     nil

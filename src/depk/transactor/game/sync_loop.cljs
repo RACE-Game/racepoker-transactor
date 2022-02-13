@@ -5,25 +5,28 @@
    [depk.transactor.game.api :as api]
    [depk.transactor.game.models :as m]
    [depk.transactor.game.handle :as game-handle]
-   [depk.transactor.log          :as log]))
+   [depk.transactor.log      :as log]))
 
 (defn start-game-state-sync
-  "Fetch game state through chain API, send :system/sync-state event to game handle."
+  "Fetch game state through chain API, send :system/sync-state event to game handle.
+
+  Will dispatch :system/sync-state event when state changes."
   [game-handle chain-api]
   (let [{:keys [game-id input snapshot]} game-handle]
 
     (log/infof "start state sync for game[%s]" game-id)
 
-    (go-loop []
+    (go-loop [prev-state nil]
       (<! (timeout 1000))
       (let [{:keys [status game-no]} @snapshot]
         (when (= :game-status/init status)
           (log/infof "fetch game state for game[%s]" game-id)
           (let [{:keys [players], :as state} (<! (api/fetch-game-account chain-api game-id))]
-            (when (not= game-no (:game-no state))
+            (when (not= state prev-state)
               (let [event (m/make-event :system/sync-state
                                         (game-handle/get-snapshot game-handle)
                                         {:players            players,
                                          :game-account-state state})]
-                (>! input event)))))
-        (recur)))))
+                (>! input event)))
+            (recur state)))
+        (recur prev-state)))))

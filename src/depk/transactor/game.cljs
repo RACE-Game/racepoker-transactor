@@ -1,15 +1,15 @@
 (ns depk.transactor.game
   "Commit game events to Arweave and Solana."
   (:require
-   [depk.transactor.util :refer [go-try <!?]]
+   [depk.transactor.util            :refer [go-try <!?]]
    [depk.transactor.game.event-loop :as event-loop]
    [depk.transactor.game.event-handler :as event-handler]
-   [depk.transactor.game.models :as m]
-   [depk.transactor.game.handle :as handle]
-   [depk.transactor.game.encrypt :as encrypt]
-   [depk.transactor.game.manager :as manager]
-   [depk.transactor.game.api :as api]
-   [depk.transactor.log :as log]))
+   [depk.transactor.game.models     :as m]
+   [depk.transactor.game.handle     :as handle]
+   [depk.transactor.game.encrypt    :as encrypt]
+   [depk.transactor.game.manager    :as manager]
+   [depk.transactor.game.api        :as api]
+   [depk.transactor.log             :as log]))
 
 (defn error-game-not-exist!
   [game-id]
@@ -41,15 +41,16 @@
 ;; Leaving game
 ;; Must provides all keys
 (defn leave
-  [game-manager game-id player-id share-keys]
-  {:pre [(string? game-id)]}
+  [game-manager game-id player-id released-keys]
+  {:pre [(string? game-id)
+         (vector? released-keys)]}
   (go-try
    (log/infof "player[%s] leave game [%s]" player-id game-id)
    (if-let [game-handle (manager/find-game game-manager game-id)]
      (handle/send-event game-handle
                         (m/make-event :client/leave
                                       (handle/get-snapshot game-handle)
-                                      {:share-keys share-keys}
+                                      {:released-keys released-keys}
                                       player-id))
      (throw (ex-info "game not exist" {:game-id game-id})))))
 
@@ -115,17 +116,17 @@
      (error-game-not-exist! game-id))))
 
 (defn release
-  [game-manager game-id player-id share-keys]
+  [game-manager game-id player-id released-keys]
   {:pre [(string? game-id)
          (string? player-id)
-         (map? share-keys)]}
+         (vector? released-keys)]}
   (go-try
    (log/infof "player[%s] release keys" player-id)
    (if-let [game-handle (manager/find-game game-manager game-id)]
      (handle/send-event game-handle
                         (m/make-event :client/release
                                       (handle/get-snapshot game-handle)
-                                      {:share-keys share-keys}
+                                      {:released-keys released-keys}
                                       player-id))
      (error-game-not-exist! game-id))))
 

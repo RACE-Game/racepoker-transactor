@@ -48,9 +48,9 @@
 
 (def-async-handler leave
   [{:keys [body]}]
-  (let [{:keys [game-id player-id sig share-keys]} body]
+  (let [{:keys [game-id player-id sig released-keys]} body]
     (verify-signature sig player-id game-id)
-    (<!? (game/leave @game-manager game-id player-id share-keys))
+    (<!? (game/leave @game-manager game-id player-id released-keys))
     {:status 200, :body "ok"}))
 
 (def-async-handler alive
@@ -83,9 +83,9 @@
 
 (def-async-handler release
   [{:keys [body]}]
-  (let [{:keys [game-id player-id sig share-keys]} body]
+  (let [{:keys [game-id player-id sig released-keys]} body]
     (verify-signature sig player-id game-id)
-    (<!? (game/release @game-manager game-id player-id share-keys))
+    (<!? (game/release @game-manager game-id player-id released-keys))
     {:status 200, :body "ok"}))
 
 (def-async-handler call

@@ -290,8 +290,8 @@
 ;; 2. Game is not running
 ;; Send a claim transaction for player
 (defmethod handle-event :client/leave
-  [{:keys [status after-key-share player-map], :as state}
-   {{:keys [share-keys]} :data,
+  [{:keys [status player-map], :as state}
+   {{:keys [released-keys]} :data,
     player-id :player-id,
     :as       event}]
   (let [state (update-in state
@@ -308,7 +308,7 @@
       ;; Game is running, calculate next state
       true
       (-> state
-          (update :released-key-map assoc :player-id share-keys)
+          (update :released-keys-map assoc :player-id released-keys)
           (misc/next-state)))))
 
 ;; ;; client/release
@@ -316,25 +316,26 @@
 ;; ;; Can only be sent when status is play
 (defmethod handle-event :client/release
   [{:keys [status after-key-share player-map], :as state}
-   {{:keys [share-keys]} :data,
+   {{:keys [released-keys]} :data,
     player-id :player-id,
     :as       event}]
 
-  (when-not (seq share-keys)
-    (misc/empty-share-keys! state event))
+  (when-not (seq released-keys)
+    (misc/empty-released-keys! state event))
 
   (when-not (= :game-status/play status)
     (misc/invalid-game-status! state event))
 
-  (when-not (= :player-status/fold (get-in player-map [player-id :status]))
-    (misc/invalid-player-id! state event))
+  ;; (when-not (= :player-status/fold (get-in player-map [player-id :status]))
+  ;;   (misc/invalid-player-id! state event))
 
   (-> state
-      (update :released-key-map assoc player-id share-keys)))
+      (update :released-keys-map assoc player-id released-keys)))
 
 (defmethod handle-event :player/fold
   [{:keys [status action-player-id], :as state}
-   {{:keys [share-keys]} :data,
+   ;; use released keys
+   {{:keys [released-keys]} :data,
     player-id :player-id,
     :as       event}]
 
@@ -347,7 +348,6 @@
   (-> state
       (assoc-in [:player-map player-id :status] :player-status/fold)
       (update :player-actions conj {:action :fold, :player-id player-id})
-      (update :released-key-map assoc player-id share-keys)
       (misc/next-state)))
 
 (defmethod handle-event :player/call
