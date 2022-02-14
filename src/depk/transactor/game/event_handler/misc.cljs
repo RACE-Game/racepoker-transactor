@@ -199,8 +199,9 @@
    :min-raise          nil
    :street-bet         nil
    :bet-map            nil
-   :dispatch-event     nil
-   :api-requests       nil
+   ;; these two keys will be reset by event loop
+   ;; :dispatch-event     nil
+   ;; :api-requests       nil
    :pots               []
    :showdown-map       nil
    :prize-map          nil

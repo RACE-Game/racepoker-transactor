@@ -35,7 +35,7 @@
   `(cljs.core.async/go-loop ~binding
                             (try ~@body
                                  (catch js/Error e#
-                                   (depk.transactor.log/error e#)
+                                   (depk.transactor.log/error (ex-message e#))
                                    e#))))
 
 (defmacro <!?

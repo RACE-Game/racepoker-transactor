@@ -19,7 +19,6 @@
 ;; system/sync-state
 ;; receiving this event when game account reflect there's a new player
 ;; will only success when game is in prepare status.
-;; will start game after a few seconds.
 (defmethod handle-event :system/sync-state
   [{:keys [status], :as state} {{:keys [players game-account-state]} :data, :as event}]
 
@@ -68,7 +67,8 @@
                   :status        :game-status/shuffle)
            (misc/dispatch-shuffle-timeout))))
     (-> state
-        (misc/kick-dropout-players))))
+        (misc/kick-dropout-players)
+        (misc/reset-game-state))))
 
 ;; client/shuffle-cards
 ;; receiving this event when player submit shuffled cards
