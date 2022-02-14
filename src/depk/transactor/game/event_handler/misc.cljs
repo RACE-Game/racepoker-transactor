@@ -4,7 +4,7 @@
    [depk.transactor.game.encrypt :as e]
    [depk.transactor.game.evaluator :as evaluator]
    [depk.transactor.util :as    u
-                         :refer [go-try <!? merge-chs-orderly]]
+                         :refer [go-try <!?]]
    [depk.transactor.constant :as c]
    [cljs.core.async :as a]
    [clojure.set :as set]))
@@ -47,10 +47,13 @@
                   {:state state,
                    :event event})))
 
-(defn decryption-failed!
-  []
-  (throw (ex-info "Decryption failed" {})))
+(defn community-cards-decryption-failed!
+  [err-data]
+  (throw (ex-info "Community cards decryption failed" err-data)))
 
+(defn showdown-cards-decryption-failed!
+  [err-data]
+  (throw (ex-info "Showdown cards decryption failed" err-data)))
 
 (defn player-not-in-action!
   [state event]
@@ -294,6 +297,28 @@
          set
          (set/difference require-key-idents))))
 
+(defn take-released-keys
+  "Take released keys, merge into share-key-map.
+
+  If a client released its keys and left the game,
+  its released keys should be visible to all."
+  [{:keys [require-key-idents share-key-map player-map released-keys-map],
+    :as   state}]
+  (let [released-player-ids    (->> player-map
+                                    (vals)
+                                    (filter #(not= :normal (:status %)))
+                                    (map :player-id))
+
+        released-share-key-map (->> require-key-idents
+                                    (filter (complement (or share-key-map {})))
+                                    (keep
+                                     (fn [[pid _type idx :as idt]]
+                                       (when-let [k (get-in released-keys-map [pid idx])]
+                                         [idt k])))
+                                    (into {}))]
+    (-> state
+        (update :share-key-map merge released-share-key-map))))
+
 (defn- list-require-hole-cards-key-idents
   [player-ids card-idx-2d]
   (let [player-id-set (set player-ids)]
@@ -478,7 +503,6 @@
                                     (recur rest-id-sets)))))))]
     (assoc state :pots new-pots)))
 
-
 (defn collect-bet-to-pots
   "Update pots, reset bets.
 
@@ -524,7 +548,8 @@
       (assoc :street          :street/showdown
              :status          :game-status/key-share
              :after-key-share :settle)
-      (update-require-key-idents)))
+      (update-require-key-idents)
+      (take-released-keys)))
 
 (defn prepare-runner
   "Prepare runner for allin.
@@ -538,7 +563,8 @@
              :after-key-share :runner
              :street          :street/showdown
              :bet-map         nil)
-      (update-require-key-idents)))
+      (update-require-key-idents)
+      (take-released-keys)))
 
 (defn- decrypt-card
   "Decrypt card with public share key."
@@ -568,14 +594,15 @@
                                     (for [idx idxs]
                                       (e/import-aes-key
                                        (get share-key-map [id :community-card idx]))))))
-                         (merge-chs-orderly)
-                         (a/into [])))
+                         (a/map vector)))
          keys-2d   (partition 5 aes-keys)
          decrypted (<!? (e/decrypt-ciphers-with-keys-2d ciphers keys-2d))
          cards     (e/decrypted-ciphers->cards decrypted)]
      (when (or (not= (count ciphers) (count cards))
                (not (every? valid-card? cards)))
-       (decryption-failed!))
+       (community-cards-decryption-failed! {:count-ciphers (count ciphers),
+                                            :count-cards   (count cards),
+                                            :cards         cards}))
 
      cards)))
 
@@ -585,7 +612,7 @@
   ;; (.debug js/console share-key-map)
   ;; (.debug js/console player-map)
   (go-try
-   (let [ciphers           (e/hex->ciphers card-ciphers)
+   (let [orig-ciphers      (e/hex->ciphers card-ciphers)
 
          ;; pick the ciphers we need
          ;; all community cards and showdown hole cards
@@ -596,7 +623,7 @@
                                 (filter (comp #{:player-status/acted :player-status/allin} :status))
                                 (mapcat (fn [{:keys [player-id]}]
                                           (for [idx (get hole-card-indices player-id)]
-                                            [(nth ciphers idx) idx player-id]))))
+                                            [(nth orig-ciphers idx) idx player-id]))))
 
          ciphers           (mapv first rel)
          idxs              (mapv second rel)
@@ -609,16 +636,23 @@
                                                 (for [idx idxs]
                                                   (e/import-aes-key
                                                    (get share-key-map [id :showdown-card idx]))))))
-                                     (merge-chs-orderly)
-                                     (a/into [])))
+                                     (a/map vector)))
 
-         keys-2d           (partition (* 2 (count player-map)) aes-keys)
+         keys-2d           (partition (count rel) aes-keys)
          decrypted         (<!? (e/decrypt-ciphers-with-keys-2d ciphers keys-2d))
          cards             (e/decrypted-ciphers->cards decrypted)]
 
+     ;; (js/console.log "orig-ciphers: " orig-ciphers)
+     ;; (js/console.log "hole-card-indices: " hole-card-indices)
+     ;; (js/console.log "rel: " rel)
+     ;; (js/console.log "player-map: " player-map)
+     ;; (js/console.log "state: " state)
+
      (when (or (not= (count ciphers) (count cards))
                (not (every? valid-card? cards)))
-       (decryption-failed!))
+       (showdown-cards-decryption-failed! {:count-ciphers (count ciphers),
+                                           :count-cards   (count cards),
+                                           :cards         cards}))
 
      (->> (mapv vector ids cards)
           (group-by first)
@@ -633,6 +667,35 @@
                                            [id (:online-status p :normal)])
                                          (into {}))}]
     (update state :api-requests conj request)))
+
+(defn terminate
+  "Terminate current game.
+
+  Bet will be returned and all non-fold users are marked as winner."
+  [{:keys [player-map bet-map], :as state} non-compliant-player-ids]
+  (let [winner-player-ids (->> player-map
+                               (vals)
+                               (filter (fn [p]
+                                         (and (not= :player-status/fold (:status p))
+                                              (= :normal (:online-status p)))))
+                               (map :player-id)
+                               (filter (complement non-compliant-player-ids))
+                               (into #{}))
+        player-map        (->> player-map
+                               (map (fn [[pid p]]
+                                      [pid (update p :chips + (get bet-map pid 0))]))
+                               (into {}))]
+    (-> state
+        (assoc :bet-map nil)
+        (assoc :player-map player-map)
+        (assign-winner-to-pots winner-player-ids)
+        (update-prize-map)
+        (update-chips-change-map)
+        (submit-game-result)
+        (dispatch-reset)
+        ;; TODO, new status/type ?
+        (assoc :status       :game-status/settle
+               :winning-type :last-player))))
 
 (defn settle
   [{:keys [community-cards], :as state} winning-type]
@@ -703,7 +766,8 @@
          :player-map      new-player-map
          :min-raise       bb
          :street-bet      nil)
-        (update-require-key-idents))))
+        (update-require-key-idents)
+        (take-released-keys))))
 
 (defn next-street
   [street]
@@ -716,30 +780,41 @@
 (defn next-state-case
   "Ask next player for action or goto next stage when no player can act."
   [{:keys [street-bet street bet-map action-player-id player-map status], :as state}]
-  (let [remain-players     (->> player-map
-                                vals
-                                (filter (comp #{:player-status/allin :player-status/acted
-                                                :player-status/wait :player-status/in-action}
-                                              :status)))
+  (let [;; a list of player ids who did not provide their keys
+        non-compliant-player-ids (->> (list-missing-key-idents state)
+                                      (map first)
+                                      (into #{}))
 
-        players-to-act     (->>
-                            (list-players-in-order state
-                                                   (get-in player-map [action-player-id :position])
-                                                   #{:player-status/acted
-                                                     :player-status/wait}))
+        remain-players           (->> player-map
+                                      vals
+                                      (filter (comp #{:player-status/allin :player-status/acted
+                                                      :player-status/wait :player-status/in-action}
+                                                    :status)))
+
+        players-to-act           (->>
+                                  (list-players-in-order state
+                                                         (get-in player-map
+                                                                 [action-player-id :position])
+                                                         #{:player-status/acted
+                                                           :player-status/wait}))
 
         ;; next action player is who haven't bet or bet less than street-bet
-        next-action-player (->> players-to-act
-                                (filter #(or (< (get bet-map (:player-id %) 0) street-bet)
-                                             (= :player-status/wait (:status %))))
-                                first)
+        next-action-player       (->> players-to-act
+                                      (filter #(or (< (get bet-map (:player-id %) 0) street-bet)
+                                                   (= :player-status/wait (:status %))))
+                                      first)
 
-        new-street         (next-street street)
+        new-street               (next-street street)
 
-        allin-players      (->> remain-players
-                                (filter (comp #{:player-status/allin} :status)))]
+        allin-players            (->> remain-players
+                                      (filter (comp #{:player-status/allin} :status)))]
 
     (cond
+      ;; missing keys, game has to be terminated
+      ;; currently, terminate means a draw game for non-fold players
+      (seq non-compliant-player-ids)
+      [:terminate non-compliant-player-ids]
+
       ;; no bets yet, blind bets
       (and (= :street/preflop street)
            (nil? bet-map))
@@ -771,6 +846,7 @@
   [state]
   (let [[c v :as x] (next-state-case state)]
     (case c
+      :terminate         (terminate state v)
       :blind-bets        (blind-bets state)
       :single-player-win (single-player-win state v)
       :ask-player-for-action (ask-player-for-action state v)

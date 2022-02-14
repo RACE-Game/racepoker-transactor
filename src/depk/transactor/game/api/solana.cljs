@@ -1,6 +1,6 @@
 (ns depk.transactor.game.api.solana
   (:require
-   [depk.transactor.util :refer [go-try <!? merge-orderly]]
+   [depk.transactor.util :refer [go-try <!?]]
    [cljs.core.async :as    a
                     :refer [<! timeout chan]]
    [depk.transactor.game.api.protocols :as p]

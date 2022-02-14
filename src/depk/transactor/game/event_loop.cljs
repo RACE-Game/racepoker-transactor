@@ -28,7 +28,7 @@
   (go
    (if (not= (:state-id state) (:state-id event))
      (do
-       (log/debugf "drop expired event[%s]" (name (:type event)))
+       (log/debugf "Drop expired event[%s]" (name (:type event)))
        {:result :err, :state state, :error (expired-event! state event)})
      (try
        (let [new-state-id (if (get non-expire-event-types (:type event))
@@ -37,7 +37,7 @@
              new-state    (event-handler/handle-event (assoc state :state-id new-state-id) event)]
          (if (map? new-state)
            (do
-             (log/debugf "handle event [%s], status: %s -> %s"
+             (log/debugf "Handle event [%s], status: %s -> %s"
                          (str (:type event))
                          (str (:status state))
                          (str (:status new-state)))
@@ -45,16 +45,18 @@
            (let [v (<! new-state)]
              (if (map? v)
                (do
-                 (log/debugf "handle event [%s], status: %s -> %s"
+                 (log/debugf "Handle event [%s], status: %s -> %s"
                              (str (:type event))
                              (str (:status state))
                              (str (:status v)))
                  {:result :ok, :state v})
                (do
-                 (log/warnf "error from event handler: %s" (ex-message v))
+                 (log/warnf "Error(async) from event handler: %s" (ex-message v))
+                 ;; (.warn js/console "Error data: " (ex-data v))
                  {:result :err, :state state, :error v})))))
        (catch ExceptionInfo e
-         (log/warnf "error in event loop: %s" (ex-message e))
+         (log/warnf "Error(sync) in event loop: %s" (ex-message e))
+         ;; (.warn js/console "Error data: " (ex-data e))
          {:result :err, :state state, :error e})))))
 
 (defn dispatch-delay-event

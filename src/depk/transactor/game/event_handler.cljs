@@ -309,6 +309,7 @@
       true
       (-> state
           (update :released-keys-map assoc :player-id released-keys)
+          (misc/take-released-keys)
           (misc/next-state)))))
 
 ;; ;; client/release
@@ -323,14 +324,12 @@
   (when-not (seq released-keys)
     (misc/empty-released-keys! state event))
 
-  (when-not (= :game-status/play status)
+  (when-not (#{:game-status/play :game-status/key-share} status)
     (misc/invalid-game-status! state event))
 
-  ;; (when-not (= :player-status/fold (get-in player-map [player-id :status]))
-  ;;   (misc/invalid-player-id! state event))
-
   (-> state
-      (update :released-keys-map assoc player-id released-keys)))
+      (assoc :released-keys-map player-id released-keys)
+      (misc/take-released-keys)))
 
 (defmethod handle-event :player/fold
   [{:keys [status action-player-id], :as state}
