@@ -22,7 +22,9 @@
         (when (= :game-status/init status)
           (let [{:keys [players], :as state} (<! (api/fetch-game-account chain-api game-id))]
             (when (not= (:game-no state) game-no)
-              (log/infof "Sync loop dispatch event for game[%s]" game-id)
+              (log/infof "Sync loop dispatch event for game[%s], player count: %s"
+                         game-id
+                         (count (filter some? players)))
               (let [event (m/make-event :system/sync-state
                                         (game-handle/get-snapshot game-handle)
                                         {:players            players,

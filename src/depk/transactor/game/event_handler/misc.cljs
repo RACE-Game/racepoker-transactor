@@ -228,20 +228,14 @@
           (m/make-event :system/reset state {})]))
 
 (defn dispatch-start-game
-  [state btn]
-  (let [{:keys [next-start-ts]} state]
+  [state]
+  (let [{:keys [next-start-ts]} state
+        btn (get state :btn 0)
+        [next-btn _] (next-position-player state btn)]
     (-> state
         (assoc :dispatch-event
                [c/start-game-delay
-                (m/make-event :system/start-game state {:btn btn})]))))
-
-(defn try-start-game
-  [state]
-  (if (<= 2 (count (:player-map state)))
-    (let [btn (get state :btn 0)
-          [next-btn _] (next-position-player state btn)]
-      (dispatch-start-game state next-btn))
-    state))
+                (m/make-event :system/start-game state {:btn next-btn})]))))
 
 (defn mark-dropout-players
   [state player-ids]
@@ -751,7 +745,6 @@
 (defn change-street
   "Goto to street and reset some states."
   [{:keys [bb player-map], :as state} street]
-  (.log js/console player-map bb street)
   (let [new-player-map (->> (for [[player-id player-state] player-map]
                               [player-id
                                (if (= :player-status/acted (:status player-state))

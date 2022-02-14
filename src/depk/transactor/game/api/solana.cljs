@@ -129,18 +129,18 @@
 
          dealer-program-id (pubkey/make-public-key (get @config :dealer-program-address))
 
-         _ (log/infof "dealer program: %s" (get @config :dealer-program-address))
+         ;; _ (log/infof "dealer program: %s" (get @config :dealer-program-address))
 
          {:keys [players stack-account-pubkey mint-pubkey]} game-account-state
 
-         _ (log/infof "players: %s" players)
+         ;; _ (log/infof "players: %s" players)
          player-ids (for [p players]
                       (when p
                         (str (:pubkey p))))
 
          ix-body (build-settle-ix-body player-ids chips-change-map player-status-map)
 
-         _ (log/infof "settle instruction body: %s" (prn-str ix-body))
+         ;; _ (log/infof "settle instruction body: %s" (prn-str ix-body))
 
          ix-data (apply ib/make-instruction-data (cons c/instruction-header-settle ix-body))
 
@@ -167,8 +167,8 @@
             :isWritable false}]
           ata-keys)
 
-         _
-         (log/infof "settle instruction keys: %s" ix-keys)
+         ;; _
+         ;; (log/infof "settle instruction keys: %s" ix-keys)
 
          ix
          (transaction/make-transaction-instruction
@@ -179,11 +179,11 @@
          (doto (transaction/make-transaction)
           (transaction/add ix))]
 
-     (log/infof "sending settle transaction: game[%s]" game-id)
+     ;; (log/infof "sending settle transaction: game[%s]" game-id)
 
      (let [sig (<! (conn/send-transaction conn tx [fee-payer]))]
 
-       (log/infof "confirming settle transaction: game[%s]" game-id)
+       ;; (log/infof "confirming settle transaction: game[%s]" game-id)
 
        (<! (conn/confirm-transaction conn sig))
 
@@ -199,7 +199,7 @@
 
  (-fetch-game-account [this game-id]
    (go-try
-    ;; (log/infof "fetch game account state for game[%s]" game-id)
+    (log/infof "fetch game account state for game[%s]" game-id)
     (let [conn (conn/make-connection (get @config :solana-rpc-endpoint))
           game-account-pubkey (pubkey/make-public-key game-id)
           game-account-state (some-> (<!?

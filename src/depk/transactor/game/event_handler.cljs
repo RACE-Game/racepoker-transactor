@@ -3,6 +3,7 @@
    [depk.transactor.game.models :as m]
    [depk.transactor.game.encrypt :as encrypt]
    [depk.transactor.game.event-handler.misc :as misc]
+   [depk.transactor.log :as log]
    [cljs.core.async :refer [go <!]]))
 
 (defmulti handle-event
@@ -40,10 +41,12 @@
       (misc/reset-game-state)))
 
 ;; system/start-game
-;; receiving this event when game start.
-;; set game status to shuffle
-;; generate a default deck of cards
-;; ask the first player (BTN) to shuffle the cards.
+;; Receiving this event to trigger game start.
+;; Unless all players are ready, kick non-ready players
+;; When there's enough players to start:
+;; - set game status to shuffle
+;; - generate a default deck of cards
+;; - ask the first player (BTN) to shuffle the cards.
 (defmethod handle-event :system/start-game
   [{:keys [status player-map], :as state}
    {{:keys [btn]} :data, :as event}]
@@ -51,9 +54,32 @@
   (when-not (= :game-status/init status)
     (misc/invalid-game-status! state event))
 
+  (log/infof "Start game, players [%s]" (vals player-map))
+
   ;; Start when all players ready
   ;; otherwise kick all non-ready players
-  (if (every? #(= :normal (:online-status %)) (vals player-map))
+  (cond
+    ;; If any client is not ready, kick it
+    (not (every? #(= :normal (:online-status %)) (vals player-map)))
+    (-> state
+        (misc/kick-dropout-players)
+        (misc/reset-game-state))
+
+    ;; If the number of players is not enough for starting
+    ;; Require further alive event from the only client
+    (= (count player-map) 1)
+    (-> state
+        (misc/mark-dropout-players (keys player-map))
+        (misc/dispatch-start-game))
+
+    ;; No players
+    ;; Reset game state, and do nothing
+    ;; Waiting a player to join
+    (zero? (count player-map))
+    (-> state
+        (misc/reset-game-state))
+
+    :else
     (go
      (let [ciphers (encrypt/cards->card-strs misc/default-deck-of-cards)
            data    (-> (<! (encrypt/encrypt-ciphers-with-default-shuffle-key ciphers))
@@ -65,10 +91,7 @@
                   :btn           btn
                   :shuffle-player-id (:player-id (misc/get-player-by-position state btn))
                   :status        :game-status/shuffle)
-           (misc/dispatch-shuffle-timeout))))
-    (-> state
-        (misc/kick-dropout-players)
-        (misc/reset-game-state))))
+           (misc/dispatch-shuffle-timeout))))))
 
 ;; client/shuffle-cards
 ;; receiving this event when player submit shuffled cards
@@ -280,7 +303,7 @@
 
   (-> state
       (assoc-in [:player-map player-id :online-status] :normal)
-      (misc/try-start-game)))
+      (misc/dispatch-start-game)))
 
 ;; client/leave
 ;; A event received when a player leave game

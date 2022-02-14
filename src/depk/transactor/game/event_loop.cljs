@@ -66,7 +66,7 @@
   [event dispatch-event input]
   (when dispatch-event
     (let [[ms evt] dispatch-event]
-      (log/debugf "event[%s] dispatch event[%s] after %sms"
+      (log/debugf "Event[%s] dispatch event[%s] after %sms"
                   (str (:type event))
                   (str (:type evt))
                   (str ms))
@@ -79,7 +79,7 @@
   [event api-requests output]
   (doseq [req api-requests]
     (when req
-      (log/debugf "event[%s] dispatch api request[%s]" (str (:type event)) (prn-str req))
+      (log/debugf "Event[%s] dispatch api request[%s]" (str (:type event)) (prn-str req))
       (put! output req))))
 
 (defn collect-and-dispatch-game-history
@@ -101,7 +101,7 @@
 (defn start-event-loop
   [game-handle]
   (let [{:keys [snapshot input output game-id]} game-handle]
-    (log/infof "start event loop for game[%s]" game-id)
+    (log/infof "Start event loop for game[%s]" game-id)
     (go-loop [state   @snapshot
               records []]
       (let [event (<! input)]
@@ -117,8 +117,9 @@
                 (dispatch-delay-event event dispatch-event input)
                 (dispatch-api-request event api-requests output)
                 (reset! snapshot new-state)
+                (js/console.log "new-state: " new-state)
                 (recur new-state records))
               (recur old-state records)))
-          (do (log/infof "stop event loop for game[%s]" game-id)
+          (do (log/infof "Stop event loop for game[%s]" game-id)
               (swap! (:status game-handle) assoc :event-loop :stopped)
               (close! output)))))))
