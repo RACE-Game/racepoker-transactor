@@ -117,7 +117,7 @@
                 (dispatch-delay-event event dispatch-event input)
                 (dispatch-api-request event api-requests output)
                 (reset! snapshot new-state)
-                (js/console.log "new-state: " new-state)
+                ;; (js/console.log "new-state: " new-state)
                 (recur new-state records))
               (recur old-state records)))
           (do (log/infof "Stop event loop for game[%s]" game-id)

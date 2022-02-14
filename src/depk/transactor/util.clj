@@ -25,7 +25,7 @@
   `(cljs.core.async/go
     (try ~@body
          (catch js/Error e#
-           (depk.transactor.log/error e#)
+           (depk.transactor.log/error e# (ex-message e#))
            (if-let [cause# (:cause e#)]
              cause#
              e#)))))
