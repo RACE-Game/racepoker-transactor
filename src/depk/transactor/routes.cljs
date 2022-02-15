@@ -22,6 +22,11 @@
   ["/info"
    ["/histories" {:get h/histories}]])
 
+(defn make-faucet-routes
+  []
+  ["/faucet"
+   ["/request" {:post h/request-test-token}]])
+
 (defn make-action-routes
   []
   ["/action"
@@ -45,6 +50,7 @@
    ["/api/v1"
     (make-game-routes)
     (make-info-routes)
+    (make-faucet-routes)
     (make-action-routes)]])
 
 (defn make-endpoint

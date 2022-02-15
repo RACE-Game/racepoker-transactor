@@ -6,6 +6,8 @@
    [depk.transactor.game :as game]
    [solana-clj.publickey :as pubkey]
    [depk.transactor.state.game-manager :refer [game-manager]]
+   [depk.transactor.game.api :as api]
+   [depk.transactor.state.api :refer [chain-api]]
    ["buffer" :as buffer]
    ["tweetnacl" :as nacl]))
 
@@ -123,7 +125,12 @@
     (<!? (game/player-check @game-manager game-id player-id))
     {:status 200, :body "ok"}))
 
-(defn musk
-  [req cb]
-  (cb {:status 200,
-       :body   ""}))
+(def-async-handler request-test-token
+  [{:keys [body]}]
+  (let [{:keys [player-id]} body]
+    (<!? (api/faucet-request @chain-api player-id))
+    {:status 200, :body "ok"}))
+
+(def-async-handler musk
+  [req]
+  {:status 200, :body "ok"})
