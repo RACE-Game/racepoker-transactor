@@ -355,7 +355,7 @@
       (misc/take-released-keys)))
 
 (defmethod handle-event :player/fold
-  [{:keys [status action-player-id], :as state}
+  [{:keys [status action-player-id state-id], :as state}
    ;; use released keys
    {{:keys [released-keys]} :data,
     player-id :player-id,
@@ -369,11 +369,11 @@
 
   (-> state
       (assoc-in [:player-map player-id :status] :player-status/fold)
-      (update :player-actions conj {:action :fold, :player-id player-id})
+      (update :player-actions conj {:action :fold, :player-id player-id, :state-id state-id})
       (misc/next-state)))
 
 (defmethod handle-event :player/call
-  [{:keys [bet-map player-map status action-player-id street-bet], :as state}
+  [{:keys [bet-map player-map status action-player-id street-bet state-id], :as state}
    {player-id :player-id, :as event}]
 
   (when-not (= :game-status/play status)
@@ -391,11 +391,13 @@
         (assoc-in [:player-map player-id] player)
         (update-in [:bet-map player-id] (fnil + 0) bet)
         (assoc-in [:player-map player-id :status] status)
-        (update :player-actions conj {:action :call, :amount bet, :player-id player-id})
+        (update :player-actions
+                conj
+                {:action :call, :amount bet, :player-id player-id, :state-id state-id})
         (misc/next-state))))
 
 (defmethod handle-event :player/check
-  [{:keys [bet-map status action-player-id street-bet], :as state}
+  [{:keys [bet-map status action-player-id street-bet state-id], :as state}
    {player-id :player-id, :as event}]
 
   (when-not (= :game-status/play status)
@@ -409,11 +411,11 @@
 
   (-> state
       (assoc-in [:player-map player-id :status] :player-status/acted)
-      (update :player-actions conj {:action :check, :player-id player-id})
+      (update :player-actions conj {:action :check, :player-id player-id, :state-id state-id})
       (misc/next-state)))
 
 (defmethod handle-event :player/bet
-  [{:keys [bet-map player-map status min-raise action-player-id street-bet], :as state}
+  [{:keys [bet-map player-map status min-raise action-player-id street-bet state-id], :as state}
    {{:keys [amount]} :data,
     player-id        :player-id,
     :as              event}]
@@ -447,11 +449,13 @@
                   (if allin? :player-status/allin :player-status/acted))
         (assoc :min-raise  bet
                :street-bet bet)
-        (update :player-actions conj {:action :bet, :amount amount, :player-id player-id})
+        (update :player-actions
+                conj
+                {:action :bet, :amount amount, :player-id player-id, :state-id state-id})
         (misc/next-state))))
 
 (defmethod handle-event :player/raise
-  [{:keys [bet-map player-map min-raise status action-player-id street-bet], :as state}
+  [{:keys [bet-map player-map min-raise status action-player-id street-bet state-id], :as state}
    {{:keys [amount]} :data,
     player-id        :player-id,
     :as              event}]
@@ -484,5 +488,7 @@
                     (if allin? :player-status/allin :player-status/acted))
           (assoc :min-raise  new-min-raise
                  :street-bet new-street-bet)
-          (update :player-actions conj {:action :raise, :amount amount, :player-id player-id})
+          (update :player-actions
+                  conj
+                  {:action :raise, :amount amount, :player-id player-id, :state-id state-id})
           (misc/next-state)))))
