@@ -213,7 +213,7 @@
 
  (-faucet-request [this player-id]
    ;; Testnet only
-   (when (#{:local :testnet} @env)
+   (when (#{:local :devnet :testnet} @env)
      (go-try
       (log/infof "Faucet request, player[%s]" player-id)
       (let [fee-payer (load-private-key)
@@ -228,7 +228,7 @@
             transfer-sol-ix (system-program/transfer
                              {:fromPubkey fee-payer-pubkey,
                               :toPubkey   player-account-pubkey,
-                              :lamports   200000000})
+                              :lamports   20000000})
 
             mint-pubkey (pubkey/make-public-key "RACE5fnTKB9obGtCusArTQ6hhdNXAtf3HarvJM17rxJ")
             payer-ata-pubkey (<!?
