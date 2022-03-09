@@ -1,6 +1,7 @@
 (ns depk.transactor.main
   (:require
    [depk.transactor.state.config :refer [use-env]]
+   [depk.transactor.state.websocket]
    [depk.transactor.state.server]
    [depk.transactor.state.api]
    [depk.transactor.state.game-manager]
@@ -23,13 +24,13 @@
 (defn main
   [& args]
   (when (seq args) (use-env (keyword (first args))))
-  (mount/start))
-
-(defn reset []
-  (mount/stop)
-  (mount/start))
-
-(aset js/global "reset" reset)
+  (mount/start #'depk.transactor.state.config/config
+               #'depk.transactor.state.api/chain-api
+               #'depk.transactor.state.api/store-api
+               #'depk.transactor.state.game-manager/game-manager
+               #'depk.transactor.state.endpoint/endpoint
+               #'depk.transactor.state.websocket/websocket
+               #'depk.transactor.state.server/server))
 
 (comment
   (main))

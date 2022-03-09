@@ -134,3 +134,14 @@
 (def-async-handler musk
   [req]
   {:status 200, :body "ok"})
+
+
+;; Websocket Event Handler
+
+(defmulti event-msg-handler :id)
+
+(defmethod event-msg-handler :default
+  [{:as ev-msg, :keys [event id ?data ring-req ?reply-fn send-fn]}]
+  (log/debugf "Unhandled event: %s" ev-msg)
+  (when ?reply-fn
+    (?reply-fn {:unmatched-event-as-echoed-from-server ev-msg})))

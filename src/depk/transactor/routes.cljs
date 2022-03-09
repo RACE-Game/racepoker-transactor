@@ -3,11 +3,13 @@
    [macchiato.middleware.params :refer [wrap-params]]
    [macchiato.middleware.keyword-params :refer [wrap-keyword-params]]
    [macchiato.middleware.restful-format :refer [wrap-restful-format]]
+   [macchiato.middleware.defaults :refer [wrap-defaults api-defaults]]
    [reitit.ring :as ring]
    ;; [ring.middleware.cors :refer [wrap-cors]]
    [depk.transactor.cors :refer [wrap-cors]]
    [depk.transactor.handlers :as h]
    [depk.transactor.state.config :as config]
+   [depk.transactor.state.websocket :refer [websocket]]
    [depk.transactor.util :as u]
    [cognitect.transit :as transit]))
 
@@ -16,6 +18,12 @@
   ["/game"
    ["/attach" {:post h/attach-game}]
    ["/state" {:post h/state}]])
+
+(defn make-websocket-routes
+  []
+  ["/chsk" {:get (:ring-ajax-get-or-ws-handshake @websocket)
+            :post (:ring-ajax-post @websocket)
+            :ws (:ring-ajax-get-or-ws-handshake @websocket)}])
 
 (defn make-info-routes
   []
@@ -48,6 +56,7 @@
   [""
    ["/" {:get h/alive-handler}]
    ["/api/v1"
+    (make-websocket-routes)
     (make-game-routes)
     (make-info-routes)
     (make-faucet-routes)
@@ -58,11 +67,13 @@
   (ring/ring-handler
    (ring/router
     [(make-routes)]
-    {:data {:middleware [[wrap-cors
-                          :access-control-allow-origin #".*"
-                          :access-control-allow-methods [:get :post :put :delete]]
-                         [wrap-restful-format
-                          {:keywordize? true}]
-                         wrap-params
-                         wrap-keyword-params]}})
+    ;; {:data {:middleware [[wrap-cors
+    ;;                       :access-control-allow-origin #".*"
+    ;;                       :access-control-allow-methods [:get :post :put :delete :ws]]
+    ;;                      [wrap-restful-format
+    ;;                       {:keywordize? true}]
+    ;;                      wrap-params
+    ;;                      wrap-keyword-params]}}
+    {:data {:middleware [[wrap-defaults api-defaults]]}}
+    )
    (ring/create-default-handler)))

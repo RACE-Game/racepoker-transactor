@@ -14,8 +14,10 @@
         opts {:handler    endpoint,
               :host       host,
               :port       port,
-              :on-success #(log/infof "Server started on %s:%s" host port)}]
-    (http/start opts)))
+              :on-success #(log/infof "Server started on %s:%s" host port)}
+        server (http/start opts)]
+    (http/start-ws server endpoint)
+    server))
 
 (mount/defstate server
   :start
