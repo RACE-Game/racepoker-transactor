@@ -9,6 +9,7 @@
    [depk.transactor.game.sync-loop :as sync-loop]
    [depk.transactor.game.event-loop :as event-loop]
    [depk.transactor.game.api-transport :as api-transport]
+   [depk.transactor.game.state-broadcast :as state-broadcast]
    [depk.transactor.log :as log]))
 
 (defn game-not-exist!
@@ -26,6 +27,7 @@
       (event-loop/start-event-loop game-handle)
       (sync-loop/start-game-state-sync game-handle chain-api)
       (api-transport/start-api-transport game-handle chain-api store-api)
+      (state-broadcast/start-broadcast game-handle)
       (assoc game-handle-map game-id game-handle))))
 
 (defn load-game

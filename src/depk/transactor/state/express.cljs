@@ -2,43 +2,32 @@
   (:require
    [depk.transactor.handlers :as h]
    [depk.transactor.log :as log]
+   [depk.transactor.state.websocket :refer [websocket]]
    [taoensso.sente]
-   [taoensso.sente.server-adapters.express :as sente-express]
-   [mount.core      :as mount]
-   ["http"          :as http]
-   ["express"       :as express]
-   ["express-ws"    :as express-ws]
-   ["ws"            :as ws]
+   [mount.core :as mount]
+   [cljs.core.async :as a]
+   ["http" :as http]
+   ["express" :as express]
+   ["express-ws" :as express-ws]
+   ["ws" :as ws]
    ["cookie-parser" :as cookie-parser]
-   ["body-parser"   :as body-parser]
+   ["body-parser" :as body-parser]
    ["express-session" :as session]
-   ["csurf"         :as csurf]))
-
-(let [{:keys [ch-recv send-fn ajax-post-fn ajax-get-or-ws-handshake-fn
-              connected-uids]}
-      (sente-express/make-express-channel-socket-server! {:csrf-token-fn nil,
-                                                          :user-id-fn    h/user-id-fn})]
-  (def ajax-post ajax-post-fn)
-  (def ajax-get-or-ws-handshake ajax-get-or-ws-handshake-fn)
-  (def ch-chsk ch-recv)
-  (def chsk-send! send-fn)
-  (def connected-uids connected-uids))
-
-(defonce _attach-event-handler
-  (h/attach-event-handler ch-chsk))
+   ["csurf" :as csurf]))
 
 (defn routes
   [^js express-app]
   (doto express-app
    (.ws "/api"
         (fn [ws req next]
-          (ajax-get-or-ws-handshake req
-                                    nil
-                                    nil
-                                    {:websocket? true,
-                                     :websocket  ws})))
-   (.get "/api" ajax-get-or-ws-handshake)
-   (.post "/api" ajax-post)
+          ((:ajax-get-or-ws-handshake @websocket)
+           req
+           nil
+           nil
+           {:websocket? true,
+            :websocket  ws})))
+   (.get "/api" (:ajax-get-or-ws-handshake @websocket))
+   (.post "/api" (:ajax-post @websocket))
    (.use (fn [req res next]
            (log/warnf "Unhandled request: %s" (.-originalUrl ^js req))
            (next)))))
@@ -88,4 +77,4 @@
   :start
   (start-selected-web-server! routes 3000)
   :stop
-  (do (.close (:http-server @server))))
+  (.close (:http-server @server)))
