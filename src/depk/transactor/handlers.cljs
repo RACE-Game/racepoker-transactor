@@ -127,7 +127,8 @@
     {:status 200, :body "ok"}))
 
 (def-async-handler request-test-token
-  [{:keys [body]}]
+  [{:keys [body] :as req}]
+  (println req)
   (let [{:keys [player-id]} body]
     (<!? (api/faucet-request @chain-api player-id))
     {:status 200, :body "ok"}))
@@ -164,7 +165,7 @@
      (?reply-fn {:result :ok,
                  :state  state}))))
 
-(defmethod event-msg-handler :game/leave
+(defmethod event-msg-handler :cleant/leave
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
   (log/debugf "Leave game: %s" uid)
   (a/go
@@ -173,7 +174,7 @@
      (a/<! (game/leave @game-manager game-id player-id released-keys))
      (?reply-fn {:result :ok}))))
 
-(defmethod event-msg-handler :game/alive
+(defmethod event-msg-handler :client/alive
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
   (log/debugf "Keep alive: %s" uid)
   (a/go
@@ -270,6 +271,7 @@
 
 (defn user-id-fn
   [{:keys [params]}]
+  (println "Receive WS connection with params: " (prn-str params))
   (let [{:keys [pubkey sig game-id]} params
         k   (pubkey/to-buffer (pubkey/make-public-key pubkey))
         msg (buffer/Buffer.from
@@ -277,5 +279,7 @@
                   " sign with game "
                   game-id
                   " for RACE Poker."))]
-    (when (nacl/sign.detached.verify msg sig k)
-      [game-id pubkey])))
+    (if (nacl/sign.detached.verify msg (buffer/Buffer.from sig "hex") k)
+      (do (println "Signature check succeed.")
+          [game-id pubkey])
+      (println "Signature check failed."))))

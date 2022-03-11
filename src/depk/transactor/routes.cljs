@@ -4,9 +4,8 @@
    [macchiato.middleware.keyword-params :refer [wrap-keyword-params]]
    [macchiato.middleware.restful-format :refer [wrap-restful-format]]
    [macchiato.middleware.defaults :refer [wrap-defaults api-defaults]]
-   [reitit.ring :as ring]
-   ;; [ring.middleware.cors :refer [wrap-cors]]
    [depk.transactor.cors :refer [wrap-cors]]
+   [reitit.ring :as ring]
    [depk.transactor.handlers :as h]
    [depk.transactor.state.config :as config]
    [depk.transactor.state.websocket :refer [websocket]]
@@ -21,9 +20,9 @@
 
 (defn make-websocket-routes
   []
-  ["/chsk" {:get (:ring-ajax-get-or-ws-handshake @websocket)
-            :post (:ring-ajax-post @websocket)
-            :ws (:ring-ajax-get-or-ws-handshake @websocket)}])
+  ["/chsk"
+   {:get  (:ring-ajax-get-or-ws-handshake @websocket),
+    :post (:ring-ajax-post @websocket)}])
 
 (defn make-info-routes
   []
@@ -67,13 +66,8 @@
   (ring/ring-handler
    (ring/router
     [(make-routes)]
-    ;; {:data {:middleware [[wrap-cors
-    ;;                       :access-control-allow-origin #".*"
-    ;;                       :access-control-allow-methods [:get :post :put :delete :ws]]
-    ;;                      [wrap-restful-format
-    ;;                       {:keywordize? true}]
-    ;;                      wrap-params
-    ;;                      wrap-keyword-params]}}
-    {:data {:middleware [[wrap-defaults api-defaults]]}}
-    )
+    {:data {:middleware [[wrap-cors
+                          {:access-control-allow-origin #".*"
+                           :access-control-allow-methods [:get :post :put :delete]}]
+                         [wrap-defaults api-defaults]]}})
    (ring/create-default-handler)))

@@ -1,8 +1,9 @@
 (ns depk.transactor.main
   (:require
    [depk.transactor.state.config :refer [use-env]]
-   [depk.transactor.state.websocket]
-   [depk.transactor.state.server]
+   ;; [depk.transactor.state.websocket]
+   ;; [depk.transactor.state.server]
+   [depk.transactor.state.express]
    [depk.transactor.state.api]
    [depk.transactor.state.game-manager]
    [depk.transactor.helpers]
@@ -28,9 +29,11 @@
                #'depk.transactor.state.api/chain-api
                #'depk.transactor.state.api/store-api
                #'depk.transactor.state.game-manager/game-manager
-               #'depk.transactor.state.endpoint/endpoint
-               #'depk.transactor.state.websocket/websocket
-               #'depk.transactor.state.server/server))
+               ;; #'depk.transactor.state.endpoint/endpoint
+               ;; #'depk.transactor.state.websocket/websocket
+               ;; #'depk.transactor.state.server/server
+               #'depk.transactor.state.express/server
+               ))
 
 (comment
   (main))
