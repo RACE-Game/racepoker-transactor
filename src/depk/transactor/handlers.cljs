@@ -41,7 +41,7 @@
      (?reply-fn {:result :ok,
                  :state  state}))))
 
-(defmethod event-msg-handler :cleant/leave
+(defmethod event-msg-handler :client/leave
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
   (log/debugf "Leave game: %s" uid)
   (a/go
