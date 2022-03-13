@@ -290,7 +290,7 @@
               :street-bet       200,
               :min-raise        200,
               :state-id         1,
-              :dispatch-event  [c/player-action-timeout-delay
+              :dispatch-event   [c/player-action-timeout-delay
                                  {:type      :system/player-action-timeout,
                                   :state-id  1,
                                   :data      {},
@@ -315,7 +315,7 @@
               :street-bet       200,
               :min-raise        200,
               :state-id         1,
-              :dispatch-event  [c/player-action-timeout-delay
+              :dispatch-event   [c/player-action-timeout-delay
                                  {:type      :system/player-action-timeout,
                                   :state-id  1,
                                   :data      {},
@@ -501,7 +501,7 @@
                                   :player-status-map {100 :normal,
                                                       101 :normal,
                                                       102 :normal}}],
-              :dispatch-event  [c/reset-timeout-delay
+              :dispatch-event   [c/reset-timeout-delay
                                  {:type      :system/reset,
                                   :state-id  1,
                                   :data      {},
@@ -534,7 +534,7 @@
                                     :player-status-map {100 :normal,
                                                         101 :normal,
                                                         102 :normal}}],
-                :dispatch-event  [c/reset-timeout-delay
+                :dispatch-event   [c/reset-timeout-delay
                                    {:type      :system/reset,
                                     :state-id  1,
                                     :data      {},
@@ -571,7 +571,7 @@
                                     :player-status-map {100 :normal,
                                                         101 :normal,
                                                         102 :normal}}],
-                :dispatch-event  [c/reset-timeout-delay
+                :dispatch-event   [c/reset-timeout-delay
                                    {:type      :system/reset,
                                     :state-id  1,
                                     :data      {},
@@ -748,7 +748,7 @@
             :state-id        1}]
        (t/is
         (=
-         {:dispatch-event  [c/reset-timeout-delay
+         {:dispatch-event   [c/reset-timeout-delay
                              {:type      :system/reset,
                               :state-id  1,
                               :data      {},

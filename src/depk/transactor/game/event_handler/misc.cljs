@@ -146,7 +146,7 @@
         (first pos-pid))))
 
 (defn next-player-id
-  "Return next player tsate."
+  "Return next player state."
   [state player-id]
   (let [pos (get-in state [:player-map player-id :position])]
     (second (next-position-player state pos))))
@@ -754,12 +754,13 @@
     (-> state
         (collect-bet-to-pots)
         (assoc
-         :status          :game-status/key-share
-         :after-key-share :init-street
-         :street          street
-         :player-map      new-player-map
-         :min-raise       bb
-         :street-bet      nil)
+         :status           :game-status/key-share
+         :after-key-share  :init-street
+         :street           street
+         :player-map       new-player-map
+         :min-raise        bb
+         :action-player-id nil
+         :street-bet       nil)
         (update-require-key-idents)
         (take-released-keys))))
 
@@ -773,7 +774,7 @@
 
 (defn next-state-case
   "Ask next player for action or goto next stage when no player can act."
-  [{:keys [street-bet street bet-map action-player-id player-map status], :as state}]
+  [{:keys [street-bet street bet-map action-player-id player-map status btn], :as state}]
   (let [;; a list of player ids who did not provide their keys
         non-compliant-player-ids (->> (list-missing-key-idents state)
                                       (map first)
@@ -788,7 +789,8 @@
         players-to-act           (->>
                                   (list-players-in-order state
                                                          (get-in player-map
-                                                                 [action-player-id :position])
+                                                                 [action-player-id :position]
+                                                                 btn)
                                                          #{:player-status/acted
                                                            :player-status/wait}))
 
