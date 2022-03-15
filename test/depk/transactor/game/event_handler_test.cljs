@@ -126,7 +126,7 @@
 
          (t/is (= {:player-map        (:player-map state),
                    :shuffle-player-id 101,
-                   :dispatch-event    [3000
+                   :dispatch-event    [c/shuffle-timeout-delay
                                        (m/make-event :system/shuffle-timeout state)]}
                   (-> (<! (sut/handle-event state event))
                       (select-keys [:player-map :dispatch-event :shuffle-player-id]))))))

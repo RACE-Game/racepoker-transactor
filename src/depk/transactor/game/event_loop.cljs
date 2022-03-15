@@ -12,11 +12,14 @@
   (ex-info "drop expired event" {:event event, :state-id (:state-id state)}))
 
 (defn- handle-result
-  [{:keys [result state], :as res}]
+  [event {:keys [result state], :as res}]
   (let [{:keys [dispatch-event reserve-dispatch-id api-requests state-id]} state
         state (cond-> (dissoc state :dispatch-event :api-requests :reserve-dispatch-id)
                 (not reserve-dispatch-id)
-                (assoc :dispatch-id state-id))]
+                (assoc :dispatch-id state-id)
+
+                true
+                (assoc :this-event (:type event)))]
     (assoc res
            :state          state
            :dispatch-event dispatch-event
@@ -49,7 +52,7 @@
                          (str (:type event))
                          (str (:status state))
                          (str (:status new-state)))
-             (handle-result {:result :ok, :state new-state}))
+             (handle-result event {:result :ok, :state new-state}))
            (let [v (<! new-state)]
              (if (map? v)
                (do
@@ -57,7 +60,7 @@
                              (str (:type event))
                              (str (:status state))
                              (str (:status v)))
-                 (handle-result {:result :ok, :state v}))
+                 (handle-result event {:result :ok, :state v}))
                (do
                  (log/warnf "Error(async) from event handler: %s" (ex-message v))
                  {:result :err, :state state, :error v})))))

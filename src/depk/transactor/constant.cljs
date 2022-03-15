@@ -3,7 +3,7 @@
 (def continue-start-game-delay 100)
 (def default-start-game-delay 5000)
 (def key-share-timeout-delay 3000)
-(def shuffle-timeout-delay 8000)
+(def shuffle-timeout-delay 15000)
 (def encrypt-timeout-delay 3000)
 (def player-action-timeout-delay 30000)
 (def reset-timeout-delay 2000)

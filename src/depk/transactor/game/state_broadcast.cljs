@@ -11,7 +11,7 @@
                 :shuffle-player-id :encrypt-player-id
                 :btn :sb :bb :require-key-idents :share-key-map
                 :card-ciphers :player-actions :winning-type :dispatch-id
-                :game-id]))
+                :game-id :this-event]))
 
 (defonce broadcast-ch (chan 64))
 
