@@ -3,6 +3,7 @@
    [depk.transactor.game.event-handler :as sut]
    [depk.transactor.game.models :as m]
    [depk.transactor.constant :as c]
+   [depk.transactor.log :as log]
    [cljs.core.async :refer [go <!]]
    [cljs.test :as t
               :include-macros true]))
@@ -23,8 +24,10 @@
                  :system/sync-state
                  state
                  {:players [{:pubkey 100, :chips 1000}]})]
+
       (t/is (= {:player-map     expected-player-map,
-                :dispatch-event nil}
+                :dispatch-event
+                [c/default-start-game-delay (m/make-event :system/start-game state {:btn 0})]}
                (-> (sut/handle-event state event)
                    (select-keys [:player-map :dispatch-event]))))))
 
@@ -51,6 +54,58 @@
              :btn        0
              :state-id   1)))
 
+(t/deftest alive
+  (let [state-0 {:player-map {100 {:player-id     100,
+                                   :position      0,
+                                   :online-status :dropout}},
+                 :state-id   1,
+                 :status     :game-status/init}
+        state-1 {:player-map {100 {:player-id     100,
+                                   :position      0,
+                                   :online-status :dropout},
+                              200 {:player-id     200,
+                                   :position      1,
+                                   :online-status :dropout}},
+                 :state-id   1,
+                 :status     :game-status/init}
+        state-2 {:player-map {100 {:player-id     100,
+                                   :position      0,
+                                   :online-status :dropout},
+                              200 {:player-id     200,
+                                   :position      1,
+                                   :online-status :normal}},
+                 :state-id   1,
+                 :status     :game-status/init}
+
+        event-1 (m/make-event :client/alive state-1 {} 100)
+        event-2 (m/make-event :client/alive state-1 {} 200)]
+    (t/testing "failure for already alive"
+      (t/is (thrown-with-msg? ExceptionInfo #"Player already alive"
+              (sut/handle-event state-2 event-2))))
+
+    (t/testing "success for the first player"
+      (t/is (= {:player-map     {100 {:player-id 100, :position 0, :online-status :normal},
+                                 200 {:player-id 200, :position 1, :online-status :dropout}},
+                :dispatch-event [c/default-start-game-delay
+                                 (m/make-event :system/start-game state-1 {:btn 1})]}
+               (-> (sut/handle-event state-1 event-1)
+                   (select-keys [:player-map :dispatch-event])))))
+
+    (t/testing "success for the second player"
+      (t/is (= {:player-map     {100 {:player-id 100, :position 0, :online-status :normal},
+                                 200 {:player-id 200, :position 1, :online-status :normal}},
+                :dispatch-event [c/continue-start-game-delay
+                                 (m/make-event :system/start-game state-1 {:btn 1})]}
+               (-> (sut/handle-event state-2 event-1)
+                   (select-keys [:player-map :dispatch-event])))))
+
+    (t/testing "success for single player"
+      (t/is (= {:player-map     {100 {:player-id 100, :position 0, :online-status :normal}},
+                :dispatch-event [c/default-start-game-delay
+                                 (m/make-event :system/start-game state-1 {:btn 0})]}
+               (-> (sut/handle-event state-0 event-1)
+                   (select-keys [:player-map :dispatch-event])))))))
+
 (t/deftest system-start-game
 
   (t/testing "failure"
@@ -72,14 +127,10 @@
          (t/is (= {:player-map        (:player-map state),
                    :shuffle-player-id 101,
                    :dispatch-event    [3000
-                                       {:type      :system/shuffle-timeout,
-                                        :state-id  1,
-                                        :data      {},
-                                        :player-id nil}]}
+                                       (m/make-event :system/shuffle-timeout state)]}
                   (-> (<! (sut/handle-event state event))
                       (select-keys [:player-map :dispatch-event :shuffle-player-id]))))))
      (done))))
-
 
 (def state-game-started
   (-> (m/make-game-state {:btn 0} {})

@@ -65,3 +65,8 @@
        [& args]
        `(when-not disable-log
           (taoensso.timbre/errorf ~@args))))
+
+#?(:clj
+   (defmacro spy
+     [x]
+     (taoensso.sente/spy ~x)))

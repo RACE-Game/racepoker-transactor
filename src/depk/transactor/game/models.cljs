@@ -8,17 +8,16 @@
   (throw (ex-info "Missing state id" {})))
 
 (defrecord Event
-  [type state-id data player-id])
+  [type dispatch-id data player-id])
 
 (defn make-event
-  ([type current-state]
-   (make-event type current-state {}))
-  ([type current-state data]
-   (make-event type current-state data nil))
-  ([type current-state data player-id]
-   (if-let [state-id (:state-id current-state)]
-     (into {} (->Event type state-id data player-id))
-     (missing-state-id!))))
+  ([type state]
+   (make-event type state {}))
+  ([type state data]
+   (make-event type state data nil))
+  ([type state data player-id]
+   (let [dispatch-id (:state-id state)]
+     (->Event type dispatch-id data player-id))))
 
 (defrecord PlayerState
   [
@@ -73,7 +72,7 @@
    bb
    btn
    size
-   ;; game status: init shuffle encrypt key-share play showdown settle
+   ;; game status: init prepare shuffle encrypt key-share play showdown settle
    status
    ;; street: preflop flop turn river
    street
@@ -126,8 +125,14 @@
    chips-change-map
 
    ;; dispatch event [ms, event]
-   ;; an events dispatched with ms as delay
+   ;; an events dispatched with a delay
    dispatch-event
+   ;; an ID for dispatched event, the event will be handled only when the IDs are same.
+   ;; this property is managed by event loop
+   ;; after each event, the value will be updated, unless reserve-dispatch-id is true
+   dispatch-id
+   ;; preserve current dispatch, means "don't update dispatch-id"
+   reserve-dispatch-id
 
    ;; uuid, updated whenever state changes
    state-id
@@ -140,10 +145,6 @@
 
    ;; winning type: last-player showdown runner
    winning-type
-
-   ;; reverse current state id
-   ;; this is for some special events like :client/leave
-   reserve-state-id
   ])
 
 (defn make-game-state

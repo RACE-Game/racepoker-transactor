@@ -7,6 +7,7 @@
    [depk.transactor.game.models     :as m]
    [depk.transactor.game.handle     :as handle]
    [depk.transactor.game.encrypt    :as encrypt]
+   [depk.transactor.game.state-broadcast :as broadcast]
    [depk.transactor.game.manager    :as manager]
    [depk.transactor.game.api        :as api]
    [depk.transactor.log             :as log]))
@@ -29,14 +30,7 @@
   {:pre [(string? game-id)]}
   (go-try
    (when-let [game-handle (manager/find-game game-manager game-id)]
-     (select-keys
-      (handle/get-snapshot game-handle)
-      [:game-no :status :street :player-map :pots :min-raise
-       :street-bet :bet-map :action-player-id
-       :showdown-map :prize-map :state-id :prepare-cards
-       :shuffle-player-id :encrypt-player-id
-       :btn :sb :bb :require-key-idents :share-key-map
-       :card-ciphers :player-actions :winning-type]))))
+     (broadcast/parse-state-as-response (handle/get-snapshot game-handle)))))
 
 ;; Leaving game
 ;; Must provides all keys
@@ -59,7 +53,6 @@
   [game-manager game-id player-id]
   {:pre [(string? game-id)]}
   (go-try
-   (log/infof "player[%s] confirm alive, game [%s]" player-id game-id)
    (if-let [game-handle (manager/find-game game-manager game-id)]
      (handle/send-event game-handle
                         (m/make-event :client/alive

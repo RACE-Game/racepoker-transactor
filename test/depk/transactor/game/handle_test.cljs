@@ -30,7 +30,7 @@
       (go
        (let [init-state  (m/make-game-state {} {})
              game-handle (sut/make-game-handle "FAKEGAMEID" init-state)
-             event       (m/make-event :mock/success init-state)
+             event       (m/make-event :mock/success "FAKEDISPATCHID")
              _ (sut/send-event game-handle event)
              output      (:output game-handle)
              [val port]  (alts! [output (timeout 100)])]

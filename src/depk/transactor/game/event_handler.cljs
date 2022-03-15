@@ -3,6 +3,7 @@
    [depk.transactor.game.models :as m]
    [depk.transactor.game.encrypt :as encrypt]
    [depk.transactor.game.event-handler.misc :as misc]
+   [depk.transactor.constant :as c]
    [depk.transactor.log :as log]
    [cljs.core.async :refer [go <!]]))
 
@@ -19,7 +20,7 @@
 
 ;; system/sync-state
 ;; receiving this event when game account reflect there's a new player
-;; will only success when game is in prepare status.
+;; will only success when game is in init status.
 (defmethod handle-event :system/sync-state
   [{:keys [status], :as state} {{:keys [players game-account-state]} :data, :as event}]
 
@@ -27,7 +28,8 @@
     (misc/invalid-game-status! state event))
 
   (-> state
-      (misc/merge-sync-state players game-account-state)))
+      (misc/merge-sync-state players game-account-state)
+      (misc/dispatch-start-game)))
 
 ;; system/reset
 ;; receiving this event for reset states
@@ -301,9 +303,14 @@
   (when-not (= status :game-status/init)
     (misc/invalid-game-status! state event))
 
-  (-> state
-      (assoc-in [:player-map player-id :online-status] :normal)
-      (misc/dispatch-start-game)))
+  (let [player-map (assoc-in player-map [player-id :online-status] :normal)
+        all-alive? (and (every? #(= :normal (:online-status %)) (vals player-map))
+                        (>= (count player-map) 2))]
+    (-> state
+        (assoc :player-map player-map)
+        (misc/dispatch-start-game (if all-alive?
+                                    c/continue-start-game-delay
+                                    c/default-start-game-delay)))))
 
 ;; client/leave
 ;; A event received when a player leave game
@@ -333,7 +340,8 @@
       (-> state
           (update :released-keys-map assoc :player-id released-keys)
           (misc/take-released-keys)
-          (misc/next-state)))))
+          (misc/next-state)
+          (misc/reserve-dispatch)))))
 
 ;; ;; client/release
 ;; ;; Received when a fold client give up its keys
@@ -352,7 +360,8 @@
 
   (-> state
       (assoc :released-keys-map player-id released-keys)
-      (misc/take-released-keys)))
+      (misc/take-released-keys)
+      (misc/reserve-dispatch)))
 
 (defmethod handle-event :player/fold
   [{:keys [status action-player-id state-id], :as state}

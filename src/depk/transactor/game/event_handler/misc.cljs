@@ -228,13 +228,13 @@
           (m/make-event :system/reset state {})]))
 
 (defn dispatch-start-game
-  [state]
+  [state & [start-delay]]
   (let [{:keys [next-start-ts]} state
         btn (get state :btn 0)
         [next-btn _] (next-position-player state btn)]
     (-> state
         (assoc :dispatch-event
-               [c/start-game-delay
+               [(or start-delay c/default-start-game-delay)
                 (m/make-event :system/start-game state {:btn next-btn})]))))
 
 (defn mark-dropout-players
@@ -881,3 +881,6 @@
            :bb         bb
            :game-no    (:game-no game-account-state)
            :game-account-state game-account-state)))
+
+(defn reserve-dispatch [state]
+  (assoc state :reserve-dispatch-id true))
