@@ -711,6 +711,7 @@
                                 (mapv #(set (mapv first (second %)))))]
 
      (-> state
+         (collect-bet-to-pots)
          (assoc :showdown-map showdown
                 :bet-map      nil)
          (assign-winner-to-pots winner-id-sets)
