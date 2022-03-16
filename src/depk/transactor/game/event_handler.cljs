@@ -297,6 +297,9 @@
    {player-id :player-id,
     :as       event}]
 
+  (when-not (get player-map player-id)
+    (misc/invalid-player-id! state event))
+
   (when (= :normal (get-in player-map [player-id :online-status]))
     (misc/player-already-alive! state event))
 
