@@ -29,11 +29,7 @@
                #'depk.transactor.state.api/chain-api
                #'depk.transactor.state.api/store-api
                #'depk.transactor.state.game-manager/game-manager
-               ;; #'depk.transactor.state.endpoint/endpoint
-               ;; #'depk.transactor.state.websocket/websocket
-               ;; #'depk.transactor.state.server/server
-               #'depk.transactor.state.express/server
-               ))
+               #'depk.transactor.state.express/server))
 
 (comment
   (main))

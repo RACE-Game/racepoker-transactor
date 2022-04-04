@@ -17,6 +17,7 @@
    [depk.transactor.state.config :refer [config]]
    [depk.transactor.log :as log]
    [depk.transactor.state.config :refer [env]]
+   [depk.transactor.game.api.state :refer [parse-state-data]]
    ["fs" :as fs]
    ["bn.js" :as bn]))
 
@@ -39,30 +40,6 @@
                        (keypair/from-secret-key))]
     key
     (throw (ex-info "Can't load fee payer keypair" {}))))
-
-(defrecord Player [pubkey chips])
-
-(def player-layout (bl/struct ->Player [:pubkey :u64]))
-
-(defrecord GameState [is-initialized game-no players stack-account-pubkey mint-pubkey level
-                      mint-decimals])
-
-(def game-state-layout
-  (bl/struct ->GameState
-             [:bool                                  ; is_initialized
-              :u32                                   ; game_no
-              (bl/array 6 (bl/option player-layout)) ; players
-              :pubkey                                ; stack_account_pubkey
-              :pubkey                                ; mint_pubkey
-              (bl/enum :NL100 :NL200 :NL500 :NL1000) ; game_level
-              :u8                                    ; mint_decimals
-             ]))
-
-(bl/size game-state-layout)
-
-(defn parse-state-data
-  [data]
-  (bl/unpack game-state-layout (bl/buffer-from data)))
 
 (defrecord SolanaApi [])
 
@@ -131,18 +108,13 @@
 
          dealer-program-id (pubkey/make-public-key (get @config :dealer-program-address))
 
-         ;; _ (log/infof "dealer program: %s" (get @config :dealer-program-address))
-
          {:keys [players stack-account-pubkey mint-pubkey]} game-account-state
 
-         ;; _ (log/infof "players: %s" players)
          player-ids (for [p players]
                       (when p
                         (str (:pubkey p))))
 
          ix-body (build-settle-ix-body player-ids chips-change-map player-status-map)
-
-         ;; _ (log/infof "settle instruction body: %s" (prn-str ix-body))
 
          ix-data (apply ib/make-instruction-data (cons c/instruction-header-settle ix-body))
 
@@ -169,9 +141,6 @@
             :isWritable false}]
           ata-keys)
 
-         ;; _
-         ;; (log/infof "settle instruction keys: %s" ix-keys)
-
          ix
          (transaction/make-transaction-instruction
           {:keys      ix-keys,
@@ -181,11 +150,7 @@
          (doto (transaction/make-transaction)
           (transaction/add ix))]
 
-     ;; (log/infof "sending settle transaction: game[%s]" game-id)
-
      (let [sig (<! (conn/send-transaction conn tx [fee-payer]))]
-
-       ;; (log/infof "confirming settle transaction: game[%s]" game-id)
 
        (<! (conn/confirm-transaction conn sig))
 
@@ -201,82 +166,14 @@
 
  (-fetch-game-account [this game-id]
    (go-try
-    ;; (log/infof "Fetch game account state for game[%s]" game-id)
     (let [conn (conn/make-connection (get @config :solana-rpc-endpoint))
           game-account-pubkey (pubkey/make-public-key game-id)
           game-account-state (some-> (<!?
                                       (conn/get-account-info conn game-account-pubkey commitment))
                                      :data
                                      (parse-state-data))]
-      ;; (log/infof "game state for [%s]: %s" game-id (prn-str game-account-state))
-      game-account-state)))
+      game-account-state))))
 
- (-faucet-request [this player-id]
-   ;; Testnet only
-   ;; (when (#{:local :devnet :testnet} @env)
-   ;;   (go-try
-   ;;    (log/infof "Faucet request, player[%s]" player-id)
-   ;;    (let [fee-payer (load-private-key)
-   ;;          fee-payer-pubkey (keypair/public-key fee-payer)
-   ;;          conn (conn/make-connection (get @config :solana-rpc-endpoint))
-   ;;          player-account-pubkey (pubkey/make-public-key player-id)
-   ;;          player-account-state
-   ;;          (some->
-   ;;           (<!? (conn/get-account-info conn player-account-pubkey commitment))
-   ;;           :data)
-
-   ;;          transfer-sol-ix (system-program/transfer
-   ;;                           {:fromPubkey fee-payer-pubkey,
-   ;;                            :toPubkey   player-account-pubkey,
-   ;;                            :lamports   20000000})
-
-   ;;          mint-pubkey (pubkey/make-public-key "RACE5fnTKB9obGtCusArTQ6hhdNXAtf3HarvJM17rxJ")
-   ;;          payer-ata-pubkey (<!?
-   ;;                            (spl-token/get-associated-token-address
-   ;;                             spl-token/associated-token-program-id
-   ;;                             spl-token/token-program-id
-   ;;                             mint-pubkey
-   ;;                             fee-payer-pubkey))
-   ;;          ata-pubkey (<!?
-   ;;                      (spl-token/get-associated-token-address
-   ;;                       spl-token/associated-token-program-id
-   ;;                       spl-token/token-program-id
-   ;;                       mint-pubkey
-   ;;                       player-account-pubkey))
-
-   ;;          create-ata-ix (spl-token/create-associated-token-account-instruction
-   ;;                         spl-token/associated-token-program-id
-   ;;                         spl-token/token-program-id
-   ;;                         mint-pubkey
-   ;;                         ata-pubkey
-   ;;                         player-account-pubkey
-   ;;                         fee-payer-pubkey)
-
-   ;;          transfer-ix (spl-token/create-transfer-instruction
-   ;;                       spl-token/token-program-id
-   ;;                       payer-ata-pubkey
-   ;;                       ata-pubkey
-   ;;                       fee-payer-pubkey
-   ;;                       []
-   ;;                       10000000000000)
-
-   ;;          tx (doto (transaction/make-transaction)
-   ;;              (transaction/add transfer-sol-ix)
-   ;;              (transaction/add create-ata-ix)
-   ;;              (transaction/add transfer-ix))]
-
-   ;;      (log/infof "Payer pubkey: %s" fee-payer-pubkey)
-   ;;      (log/infof "Payer ATA: %s" payer-ata-pubkey)
-   ;;      (log/infof "Mint: %s" mint-pubkey)
-   ;;      (log/infof "Receiver address: %s" player-account-pubkey)
-   ;;      (log/infof "Receiver ATA: %s" ata-pubkey)
-
-   ;;      (if-let [sig (<!? (conn/send-transaction conn tx [fee-payer]))]
-   ;;        (if-let [res (<!? (conn/confirm-transaction conn sig))]
-   ;;          (log/infof "Faucet request succeed: player-id[%s]" player-id)
-   ;;          (log/error "Faucet request: confirmation failed."))
-   ;;        (log/error "Faucet request: transaction failed.")))))
-   ))
 
 (comment
   (.log js/console
@@ -304,8 +201,4 @@
    "96jrkBBa3iKGeG5KYrXTAWwu7RkNRYVYnXVvU2URVbc7"
    {"ENR11vPNw2xPXkCJk1Woheui1Yrd68NGWDBmgwSdzcwP" 10,
     "DfgtACV9VzRUKUqRjuzxRHmeycyomcCzfRHgVyDPha9F" -10}
-   nil)
-
-  (p/-faucet-request
-   (->SolanaApi)
-   "8vTPQp7hZLBviDmd296ecZ2p92r6CE95tKW6pcmbyYsP"))
+   nil))

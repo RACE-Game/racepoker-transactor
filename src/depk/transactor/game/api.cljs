@@ -46,11 +46,6 @@
   [chain-api game-id player-status-map]
   (p/-settle-failed-game chain-api game-id player-status-map))
 
-(defn faucet-request
-  "(Testnet only) Send token to player without charging."
-  [chain-api player-id]
-  (p/-faucet-request chain-api player-id))
-
 (defn fetch-game-account
   "Fetch account of a game."
   [chain-api game-id]
