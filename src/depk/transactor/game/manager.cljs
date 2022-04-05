@@ -19,10 +19,11 @@
 (defrecord GameManager [game-handle-map chain-api])
 
 (defn assign-new-game-handle
-  [game-handle-map game-id game-account-state chain-api store-api]
+  [game-handle-map game-id game-account-state mint-info chain-api store-api]
   (if (get game-handle-map game-id)
     game-handle-map
-    (let [init-state  (m/make-game-state game-account-state {:game-id game-id})
+    (let [init-state  (m/make-game-state game-account-state {:game-id game-id
+                                                             :mint-info mint-info})
           game-handle (handle/make-game-handle game-id init-state)]
       (event-loop/start-event-loop game-handle)
       (sync-loop/start-game-state-sync game-handle chain-api)
@@ -38,11 +39,13 @@
   (go-try
    (let [{:keys [chain-api store-api]} manager
          game-account-state (<!? (api/fetch-game-account chain-api game-id))
+         mint-info (<!? (api/fetch-mint-info chain-api (str (:mint-pubkey game-account-state))))
          _ (when-not game-account-state (game-not-exist! game-id))]
      (swap! (:game-handle-map manager)
        assign-new-game-handle
        game-id
        game-account-state
+       mint-info
        chain-api
        store-api)
      (get @(:game-handle-map manager) game-id))))

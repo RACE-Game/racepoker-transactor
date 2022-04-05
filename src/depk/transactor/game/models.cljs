@@ -60,6 +60,7 @@
   [
    ;; sychronized onchain game state
    game-account-state
+   mint-info
 
    ;; ----------------------------------------------
    ;; general info

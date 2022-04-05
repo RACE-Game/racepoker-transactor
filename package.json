@@ -1,7 +1,7 @@
 {
   "dependencies": {
     "@peculiar/webcrypto": "^1.2.3",
-    "@solana/spl-token": "^0.1.8",
+    "@solana/spl-token": "^0.2.0",
     "@solana/web3.js": "^1.31.0",
     "aes-js": "^3.1.2",
     "bn.js": "^5.2.0",

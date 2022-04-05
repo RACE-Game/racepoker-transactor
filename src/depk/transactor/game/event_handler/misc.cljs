@@ -853,10 +853,11 @@
 
 (defn get-blind-bet
   "Get blind bet amount as [sb, bb]."
-  [game-account-state]
-  (let [{:keys [level mint-decimals]} game-account-state
+  [game-account-state mint-info]
+  (let [{:keys [level]} game-account-state
+        {:keys [decimals]} mint-info
         {:keys [sb bb]} (get c/level-info-map level)
-        base (js/Math.pow 10 mint-decimals)]
+        base (js/Math.pow 10 decimals)]
     [(* base sb)
      (* base bb)]))
 
@@ -875,7 +876,7 @@
                                                     :dropout)))))
                         (map (juxt :player-id identity))
                         (into {}))
-        [sb bb]    (get-blind-bet game-account-state)]
+        [sb bb]    (get-blind-bet game-account-state (:mint-info state))]
     (assoc state
            :player-map player-map
            :sb         sb

@@ -51,6 +51,11 @@
   [chain-api game-id]
   (p/-fetch-game-account chain-api game-id))
 
+(defn fetch-mint-info
+  "Fetch mint information of a game."
+  [chain-api mint-address]
+  (p/-fetch-mint-info chain-api mint-address))
+
 (defn make-solana-api []
   (solana/->SolanaApi))
 

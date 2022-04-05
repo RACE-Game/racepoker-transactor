@@ -172,10 +172,18 @@
                                       (conn/get-account-info conn game-account-pubkey commitment))
                                      :data
                                      (parse-state-data))]
-      game-account-state))))
+      game-account-state)))
+
+ (-fetch-mint-info [this mint-address]
+   (go-try
+    (let [conn (conn/make-connection (get @config :solana-rpc-endpoint))
+          mint-pubkey (pubkey/make-public-key mint-address)
+          mint-state (<!? (spl-token/get-mint conn mint-pubkey "finalized"))]
+      mint-state))))
 
 
 (comment
+
   (.log js/console
         (into-array
          (ib/make-instruction-data

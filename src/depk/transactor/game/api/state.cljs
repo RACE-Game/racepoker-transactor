@@ -19,8 +19,7 @@
 (def player-layout (bl/struct ->Player [:pubkey :u64 :u8]))
 
 (defrecord GameState [is-initialized game-no players stack-account-pubkey mint-pubkey
-                      level mint-decimals size game-type transactor-pubkey owner-pubkey
-                      rake status])
+                      level size game-type transactor-pubkey owner-pubkey rake status])
 
 (def game-state-layout
   (bl/struct ->GameState
