@@ -1,7 +1,18 @@
 (ns depk.transactor.game.api.state
   (:require
    [solana-clj.extra.buffer-layout :as    bl
-                                   :refer [buffer-from]]))
+                                   :refer [buffer-from]]
+   [clojure.string :as str]))
+
+(defmethod bl/unpack :str16
+  [_ buf]
+  (str/replace (.toString buf)
+               (js/String.fromCharCode 0)
+               ""))
+
+(defmethod bl/size :str16
+  [type]
+  16)
 
 (def init-game-ix-id 0)
 (def buyin-ix-id 1)
@@ -19,7 +30,8 @@
 (def player-layout (bl/struct ->Player [:pubkey :u64 :u8]))
 
 (defrecord GameState [is-initialized game-no players stack-account-pubkey mint-pubkey
-                      level size game-type transactor-pubkey owner-pubkey rake status])
+                      level size game-type transactor-pubkey owner-pubkey rake status
+                      bonus-pubkey name])
 
 (def game-state-layout
   (bl/struct ->GameState
@@ -34,7 +46,7 @@
               ;; mint_pubkey
               :pubkey
               ;; level
-              (bl/enum :NL100 :NL200 :NL500 :NL1000)
+              (bl/enum :nl100 :nl200 :nl500 :nl1000 :sng)
               ;; size
               :u8
               ;; game_type
@@ -47,6 +59,10 @@
               :u16
               ;; status
               (bl/enum :open :wait-claim :locked :in-progress :closed)
+              ;; bonus_pubkey
+              (bl/option :pubkey)
+              ;; name
+              :str16
              ]))
 
 (defn parse-state-data

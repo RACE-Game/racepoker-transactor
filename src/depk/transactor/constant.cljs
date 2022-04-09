@@ -11,7 +11,7 @@
 (def instruction-header-settle [3 1])
 
 (def level-info-map
-  {:NL100  {:sb 1, :bb 2},
-   :NL200  {:sb 1, :bb 2},
-   :NL500  {:sb 2, :bb 5},
-   :NL1000 {:sb 5, :bb 10}})
+  {:nl100  {:sb (js/BigInt 1), :bb (js/BigInt 2)},
+   :nl200  {:sb (js/BigInt 1), :bb (js/BigInt 2)},
+   :nl500  {:sb (js/BigInt 2), :bb (js/BigInt 5)},
+   :nl1000 {:sb (js/BigInt 5), :bb (js/BigInt 10)}})

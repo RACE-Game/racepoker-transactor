@@ -857,7 +857,7 @@
   (let [{:keys [level]} game-account-state
         {:keys [decimals]} mint-info
         {:keys [sb bb]} (get c/level-info-map level)
-        base (js/Math.pow 10 decimals)]
+        base (js/BigInt (js/Math.pow 10 decimals))]
     [(* base sb)
      (* base bb)]))
 
@@ -884,5 +884,6 @@
            :game-no    (:game-no game-account-state)
            :game-account-state game-account-state)))
 
-(defn reserve-dispatch [state]
+(defn reserve-dispatch
+  [state]
   (assoc state :reserve-dispatch-id true))

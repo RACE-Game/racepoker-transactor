@@ -16,14 +16,17 @@
               (sut/handle-event state (m/make-event :system/sync-state state))))))
 
   (t/testing "success with enough players to start"
-    (let [state (-> (m/make-game-state {:btn 0} {})
+    (let [state (-> (m/make-game-state {}
+                                       {:btn       0,
+                                        :mint-info {:decimals 9}})
                     (assoc :status :game-status/init))
           expected-player-map
           {"100" (m/make-player-state "100" 1000 0 :player-status/wait :dropout)}
           event (m/make-event
                  :system/sync-state
                  state
-                 {:players [{:pubkey 100, :chips 1000}]})]
+                 {:players            [{:pubkey 100, :chips 1000}],
+                  :game-account-state {:level :nl100}})]
 
       (t/is (= {:player-map     expected-player-map,
                 :dispatch-event
@@ -34,12 +37,17 @@
   (t/testing "success with enough players to start"
     (let [state      (-> (m/make-game-state {:btn 0} {})
                          (assoc :status :game-status/init))
-          player-map {"100" (m/make-player-state "100" 1000 0 :player-status/wait :dropout),
-                      "101" (m/make-player-state "101" 10000 2 :player-status/wait :dropout)}
+          player-map {"100"
+                      (m/make-player-state "100" (js/BigInt 1000) 0 :player-status/wait :dropout),
+                      "101"
+                      (m/make-player-state "101" (js/BigInt 10000) 2 :player-status/wait :dropout)}
           event      (m/make-event
                       :system/sync-state
                       state
-                      {:players [{:pubkey "100", :chips 1000} nil {:pubkey "101", :chips 10000}]})]
+                      {:players            [{:pubkey "100", :chips (js/BigInt 1000)}
+                                            nil
+                                            {:pubkey "101", :chips (js/BigInt 10000)}],
+                       :game-account-state {:level :nl100}})]
       (t/is
        (= {:player-map player-map}
           (-> (sut/handle-event state event)
