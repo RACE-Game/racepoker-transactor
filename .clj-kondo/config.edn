@@ -3,6 +3,6 @@
            mount.core/defstate clojure.core/def
            reagent.core/with-let clojure.core/let
            shadow.cljs.modern/defclass clj-kondo.lint-as/def-catch-all
-           borsh.core/defrecord clojure.core./defrecord
+           borsh.core/defrecord clojure.core/defrecord
            depk.transactor.util/def-async-handler clojure.core/defn
            depk.transactor.util/go-loop-try clojure.core/let}}

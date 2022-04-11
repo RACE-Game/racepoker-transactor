@@ -7,7 +7,9 @@
                          :refer [go-try <!?]]
    [depk.transactor.constant :as c]
    [cljs.core.async :as a]
-   [clojure.set :as set]))
+   [clojure.set :as set]
+   [goog.string :as gstr]
+   [depk.transactor.log :as log]))
 
 ;; errors
 
@@ -19,7 +21,7 @@
 
 (defn invalid-game-status!
   [state event]
-  (throw (ex-info "Invalid game status"
+  (throw (ex-info (gstr/format "Invalid game status: %s" (:status state))
                   {:state state,
                    :event event})))
 
@@ -109,14 +111,15 @@
   (let [dropout-players (->> player-map
                              vals
                              (filter #(not= :normal (:online-status %))))
-        request         {:api-request/type  :settle-failed-game,
-                         :player-status-map (->> (for [[id p] player-map]
-                                                   [id
-                                                    (if (= :normal (:online-status p))
-                                                      :normal
-                                                      :leave)
-                                                    (:online-status p :leave)])
-                                                 (into {}))}]
+        request         {:type :system/settle-failed,
+                         :data {:player-status-map
+                                (->> (for [[id p] player-map]
+                                       [id
+                                        (if (= :normal (:online-status p))
+                                          :normal
+                                          :leave)
+                                        (:online-status p :leave)])
+                                     (into {}))}}]
     ;; send settlement for leaving players
     (-> state
         (update :player-map (fn [m] (apply dissoc m (map :player-id dropout-players))))
@@ -183,31 +186,52 @@
                        (- position last-pos)
                        (+ 10000 position))))))))
 
+(defn add-joined-player
+  [state]
+  (let [{:keys [player-map game-account-state]} state
+        players        (:players game-account-state)
+        player-map-new (m/players->player-map players)]
+    (assoc state
+           :player-map
+           (merge player-map-new player-map))))
+
+(defn reset-player-map-status
+  [player-map]
+  (->> (for [[pid p] player-map]
+         [pid (assoc p
+                     :status :player-status/wait
+                     :online-status :dropout)])
+       (into {})))
+
 (defn reset-game-state
   "Reset game state based on `event-type`."
   [state]
-  (assoc
-   state
-   :status             :game-status/init
-   :released-keys-map  nil
-   :street             nil
-   :card-ciphers       []
-   :after-keyshare     nil
-   :require-key-idents nil
-   :share-key-map      nil
-   :community-cards    nil
-   :min-raise          nil
-   :street-bet         nil
-   :bet-map            nil
-   ;; these two keys will be reset by event loop
-   ;; :dispatch-event     nil
-   ;; :api-requests       nil
-   :pots               []
-   :showdown-map       nil
-   :prize-map          nil
-   :player-actions     []
-   :winning-type       nil
-   :after-key-share    nil))
+  (-> state
+      (update :player-map reset-player-map-status)
+      (merge
+       {:status             :game-status/init,
+        :released-keys-map  nil,
+        :street             nil,
+        :card-ciphers       [],
+        :after-keyshare     nil,
+        :require-key-idents nil,
+        :share-key-map      nil,
+        :community-cards    nil,
+        :min-raise          nil,
+        :street-bet         nil,
+        :bet-map            nil,
+        :pots               [],
+        :showdown-map       nil,
+        :prize-map          nil,
+        :player-actions     [],
+        :winning-type       nil,
+        :after-key-share    nil})))
+
+(defn request-sync-state
+  [state]
+  (let [request {:type :system/request-sync-state,
+                 :data {:game-no (:game-no state)}}]
+    (update state :api-requests conj request)))
 
 (defn get-player-hole-card-indices
   [{:keys [btn player-map], :as state}]
@@ -227,15 +251,24 @@
          [c/reset-timeout-delay
           (m/make-event :system/reset state {})]))
 
+(defn next-btn
+  [state]
+  (let [[next-btn _] (next-position-player state (get state :btn 0))]
+    next-btn))
+
+(defn with-next-btn
+  [state]
+  (let [btn (get state :btn 0)
+        [next-btn _] (next-position-player state btn)]
+    (assoc state :btn next-btn)))
+
 (defn dispatch-start-game
   [state & [start-delay]]
-  (let [{:keys [next-start-ts]} state
-        btn (get state :btn 0)
-        [next-btn _] (next-position-player state btn)]
+  (let [{:keys [next-start-ts]} state]
     (-> state
         (assoc :dispatch-event
                [(or start-delay c/default-start-game-delay)
-                (m/make-event :system/start-game state {:btn next-btn})]))))
+                (m/make-event :system/start-game state {})]))))
 
 (defn mark-dropout-players
   [state player-ids]
@@ -391,7 +424,7 @@
   [{:keys [pots], :as state}]
   (let [prize-map (->> pots
                        (mapcat (fn [{:keys [amount winner-ids]}]
-                                 (let [prize (/ amount (count winner-ids))]
+                                 (let [prize (/ amount (js/BigInt (count winner-ids)))]
                                    (for [id winner-ids]
                                      {id prize}))))
                        (apply merge-with +))]
@@ -405,8 +438,8 @@
   (let [chips-change-map (reduce
                           (fn [acc pot]
                             (let [{:keys [owner-ids winner-ids amount]} pot
-                                  bet-amount   (/ amount (count owner-ids))
-                                  prize-amount (/ amount (count winner-ids))]
+                                  bet-amount   (/ amount (js/BigInt (count owner-ids)))
+                                  prize-amount (/ amount (js/BigInt (count winner-ids)))]
                               (as-> acc $
                                 (reduce (fn [acc owner-id]
                                           (update acc owner-id - bet-amount))
@@ -417,10 +450,10 @@
                                         $
                                         winner-ids))))
                           (->> (for [[pid] player-map]
-                                 [pid 0])
+                                 [pid (js/BigInt 0)])
                                (into {}))
                           pots)
-        chips-change-map (merge-with (fnil - 0)
+        chips-change-map (merge-with (fnil - (js/BigInt 0))
                                      chips-change-map
                                      bet-map)]
     (assoc state :chips-change-map chips-change-map)))
@@ -506,10 +539,12 @@
   (let [steps    (->> bet-map
                       vals
                       distinct
-                      sort)
+                      ;; Here we deal with js/BigInt
+                      ;; sort-by needs a result of -/+/0 in Number
+                      (sort-by identity #(js/parseInt (- %1 %2))))
         pots
         (loop [ret     []
-               counted 0
+               counted (js/BigInt 0)
                [step & rest-steps] steps]
           (if-not step
             ret
@@ -524,7 +559,7 @@
                   total     (->> bet-map
                                  (map (fn [[_ bet]]
                                         (min bet step)))
-                                 (reduce + 0))
+                                 (reduce + (js/BigInt 0)))
                   amount    (- total counted)
                   pot       (m/make-pot owner-ids amount)]
               (recur (if (= (count owner-ids) (count (:owner-ids (peek ret))))
@@ -603,9 +638,6 @@
 
 (defn- decrypt-showdown-card-map
   [{:keys [card-ciphers share-key-map player-map], :as state}]
-  ;; (.debug js/console card-ciphers)
-  ;; (.debug js/console share-key-map)
-  ;; (.debug js/console player-map)
   (go-try
    (let [orig-ciphers      (e/hex->ciphers card-ciphers)
 
@@ -655,12 +687,12 @@
 
 (defn- submit-game-result
   "Add request to :api-requests, submit game result."
-  [{:keys [chips-change-map player-map], :as state}]
-  (let [request {:api-request/type  :settle-finished-game,
-                 :chips-change-map  chips-change-map,
-                 :player-status-map (->> (for [[id p] player-map]
-                                           [id (:online-status p :normal)])
-                                         (into {}))}]
+  [{:keys [chips-change-map player-map game-no], :as state}]
+  (let [request {:type :system/settle-finished,
+                 :data {:chips-change-map  chips-change-map,
+                        :player-status-map (->> (for [[id p] player-map]
+                                                  [id (:online-status p :normal)])
+                                                (into {}))}}]
     (update state :api-requests conj request)))
 
 (defn terminate
@@ -678,7 +710,7 @@
                                (into #{}))
         player-map        (->> player-map
                                (map (fn [[pid p]]
-                                      [pid (update p :chips + (get bet-map pid 0))]))
+                                      [pid (update p :chips + (get bet-map pid (js/BigInt 0)))]))
                                (into {}))]
     (-> state
         (assoc :bet-map nil)
@@ -716,6 +748,7 @@
                 :bet-map      nil)
          (assign-winner-to-pots winner-id-sets)
          (update-prize-map)
+         (apply-prize-map)
          (update-chips-change-map)
          (submit-game-result)
          (dispatch-reset)
@@ -725,8 +758,8 @@
 (defn single-player-win
   "Single player win the game."
   [{:keys [pots bet-map], :as state} player-id]
-  (let [bet-sum   (reduce + 0 (map val bet-map))
-        prize-map {player-id (+ (transduce (map :amount) + 0 pots)
+  (let [bet-sum   (reduce + (js/BigInt 0) (map val bet-map))
+        prize-map {player-id (+ (transduce (map :amount) + (js/BigInt 0) pots)
                                 bet-sum)}]
     (-> state
         (assign-winner-to-pots [#{player-id}])
@@ -734,9 +767,9 @@
         (apply-prize-map)
         (update-chips-change-map)
         ;; Append a pot collected from current street
-        (cond-> (pos? bet-sum)
+        (cond-> (> bet-sum (js/BigInt 0))
                 (update :pots conj (m/make-pot (set (keys bet-map)) bet-sum #{player-id})))
-        (update-in [:chips-change-map player-id] (fnil + 0) bet-sum)
+        (update-in [:chips-change-map player-id] (fnil + (js/BigInt 0)) bet-sum)
         (submit-game-result)
         (dispatch-reset)
         (assoc :status       :game-status/settle
@@ -851,38 +884,18 @@
       :showdown          (prepare-showdown state)
       :runner            (prepare-runner state))))
 
-(defn get-blind-bet
-  "Get blind bet amount as [sb, bb]."
-  [game-account-state mint-info]
-  (let [{:keys [level]} game-account-state
-        {:keys [decimals]} mint-info
-        {:keys [sb bb]} (get c/level-info-map level)
-        base (js/BigInt (js/Math.pow 10 decimals))]
-    [(* base sb)
-     (* base bb)]))
+(defn with-next-game-no
+  [state]
+  (let [{:keys [game-no]} state
+        new-game-no       (if (= 1000000 game-no)
+                            1
+                            (inc game-no))]
+    (assoc state :game-no new-game-no)))
 
 (defn merge-sync-state
-  "Merge players data(from blockchain) into player-map."
-  [state players game-account-state]
-  (let [player-map (->> players
-                        (keep-indexed
-                         (fn [idx p]
-                           (when p
-                             (let [player-id (str (:pubkey p))]
-                               (m/make-player-state player-id
-                                                    (:chips p)
-                                                    idx
-                                                    :player-status/wait
-                                                    :dropout)))))
-                        (map (juxt :player-id identity))
-                        (into {}))
-        [sb bb]    (get-blind-bet game-account-state (:mint-info state))]
-    (assoc state
-           :player-map player-map
-           :sb         sb
-           :bb         bb
-           :game-no    (:game-no game-account-state)
-           :game-account-state game-account-state)))
+  "Merge game account state."
+  [state game-account-state]
+  (assoc state :game-account-state game-account-state))
 
 (defn reserve-dispatch
   [state]

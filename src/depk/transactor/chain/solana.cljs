@@ -1,9 +1,9 @@
-(ns depk.transactor.game.api.solana
+(ns depk.transactor.chain.solana
   (:require
+   [depk.transactor.chain.protocol :as p]
+   [depk.transactor.event.protocol :as ep]
    [depk.transactor.util :refer [go-try <!?]]
-   [cljs.core.async :as    a
-                    :refer [<! timeout chan]]
-   [depk.transactor.game.api.protocols :as p]
+   [cljs.core.async :as a]
    [solana-clj.connection :as conn]
    [solana-clj.publickey :as pubkey]
    [solana-clj.keypair :as keypair]
@@ -17,11 +17,14 @@
    [depk.transactor.state.config :refer [config]]
    [depk.transactor.log :as log]
    [depk.transactor.state.config :refer [env]]
-   [depk.transactor.game.api.state :refer [parse-state-data]]
+   [depk.transactor.chain.state :refer [parse-state-data]]
+   [depk.transactor.util :as u]
+   [depk.transactor.chain.sync-loop :as sync-loop]
+   [depk.transactor.chain.transact-loop :as transact-loop]
    ["fs" :as fs]
    ["bn.js" :as bn]))
 
-(def commitment "confirmed")
+;;; Helpers
 
 (def settle-type-no-update 0)
 (def settle-type-chip-add 1)
@@ -41,14 +44,12 @@
     key
     (throw (ex-info "Can't load fee payer keypair" {}))))
 
-(defrecord SolanaApi [])
-
 (defn- build-settle-ix-body
   [player-ids chips-change-map player-status-map]
   (->> player-ids
        (keep (fn [pid]
                (if pid
-                 (let [chip-change (get chips-change-map pid 0)
+                 (let [chip-change (get chips-change-map pid (js/BigInt 0))
                        status      (get player-status-map pid)]
                    [[(case status
                        :dropout settle-status-leave
@@ -60,7 +61,7 @@
                        (pos? chip-change)  settle-type-chip-add
                        :else               settle-type-chip-sub)
                      1]
-                    [(js/Math.abs chip-change) 8]])
+                    [(u/abs chip-change) 8]])
                  ;; empty entries
                  [[settle-status-empty 1] [settle-type-no-update 1] [0 8]])))
        (mapcat identity)))
@@ -74,20 +75,19 @@
                               (when (and id (#{:leave :dropout} (get player-status-map id)))
                                 (a/go
                                  (let [account-pubkey (pubkey/make-public-key id)
-                                       ata-pubkey     (<!? (spl-token/get-associated-token-address
-                                                            spl-token/associated-token-program-id
-                                                            spl-token/token-program-id
-                                                            mint-pubkey
-                                                            account-pubkey))]
+                                       ata-pubkey     (<!?
+                                                       (spl-token/get-associated-token-address
+                                                        mint-pubkey
+                                                        account-pubkey))]
                                    {:pubkey     ata-pubkey,
                                     :isSigner   false,
                                     :isWritable true})))))
                       (a/map vector))]
-     (<! ata-keys-ch))))
+     (<!? ata-keys-ch))))
 
 (defn settle
   [game-id chips-change-map player-status-map]
-  (when-not (transduce (map val) + 0 chips-change-map)
+  (when-not (transduce (map val) + (js/BigInt 0) chips-change-map)
     (throw (ex-info "Can't settel, invalid chips change!" {:chips-change-map chips-change-map})))
 
   (log/infof "Settle game result on Solana: game[%s]" game-id)
@@ -99,7 +99,7 @@
          conn (conn/make-connection (get @config :solana-rpc-endpoint))
          game-account-pubkey (pubkey/make-public-key game-id)
          game-account-state (some-> (<!?
-                                     (conn/get-account-info conn game-account-pubkey commitment))
+                                     (conn/get-account-info conn game-account-pubkey "finalized"))
                                     :data
                                     (parse-state-data))
 
@@ -148,65 +148,71 @@
            :data      ix-data})
          tx
          (doto (transaction/make-transaction)
-          (transaction/add ix))]
+          (transaction/add ix))
 
-     (let [sig (<! (conn/send-transaction conn tx [fee-payer]))]
+         sig (<!? (conn/send-transaction conn tx [fee-payer]))
 
-       (<! (conn/confirm-transaction conn sig))
+         ret (<!? (conn/confirm-transaction conn sig "finalized"))]
+     (if (nil? (get-in ret [:value :err]))
+       (log/infof "Transaction succeed")
+       (log/errorf "Transaction failed")))))
 
-       (log/infof "settle succeed: game[%s]" game-id)))))
+;;; Implementations
+
+(defrecord SolanaApi [input output pending confirming])
+
+(defn make-solana-api
+  []
+  (log/debug "Use Solana chain api.")
+  (let [input      (a/chan 30)
+        output     (a/chan 30)
+        pending    (atom [])
+        confirming (atom [])]
+    (->SolanaApi input output pending confirming)))
 
 (extend-type SolanaApi
  p/IChainApi
- (-settle-finished-game [this game-id chips-change-map player-status-map]
+
+ (p/-settle-finished-game
+   [this game-id chips-change-map player-status-map]
    (settle game-id chips-change-map player-status-map))
 
- (-settle-failed-game [this game-id player-status-map]
+ (p/-settle-failed-game
+   [this game-id player-status-map]
    (settle game-id {} player-status-map))
 
- (-fetch-game-account [this game-id]
+ (p/-fetch-game-account
+   [this game-id]
    (go-try
     (let [conn (conn/make-connection (get @config :solana-rpc-endpoint))
           game-account-pubkey (pubkey/make-public-key game-id)
           game-account-state (some-> (<!?
-                                      (conn/get-account-info conn game-account-pubkey commitment))
+                                      (conn/get-account-info conn game-account-pubkey "finalized"))
                                      :data
                                      (parse-state-data))]
       game-account-state)))
 
- (-fetch-mint-info [this mint-address]
+ (p/-fetch-mint-info
+   [this mint-address]
    (go-try
-    (let [conn (conn/make-connection (get @config :solana-rpc-endpoint))
+    (let [conn        (conn/make-connection (get @config :solana-rpc-endpoint))
           mint-pubkey (pubkey/make-public-key mint-address)
-          mint-state (<!? (spl-token/get-mint conn mint-pubkey "finalized"))]
-      mint-state))))
+          mint-state  (<!? (spl-token/get-mint conn mint-pubkey "finalized"))]
+      mint-state)))
 
+ ep/IAttachable
+ (ep/-input
+   [this]
+   (:input this))
 
-(comment
+ (ep/-output
+   [this]
+   (:output this))
 
-  (.log js/console
-        (into-array
-         (ib/make-instruction-data
-          [1 8]
-          [0 8]
-          [1 8]
-          [0 8]
-          [1 8]
-          [0 8]
-          [1 1]
-          [0 1]
-          [1 1]
-          [0 1]
-          [1 1]
-          [0 1])))
-
-  (p/-fetch-game-account
-   (->SolanaApi)
-   "GJecU1PjuFJo5mjXEphmjPmE58UvBorhvy7jczVQS6Lr")
-
-  (p/-settle-finished-game
-   (->SolanaApi)
-   "96jrkBBa3iKGeG5KYrXTAWwu7RkNRYVYnXVvU2URVbc7"
-   {"ENR11vPNw2xPXkCJk1Woheui1Yrd68NGWDBmgwSdzcwP" 10,
-    "DfgtACV9VzRUKUqRjuzxRHmeycyomcCzfRHgVyDPha9F" -10}
+ ep/IComponent
+ (ep/-start [this opts]
+   (let [{:keys [input output]} this
+         {:keys [game-id]}      opts]
+     (sync-loop/start-sync-loop this game-id output)
+     (transact-loop/start-transact-loop this game-id input output))
    nil))

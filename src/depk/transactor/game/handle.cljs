@@ -1,24 +1,51 @@
 (ns depk.transactor.game.handle
-  "Storage for game state."
-  (:require
-   [clojure.core.async :as    a
-                       :refer [go >! chan close!]]))
+  "Game handle is used to control a set of components of a game.
 
-(defrecord GameHandle [game-id input output snapshot status])
+  A running game includes following components:
+    * Event bus
+    * Chain API
+    * Store API
+    * Broadcaster
+    * Event loop
+  "
+  (:require
+   [cljs.core.async           :as a]
+   [depk.transactor.event     :as event]
+   [depk.transactor.chain     :as chain]
+   [depk.transactor.store     :as store]
+   [depk.transactor.broadcast :as broadcast]
+   [depk.transactor.game.event-loop :as eloop]
+   [depk.transactor.log       :as log]))
+
+(defrecord GameHandle
+  [event-bus
+   chain-api
+   store-api
+   broadcaster
+   event-loop])
 
 (defn make-game-handle
-  [game-id init-game-state]
-  (let [input    (chan)
-        output   (chan)
-        snapshot (atom init-game-state)
-        status   (atom {:event-loop :running,
-                        :sync-loop  :running})]
-    (->GameHandle game-id input output snapshot status)))
+  [game-id init-state ws-conn]
+  (log/debugf "Create game handle for game: %s" game-id)
+  (let [opts        {:game-id game-id, :init-state init-state}
+        chain-api   (chain/make-solana-api)
+        event-bus   (event/make-mem-event-bus)
+        store-api   (store/make-fake-store-api)
+        broadcaster (broadcast/make-broadcaster ws-conn)
+        event-loop  (eloop/make-event-loop)]
+    ;; Attach components to event bus
+    (event/attach event-loop event-bus)
+    (event/attach chain-api event-bus)
+    (event/attach store-api event-bus)
+    (event/attach broadcaster event-bus)
+    ;; Start components
+    (event/start-component event-bus opts)
+    (event/start-component chain-api opts)
+    (event/start-component event-loop opts)
+    (event/start-component store-api opts)
+    (event/start-component broadcaster opts)
 
-(defn shutdown-game-handle
-  [game-handle]
-  (let [{:keys [input]} game-handle]
-    (close! input)))
+    (->GameHandle event-bus chain-api store-api broadcaster event-loop)))
 
 (defn game-handle?
   [x]
@@ -26,14 +53,12 @@
 
 (defn send-event
   [game-handle event]
-  (go
-   (let [input (:input game-handle)]
-     (>! input event))))
+  (event/send (:event-bus game-handle) event))
 
 (defn get-snapshot
   [game-handle]
-  @(:snapshot game-handle))
+  (broadcast/get-snapshot (:broadcaster game-handle)))
 
-(defn get-status
+(defn shutdown-game-handle
   [game-handle]
-  @(:status game-handle))
+  (event/shutdown (:event-bus game-handle)))

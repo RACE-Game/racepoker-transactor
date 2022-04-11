@@ -1,8 +1,5 @@
-(ns depk.transactor.game.api.protocols)
-
-(defprotocol IStoreApi
-  (-save-game-history [this game-id game-no records])
-  (-fetch-game-histories [this game-id]))
+(ns depk.transactor.chain.protocol
+  "Protocol for chain API.")
 
 (defprotocol IChainApi
   (-settle-finished-game [this game-id chips-change-map player-status-map])

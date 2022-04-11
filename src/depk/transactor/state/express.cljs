@@ -15,8 +15,9 @@
    ["express-session" :as session]
    ["csurf" :as csurf]))
 
-(defn routes
+(defn setup-routes
   [^js express-app]
+  (h/attach-event-handler @websocket)
   (doto express-app
    (.ws "/api"
         (fn [ws req next]
@@ -33,7 +34,7 @@
            (next)))))
 
 (defn wrap-defaults
-  [^js express-app routes]
+  [^js express-app]
   (let [cookie-secret "the shiz"]
     (doto express-app
      (.use (fn [req res next]
@@ -51,20 +52,15 @@
      (.use (cookie-parser cookie-secret))
      (.use (csurf
             #js {:cookie false}))
-     (routes))))
-
-(defn main-ring-handler
-  [express-app]
-  ;; Can we even call this a ring handler?
-  (wrap-defaults express-app routes))
+     (setup-routes))))
 
 (defn start-selected-web-server!
-  [ring-handler port]
+  [port]
   (log/infof "Starting express...")
   (let [express-app       (express)
         express-ws-server (express-ws express-app)]
 
-    (ring-handler express-app)
+    (setup-routes express-app)
 
     (let [http-server (.listen express-app port)]
       {:express-app express-app,
@@ -75,6 +71,6 @@
 
 (mount/defstate server
   :start
-  (start-selected-web-server! routes 3000)
+  (start-selected-web-server! 3000)
   :stop
   (.close (:http-server @server)))

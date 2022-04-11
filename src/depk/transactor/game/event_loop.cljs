@@ -5,14 +5,49 @@
    [depk.transactor.game.event-handler :as event-handler]
    ["uuid" :as uuid]
    [depk.transactor.log :as log]
+   [depk.transactor.game.models :refer [game-state->resp]]
+   [depk.transactor.event.protocol :as ep]
    [depk.transactor.util :refer [go-try <!?]]))
+
+(def event-list
+  #{:system/sync-state
+    :system/reset
+    :system/start-game
+    :client/shuffle-cards
+    :client/encrypt-cards
+    :client/share-keys
+    :system/key-share-timeout
+    :system/shuffle-timeout
+    :system/encrypt-timeout
+    :system/player-action-timeout
+    :client/alive
+    :client/leave
+    :client/release
+    :player/fold
+    :player/call
+    :player/check
+    :player/raise
+    :player/bet})
 
 (defn expired-event!
   [state event]
-  (ex-info "drop expired event" {:event event, :state-id (:state-id state)}))
+  (throw (ex-info "Expired event"
+                  {:event    event,
+                   :state-id (:state-id state)})))
 
-(defn- handle-result
-  [event {:keys [result state], :as res}]
+(defn expired-event?
+  [state event]
+  (not (or
+        (nil? (:dispatch-id event))
+        (= (:state-id state) (:dispatch-id event))
+        (= (:dispatch-id state) (:dispatch-id event)))))
+
+(defn handle-result
+  "Handle the result of event handler.
+
+  Flush :dispatch-event, :api-requests and :reserve-dispatch-id
+  Set :dispatch-id and :this-event."
+  [event {:keys [state], :as res}]
   (let [{:keys [dispatch-event reserve-dispatch-id api-requests state-id]} state
         state (cond-> (dissoc state :dispatch-event :api-requests :reserve-dispatch-id)
                 (not reserve-dispatch-id)
@@ -37,36 +72,41 @@
 
   An event with an invalid state-id is considered to be expired."
   [state event]
-  (go
-   (if (not (or (= (:dispatch-id state) (:dispatch-id event))
-                (= (:state-id state) (:dispatch-id event))))
-     (do
-       (log/debugf "Drop expired event[%s]" (name (:type event)))
-       {:result :err, :state state, :error (expired-event! state event)})
-     (try
-       (let [new-state-id (uuid/v4)
-             new-state    (event-handler/handle-event (assoc state :state-id new-state-id) event)]
-         (if (map? new-state)
-           (do
-             (log/debugf "Handle event [%s], status: %s -> %s"
-                         (str (:type event))
-                         (str (:status state))
-                         (str (:status new-state)))
-             (handle-result event {:result :ok, :state new-state}))
-           (let [v (<! new-state)]
-             (if (map? v)
-               (do
-                 (log/debugf "Handle event [%s], status: %s -> %s"
-                             (str (:type event))
-                             (str (:status state))
-                             (str (:status v)))
-                 (handle-result event {:result :ok, :state v}))
-               (do
-                 (log/warnf "Error(async) from event handler: %s" (ex-message v))
-                 {:result :err, :state state, :error v})))))
-       (catch ExceptionInfo e
-         (log/warnf "Error(sync) in event loop: %s" (ex-message e))
-         {:result :err, :state state, :error e})))))
+  (go (try
+        ;; Check event expired?
+        (when (expired-event? state event)
+          (expired-event! state event))
+
+        ;; Process event
+        (let [new-state-id (uuid/v4)
+              new-state    (event-handler/handle-event (assoc state :state-id new-state-id) event)]
+          (if (map? new-state)
+            (do
+              (log/debugf "Handle event success: %s" (:type event))
+              ;; (js/console.debug "state: " new-state)
+              (handle-result event {:result :ok, :state new-state}))
+            (let [v (<! new-state)]
+              (if (map? v)
+                (do
+                  (log/debugf "Handle event success %s" (:type event))
+                  ;; (js/console.debug "state: " v)
+                  (handle-result event {:result :ok, :state v}))
+                (do
+                  (log/debugf "Error in event handler: %s, event: %s"
+                              (ex-message v)
+                              (prn-str event))
+                  {:result :err, :state state, :error v})))))
+
+        (catch ExceptionInfo e
+          (log/debugf "Error in event handler: %s, event: %s"
+                      (ex-message e)
+                      (prn-str event))
+          {:result :err, :state state, :error e})
+        (catch js/Error e
+          (log/errorf "Error in event handler: %s, event: %s"
+                      (ex-message e)
+                      (prn-str event))
+          {:result :err, :state state, :error e}))))
 
 (defn dispatch-delay-event
   "Dispatch dispatch-events to input channel.
@@ -101,33 +141,62 @@
     (do
       (when (:game-no old-state)
         (put! output
-              {:api-request/type :save-game-history,
-               :game-id          (:game-id old-state),
-               :game-no          (:game-no old-state),
-               :records          records}))
+              {:type :system/save-game-history,
+               :data {:game-id (:game-id old-state),
+                      :game-no (:game-no old-state),
+                      :records records}}))
       [])))
 
-(defn start-event-loop
-  [game-handle]
-  (let [{:keys [snapshot input output game-id]} game-handle]
-    (log/infof "Start event loop for game[%s]" game-id)
-    (go-loop [state   @snapshot
-              records []]
-      (let [event (<! input)]
-        (if event
-          (let [old-state state
+(defn dispatch-broadcast-state
+  [game-id state output]
+  (put! output
+        {:type :system/broadcast-state,
+         :data {:game-id game-id,
+                :state   (game-state->resp state)}}))
 
-                {:keys [result state api-requests dispatch-event]}
-                (<! (handle-event state event))]
+(defn run-event-loop
+  [game-id init-state input output]
+  (log/infof "Start event loop for game[%s]" game-id)
+  (go-loop [state   init-state
+            records []]
+    (let [event (<! input)]
+      (log/debugf "Event loop receive: %s" (:type event))
+      (if (event-list (:type event))
+        (let [old-state state
 
-            (if (= result :ok)
-              (let [records
-                    (collect-and-dispatch-game-history old-state state event records output)]
-                (dispatch-delay-event event dispatch-event input)
-                (dispatch-api-request event api-requests output)
-                (reset! snapshot state)
-                (recur state records))
-              (recur old-state records)))
-          (do (log/infof "Stop event loop for game[%s]" game-id)
-              (swap! (:status game-handle) assoc :event-loop :stopped)
-              (close! output)))))))
+              {:keys [result state api-requests dispatch-event]}
+              (<! (handle-event state event))]
+          (log/debugf "Handle event: %s, result: %s" (:type event) result)
+          (if (= result :ok)
+            (let [records
+                  (collect-and-dispatch-game-history old-state state event records output)]
+              (dispatch-delay-event event dispatch-event input)
+              (dispatch-api-request event api-requests output)
+              (dispatch-broadcast-state game-id state output)
+              (recur state records))
+            (recur old-state records)))
+        (recur state records)))))
+
+(defrecord EventLoop [input output])
+
+(extend-type EventLoop
+ ep/IAttachable
+
+ (ep/-input [this]
+   (:input this))
+
+ (ep/-output [this]
+   (:output this))
+
+ ep/IComponent
+ (ep/-start [this opts]
+   (run-event-loop (:game-id opts)
+                   (:init-state opts)
+                   (:input this)
+                   (:output this))))
+
+(defn make-event-loop
+  []
+  (let [input  (a/chan 10)
+        output (a/chan 10)]
+    (->EventLoop input output)))

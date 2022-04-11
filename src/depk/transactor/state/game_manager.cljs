@@ -1,14 +1,11 @@
 (ns depk.transactor.state.game-manager
-  (:require [mount.core :as mount]
-            [depk.transactor.game.manager :refer [make-game-manager]]
-            [depk.transactor.state.api :as api]))
+  (:require
+   [mount.core :as mount]
+   [depk.transactor.state.websocket :refer [websocket]]
+   [depk.transactor.game.manager :refer [make-game-manager]]))
 
 (mount/defstate game-manager
   :start
-  (make-game-manager @api/chain-api @api/store-api)
+  (make-game-manager @websocket)
   :stop
   nil)
-
-(comment
-  (keys (get @(:store (:store-api @game-manager)) nil))
-  @(:snapshot (val (first @(:game-handle-map @game-manager)))))

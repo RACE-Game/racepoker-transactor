@@ -2,15 +2,12 @@
   "Commit game events to Arweave and Solana."
   (:require
    [depk.transactor.util            :refer [go-try <!?]]
-   [depk.transactor.game.event-loop :as event-loop]
-   [depk.transactor.game.event-handler :as event-handler]
    [depk.transactor.game.models     :as m]
    [depk.transactor.game.handle     :as handle]
-   [depk.transactor.game.encrypt    :as encrypt]
-   [depk.transactor.game.state-broadcast :as broadcast]
+   [depk.transactor.game.event-loop :as eloop]
    [depk.transactor.game.manager    :as manager]
-   [depk.transactor.game.api        :as api]
-   [depk.transactor.log             :as log]))
+   [depk.transactor.log             :as log]
+   [depk.transactor.event.protocol  :as ep]))
 
 (defn error-game-not-exist!
   [game-id]
@@ -21,16 +18,13 @@
   {:pre [(string? game-id)]}
   (go-try
    (log/infof "player[%s] attach to game [%s]" player-id game-id)
-   (if-let [game-handle (manager/find-game game-manager game-id)]
-     game-handle
-     (<!? (manager/load-game game-manager game-id)))))
+   (manager/try-start-game game-manager game-id)))
 
 (defn state
   [game-manager game-id]
   {:pre [(string? game-id)]}
-  (go-try
-   (when-let [game-handle (manager/find-game game-manager game-id)]
-     (broadcast/parse-state-as-response (handle/get-snapshot game-handle)))))
+  (when-let [game-handle (manager/find-game game-manager game-id)]
+    (m/game-state->resp (handle/get-snapshot game-handle))))
 
 ;; Leaving game
 ;; Must provides all keys
@@ -201,5 +195,4 @@
 (defn player-musk [])
 
 (defn fetch-histories
-  [game-manager game-id]
-  (manager/fetch-game-histories game-manager game-id))
+  [_game-manager _game-id])

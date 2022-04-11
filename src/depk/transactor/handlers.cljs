@@ -1,17 +1,15 @@
 (ns depk.transactor.handlers
   (:require
    [depk.transactor.log :as log]
-   [clojure.string :as str]
-   [cljs.core.async :as a]
+   [clojure.string      :as str]
+   [cljs.core.async     :as a]
    [depk.transactor.util :refer [<!? def-async-handler]]
    [depk.transactor.game :as game]
    [solana-clj.publickey :as pubkey]
    [depk.transactor.state.game-manager :refer [game-manager]]
-   [depk.transactor.game.api :as api]
-   [depk.transactor.state.api :refer [chain-api]]
-   ["buffer" :as buffer]
-   ["tweetnacl" :as nacl]
-   ["uuid" :as uuid]))
+   ["buffer"            :as buffer]
+   ["tweetnacl"         :as nacl]
+   ["uuid"              :as uuid]))
 
 ;; Websocket Event Handler
 
@@ -31,12 +29,11 @@
 
 (defmethod event-msg-handler :game/state
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
-  (log/debugf "Sync game state: %s" uid)
-  (a/go
-   (let [[game-id player-id] uid
-         state (a/<! (game/state @game-manager game-id))]
-     (?reply-fn {:result :ok,
-                 :state  state}))))
+  ;; (log/debugf "Sync game state: %s" uid)
+  (let [[game-id player-id] uid
+        state (game/state @game-manager game-id)]
+    (?reply-fn {:result :ok,
+                :state  state})))
 
 (defmethod event-msg-handler :client/leave
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
@@ -151,29 +148,16 @@
   (log/debugf "Player send sticker message: %s" uid)
   (a/go
    (let [[game-id player-id] uid]
-     (println @connected-uids)
      (when ?reply-fn
        (?reply-fn {:result :ok})))))
 
 (defn attach-event-handler
-  [ch-recv]
-  (a/go-loop [evt (a/<! ch-recv)]
-    (try
-      (event-msg-handler evt)
-      (catch js/Error e (log/error e)))
-    (recur (a/<! ch-recv))))
-
-(defn user-id-fn
-  [{:keys [params]}]
-  (println "Receive WS connection with params: " (prn-str params))
-  (let [{:keys [pubkey sig game-id]} params
-        k   (pubkey/to-buffer (pubkey/make-public-key pubkey))
-        msg (buffer/Buffer.from
-             (str pubkey
-                  " sign with game "
-                  game-id
-                  " for RACE Poker."))]
-    (if (nacl/sign.detached.verify msg (buffer/Buffer.from sig "hex") k)
-      (do (println "Signature check succeed.")
-          [game-id pubkey])
-      (println "Signature check failed."))))
+  "Attach game event handler to websocket channel."
+  [ws-conn]
+  (let [{:keys [ch-chsk]} ws-conn]
+    (a/go-loop [evt (a/<! ch-chsk)]
+      (try
+        (event-msg-handler evt)
+        (catch js/Error e
+          (log/errorf "Error in event message handler: %s" (ex-message e))))
+      (recur (a/<! ch-chsk)))))

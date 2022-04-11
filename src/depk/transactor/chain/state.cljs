@@ -1,4 +1,4 @@
-(ns depk.transactor.game.api.state
+(ns depk.transactor.chain.state
   (:require
    [solana-clj.extra.buffer-layout :as    bl
                                    :refer [buffer-from]]

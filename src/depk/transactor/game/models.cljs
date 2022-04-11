@@ -1,7 +1,8 @@
 (ns depk.transactor.game.models
   "Models for game state machine."
   (:require
-   ["uuid" :as uuid]))
+   ["uuid" :as uuid]
+   [depk.transactor.constant :as c]))
 
 (defn missing-state-id!
   []
@@ -148,12 +149,68 @@
    winning-type
   ])
 
+;;; Initial state builder
+
+(defn get-blind-bet
+  "Get blind bet amount as [sb, bb]."
+  [game-account-state mint-info]
+  (let [{:keys [level]} game-account-state
+        {:keys [decimals]} mint-info
+        {:keys [sb bb]} (get c/level-info-map level)
+        base (js/BigInt (js/Math.pow 10 decimals))]
+    [(* base sb)
+     (* base bb)]))
+
+(defn players->player-map
+  [players]
+  (->> players
+       (keep-indexed
+        (fn [idx p]
+          (when p
+            (let [player-id (str (:pubkey p))]
+              (make-player-state player-id
+                                 (:chips p)
+                                 idx
+                                 :player-status/wait
+                                 :dropout)))))
+       (map (juxt :player-id identity))
+       (into {})))
+
 (defn make-game-state
-  [game-account-state init-state]
-  (let [state-id (uuid/v4)]
-    (into {}
-          (map->GameState
-           (merge init-state
-                  {:state-id           state-id,
-                   :status             :game-status/init,
-                   :game-account-state game-account-state})))))
+  ([game-account-state init-state]
+   (let [state-id (uuid/v4)]
+     (into {}
+           (map->GameState
+            (merge init-state
+                   {:state-id           state-id,
+                    :status             :game-status/init,
+                    :game-account-state game-account-state})))))
+  ([game-account-state mint-info init-state]
+   (let [state-id (uuid/v4)
+         [sb bb]  (get-blind-bet game-account-state mint-info)]
+     (into {}
+           (map->GameState
+            (merge
+             init-state
+             {:sb                 sb,
+              :bb                 bb,
+              :game-account-state game-account-state,
+              :state-id           state-id,
+              :status             :game-status/init,
+              :game-no            (:game-no game-account-state),
+              :mint-info          mint-info,
+              :player-map         (players->player-map (:players game-account-state))}))))))
+
+(defn game-state->resp
+  "Parse game state to response.
+
+  This help reducing the response's body size."
+  [state]
+  (select-keys state
+               [:game-no :status :street :player-map :pots :min-raise
+                :street-bet :bet-map :action-player-id
+                :showdown-map :prize-map :state-id :prepare-cards
+                :shuffle-player-id :encrypt-player-id
+                :btn :sb :bb :require-key-idents :share-key-map
+                :card-ciphers :player-actions :winning-type :dispatch-id
+                :game-id :this-event]))

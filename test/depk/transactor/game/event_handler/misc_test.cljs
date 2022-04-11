@@ -124,6 +124,14 @@
                 [101 :hole-card 0]
                 101))))
 
+(t/deftest with-next-game-no
+  (t/testing "inc"
+    (t/is (= (sut/with-next-game-no {:game-no 10})
+             {:game-no 11})))
+  (t/testing "reset"
+    (t/is (= (sut/with-next-game-no {:game-no 1000000})
+             {:game-no 1}))))
+
 (t/deftest list-missing-key-idents
   (t/is (= #{[100 :hole-card 1]}
            (sut/list-missing-key-idents
@@ -229,30 +237,30 @@
                                  :online-status :normal}}}]
     (t/is (= {:player-map   {200 {:player-id     100,
                                   :online-status :normal}},
-              :api-requests [{:api-request/type  :settle-failed-game,
-                              :player-status-map {100 :leave,
-                                                  200 :normal}}]}
+              :api-requests [{:type :system/settle-failed,
+                              :data {:player-status-map {100 :leave,
+                                                         200 :normal}}}]}
              (sut/kick-dropout-players state)))))
 
 (t/deftest update-prize-map
-  (let [state {:pots [(m/make-pot #{100 101 102} 1500 #{100})
-                      (m/make-pot #{101 102} 1500 #{102})
-                      (m/make-pot #{102} 1000 #{102})]}]
-    (t/is (= {100 1500,
-              102 2500}
+  (let [state {:pots [(m/make-pot #{100 101 102} (js/BigInt 1500) #{100})
+                      (m/make-pot #{101 102} (js/BigInt 1500) #{102})
+                      (m/make-pot #{102} (js/BigInt 1000) #{102})]}]
+    (t/is (= {100 (js/BigInt 1500),
+              102 (js/BigInt 2500)}
              (-> state
                  (sut/update-prize-map)
                  :prize-map)))))
 
 (t/deftest update-chips-change-map
-  (let [state {:pots       [(m/make-pot #{100 101 102} 1500 #{102})
-                            (m/make-pot #{101 102} 1500 #{102})],
+  (let [state {:pots       [(m/make-pot #{100 101 102} (js/BigInt 1500) #{102})
+                            (m/make-pot #{101 102} (js/BigInt 1500) #{102})],
                :player-map {100 {},
                             101 {},
                             102 {}}}]
-    (t/is (= {100 -500,
-              101 -1250,
-              102 1750}
+    (t/is (= {100 (js/BigInt -500),
+              101 (js/BigInt -1250),
+              102 (js/BigInt 1750)}
              (-> state
                  (sut/update-chips-change-map)
                  :chips-change-map)))))
@@ -269,64 +277,64 @@
              (sut/take-bet-from-player player 2000)))))
 
 (t/deftest blind-bets
-  (let [state {:player-map {100 (m/make-player-state 100 1000 0),
-                            101 (m/make-player-state 101 1000 1),
-                            102 (m/make-player-state 102 1000 2)},
+  (let [state {:player-map {100 (m/make-player-state 100 (js/BigInt 1000) 0),
+                            101 (m/make-player-state 101 (js/BigInt 1000) 1),
+                            102 (m/make-player-state 102 (js/BigInt 1000) 2)},
                :btn        2,
-               :sb         100,
-               :bb         200,
+               :sb         (js/BigInt 100),
+               :bb         (js/BigInt 200),
                :state-id   1}]
-    (t/is (= {:player-map       {100 (m/make-player-state 100 900 0),
-                                 101 (m/make-player-state 101 800 1),
-                                 102 (assoc (m/make-player-state 102 1000 2)
+    (t/is (= {:player-map       {100 (m/make-player-state 100 (js/BigInt 900) 0),
+                                 101 (m/make-player-state 101 (js/BigInt 800) 1),
+                                 102 (assoc (m/make-player-state 102 (js/BigInt 1000) 2)
                                             :status
                                             :player-status/in-action)},
-              :bet-map          {100 100,
-                                 101 200},
+              :bet-map          {100 (js/BigInt 100),
+                                 101 (js/BigInt 200)},
               :btn              2,
-              :sb               100,
-              :bb               200,
+              :sb               (js/BigInt 100),
+              :bb               (js/BigInt 200),
               :action-player-id 102,
-              :street-bet       200,
-              :min-raise        200,
+              :street-bet       (js/BigInt 200),
+              :min-raise        (js/BigInt 200),
               :state-id         1,
               :dispatch-event   [c/player-action-timeout-delay
                                  (m/make-event :system/player-action-timeout state {} nil)]}
              (sut/blind-bets state))))
-  (let [state {:player-map {100 (m/make-player-state 100 1000 0),
-                            101 (m/make-player-state 101 1000 1)},
+  (let [state {:player-map {100 (m/make-player-state 100 (js/BigInt 1000) 0),
+                            101 (m/make-player-state 101 (js/BigInt 1000) 1)},
                :btn        0,
-               :sb         100,
-               :bb         200,
+               :sb         (js/BigInt 100),
+               :bb         (js/BigInt 200),
                :state-id   1}]
-    (t/is (= {:player-map       {100 (assoc (m/make-player-state 100 900 0)
+    (t/is (= {:player-map       {100 (assoc (m/make-player-state 100 (js/BigInt 900) 0)
                                             :status
                                             :player-status/in-action),
-                                 101 (m/make-player-state 101 800 1)},
-              :bet-map          {100 100,
-                                 101 200},
+                                 101 (m/make-player-state 101 (js/BigInt 800) 1)},
+              :bet-map          {100 (js/BigInt 100),
+                                 101 (js/BigInt 200)},
               :btn              0,
-              :sb               100,
-              :bb               200,
+              :sb               (js/BigInt 100),
+              :bb               (js/BigInt 200),
               :action-player-id 100,
-              :street-bet       200,
-              :min-raise        200,
+              :street-bet       (js/BigInt 200),
+              :min-raise        (js/BigInt 200),
               :state-id         1,
               :dispatch-event   [c/player-action-timeout-delay
                                  (m/make-event :system/player-action-timeout state {} nil)]}
              (sut/blind-bets state)))))
 
 (t/deftest apply-prize-map
-  (let [state {:player-map {100 {:chips 10000},
-                            101 {:chips 10000},
-                            102 {:chips 10000}},
-               :prize-map  {100 5000,
-                            101 2000}}]
-    (t/is (= {:player-map {100 {:chips 15000},
-                           101 {:chips 12000},
-                           102 {:chips 10000}},
-              :prize-map  {100 5000,
-                           101 2000}}
+  (let [state {:player-map {100 {:chips (js/BigInt 10000)},
+                            101 {:chips (js/BigInt 10000)},
+                            102 {:chips (js/BigInt 10000)}},
+               :prize-map  {100 (js/BigInt 5000),
+                            101 (js/BigInt 2000)}}]
+    (t/is (= {:player-map {100 {:chips (js/BigInt 15000)},
+                           101 {:chips (js/BigInt 12000)},
+                           102 {:chips (js/BigInt 10000)}},
+              :prize-map  {100 (js/BigInt 5000),
+                           101 (js/BigInt 2000)}}
              (sut/apply-prize-map state)))))
 
 (t/deftest assign-winner-to-pots
@@ -337,12 +345,12 @@
              (sut/assign-winner-to-pots state [#{102} #{101} #{100}])))))
 
 (t/deftest collect-bet-to-pots
-  (let [bet-map {100 500,
-                 101 500,
-                 102 800,
-                 103 600,
-                 104 600,
-                 105 700}
+  (let [bet-map {100 (js/BigInt 500),
+                 101 (js/BigInt 500),
+                 102 (js/BigInt 800),
+                 103 (js/BigInt 600),
+                 104 (js/BigInt 600),
+                 105 (js/BigInt 700)}
         state   {:player-map {100 {:status :player-status/acted},
                               101 {:status :player-status/acted},
                               102 {:status :player-status/acted},
@@ -358,9 +366,9 @@
                            104 {:status :player-status/fold},
                            105 {:status :player-status/fold}},
               :bet-map    bet-map,
-              :pots       [(m/make-pot #{100 101 102 103} 3000)
-                           (m/make-pot #{103 102} 400)
-                           (m/make-pot #{102} 300)]}
+              :pots       [(m/make-pot #{100 101 102 103} (js/BigInt 3000))
+                           (m/make-pot #{103 102} (js/BigInt 400))
+                           (m/make-pot #{102} (js/BigInt 300))]}
              (sut/collect-bet-to-pots state)))
 
     ;; with existing pots
@@ -371,12 +379,12 @@
                            104 {:status :player-status/fold},
                            105 {:status :player-status/fold}},
               :bet-map    bet-map,
-              :pots       [(m/make-pot #{100 101 102 103} 200)
-                           (m/make-pot #{100 101 102 103} 3000)
-                           (m/make-pot #{103 102} 400)
-                           (m/make-pot #{102} 300)]}
+              :pots       [(m/make-pot #{100 101 102 103} (js/BigInt 200))
+                           (m/make-pot #{100 101 102 103} (js/BigInt 3000))
+                           (m/make-pot #{103 102} (js/BigInt 400))
+                           (m/make-pot #{102} (js/BigInt 300))]}
              (sut/collect-bet-to-pots
-              (assoc state :pots [(m/make-pot #{100 101 102 103} 200)]))))))
+              (assoc state :pots [(m/make-pot #{100 101 102 103} (js/BigInt 200))]))))))
 
 (t/deftest prepare-showdown
   (let [state {:player-map {100 (assoc (m/make-player-state 100 10000 0)
@@ -414,19 +422,19 @@
                  (select-keys [:street :status :after-key-share :require-key-idents]))))))
 
 (t/deftest prepare-runner
-  (let [state {:player-map {100 (assoc (m/make-player-state 100 10000 0)
+  (let [state {:player-map {100 (assoc (m/make-player-state 100 (js/BigInt 10000) 0)
                                        :status
                                        :player-status/fold),
-                            101 (assoc (m/make-player-state 101 10000 1)
+                            101 (assoc (m/make-player-state 101 (js/BigInt 10000) 1)
                                        :status
                                        :player-status/acted),
-                            102 (assoc (m/make-player-state 102 0 2)
+                            102 (assoc (m/make-player-state 102 (js/BigInt 0) 2)
                                        :status
                                        :player-status/allin)},
-               :bet-map    {101 10000,
-                            102 10000},
+               :bet-map    {101 (js/BigInt 10000),
+                            102 (js/BigInt 10000)},
                :btn        2,
-               :pots       [(m/make-pot #{101 102} 10000)],
+               :pots       [(m/make-pot #{101 102} (js/BigInt 10000))],
                :street     :street/turn}]
     (t/is (= {:street             :street/showdown,
               :status             :game-status/key-share,
@@ -467,64 +475,64 @@
 
 (t/deftest single-player-win
   (let [state {:state-id   1,
-               :player-map {100 {:status :player-status/fold, :chips 10000},
-                            101 {:status :player-status/acted, :chips 10000},
-                            102 {:status :player-status/fold, :chips 10000}},
-               :pots       [(m/make-pot #{100 101 102} 3000)
-                            (m/make-pot #{101} 2000)]}]
+               :player-map {100 {:status :player-status/fold, :chips (js/BigInt 10000)},
+                            101 {:status :player-status/acted, :chips (js/BigInt 10000)},
+                            102 {:status :player-status/fold, :chips (js/BigInt 10000)}},
+               :pots       [(m/make-pot #{100 101 102} (js/BigInt 3000))
+                            (m/make-pot #{101} (js/BigInt 2000))]}]
     (t/is (= {:state-id         1,
               :player-map       {100 {:status :player-status/fold,
-                                      :chips  10000},
+                                      :chips  (js/BigInt 10000)},
                                  101 {:status :player-status/acted,
-                                      :chips  15000},
+                                      :chips  (js/BigInt 15000)},
                                  102 {:status :player-status/fold,
-                                      :chips  10000}},
-              :prize-map        {101 5000},
-              :chips-change-map {100 -1000,
-                                 101 2000,
-                                 102 -1000},
-              :pots             [(m/make-pot #{100 101 102} 3000 #{101})
-                                 (m/make-pot #{101} 2000 #{101})],
+                                      :chips  (js/BigInt 10000)}},
+              :prize-map        {101 (js/BigInt 5000)},
+              :chips-change-map {100 (js/BigInt -1000),
+                                 101 (js/BigInt 2000),
+                                 102 (js/BigInt -1000)},
+              :pots             [(m/make-pot #{100 101 102} (js/BigInt 3000) #{101})
+                                 (m/make-pot #{101} (js/BigInt 2000) #{101})],
               :status           :game-status/settle,
               :winning-type     :last-player,
               :bet-map          nil,
-              :api-requests     [{:api-request/type  :settle-finished-game,
-                                  :chips-change-map  {100 -1000,
-                                                      101 2000,
-                                                      102 -1000},
-                                  :player-status-map {100 :normal,
-                                                      101 :normal,
-                                                      102 :normal}}],
+              :api-requests     [{:type :system/settle-finished,
+                                  :data {:chips-change-map  {100 (js/BigInt -1000),
+                                                             101 (js/BigInt 2000),
+                                                             102 (js/BigInt -1000)},
+                                         :player-status-map {100 :normal,
+                                                             101 :normal,
+                                                             102 :normal}}}],
               :dispatch-event   [c/reset-timeout-delay
                                  (m/make-event :system/reset state {} nil)]}
              (sut/single-player-win state 101)))
 
     ;; with blind bets
     (let [state-with-bet-map (assoc state
-                                    :bet-map {100 50, 101 100}
+                                    :bet-map {100 (js/BigInt 50), 101 (js/BigInt 100)}
                                     :pots    [])]
       (t/is (= {:state-id         1,
                 :player-map       {100 {:status :player-status/fold,
-                                        :chips  10000},
+                                        :chips  (js/BigInt 10000)},
                                    101 {:status :player-status/acted,
-                                        :chips  10150},
+                                        :chips  (js/BigInt 10150)},
                                    102 {:status :player-status/fold,
-                                        :chips  10000}},
-                :prize-map        {101 150},
-                :chips-change-map {100 -50,
-                                   101 50,
-                                   102 0},
+                                        :chips  (js/BigInt 10000)}},
+                :prize-map        {101 (js/BigInt 150)},
+                :chips-change-map {100 (js/BigInt -50),
+                                   101 (js/BigInt 50),
+                                   102 (js/BigInt 0)},
                 :bet-map          nil,
-                :pots             [(m/make-pot #{100 101} 150 #{101})],
+                :pots             [(m/make-pot #{100 101} (js/BigInt 150) #{101})],
                 :status           :game-status/settle,
                 :winning-type     :last-player,
-                :api-requests     [{:api-request/type  :settle-finished-game,
-                                    :chips-change-map  {100 -50,
-                                                        101 50,
-                                                        102 0},
-                                    :player-status-map {100 :normal,
-                                                        101 :normal,
-                                                        102 :normal}}],
+                :api-requests     [{:type :system/settle-finished,
+                                    :data {:chips-change-map  {100 (js/BigInt -50),
+                                                               101 (js/BigInt 50),
+                                                               102 (js/BigInt 0)},
+                                           :player-status-map {100 :normal,
+                                                               101 :normal,
+                                                               102 :normal}}}],
                 :dispatch-event   [c/reset-timeout-delay
                                    (m/make-event :system/reset state-with-bet-map {} nil)]}
                (sut/single-player-win state-with-bet-map 101))))
@@ -532,33 +540,33 @@
     ;; with normal bets
     (let [state-with-bet-map (assoc state
                                     :bet-map
-                                    {100 500,
-                                     101 1000,
-                                     102 500})]
+                                    {100 (js/BigInt 500),
+                                     101 (js/BigInt 1000),
+                                     102 (js/BigInt 500)})]
       (t/is (= {:state-id         1,
                 :player-map       {100 {:status :player-status/fold,
-                                        :chips  10000},
+                                        :chips  (js/BigInt 10000)},
                                    101 {:status :player-status/acted,
-                                        :chips  17000},
+                                        :chips  (js/BigInt 17000)},
                                    102 {:status :player-status/fold,
-                                        :chips  10000}},
-                :prize-map        {101 7000},
-                :chips-change-map {100 -1500,
-                                   101 3000,
-                                   102 -1500},
+                                        :chips  (js/BigInt 10000)}},
+                :prize-map        {101 (js/BigInt 7000)},
+                :chips-change-map {100 (js/BigInt -1500),
+                                   101 (js/BigInt 3000),
+                                   102 (js/BigInt -1500)},
                 :bet-map          nil,
-                :pots             [(m/make-pot #{100 101 102} 3000 #{101})
-                                   (m/make-pot #{101} 2000 #{101})
-                                   (m/make-pot #{100 101 102} 2000 #{101})],
+                :pots             [(m/make-pot #{100 101 102} (js/BigInt 3000) #{101})
+                                   (m/make-pot #{101} (js/BigInt 2000) #{101})
+                                   (m/make-pot #{100 101 102} (js/BigInt 2000) #{101})],
                 :status           :game-status/settle,
                 :winning-type     :last-player,
-                :api-requests     [{:api-request/type  :settle-finished-game,
-                                    :chips-change-map  {100 -1500,
-                                                        101 3000,
-                                                        102 -1500},
-                                    :player-status-map {100 :normal,
-                                                        101 :normal,
-                                                        102 :normal}}],
+                :api-requests     [{:type :system/settle-finished,
+                                    :data {:chips-change-map  {100 (js/BigInt -1500),
+                                                               101 (js/BigInt 3000),
+                                                               102 (js/BigInt -1500)},
+                                           :player-status-map {100 :normal,
+                                                               101 :normal,
+                                                               102 :normal}}}],
                 :dispatch-event   [c/reset-timeout-delay
                                    (m/make-event :system/reset state-with-bet-map {} nil)]}
                (sut/single-player-win state-with-bet-map 101))))))
@@ -712,7 +720,7 @@
     (go
      (let [state
            {:community-cards [[:h :a] [:d :a] [:c :a] [:s :j] [:s :t]],
-            :pots            [(m/make-pot #{100 101} 2000)],
+            :pots            [(m/make-pot #{100 101} (js/BigInt 2000))],
             :card-ciphers    "9e3f-3a42-0056-2ac3",
             :share-key-map   {[100 :showdown-card 0] "24918f4ffc066105629863d68a92596b",
                               [100 :showdown-card 1] "c35ad7e22a9a7164e7980ad3c16b39c7",
@@ -723,10 +731,10 @@
                               [101 :showdown-card 1] "72dc6cfefd32565c610b5cd892bc1f7d",
                               [101 :showdown-card 2] "d5f9ea1a7f4c0ca3eab9e239cea0ae8f",
                               [101 :showdown-card 3] "867f57da487c4f9672359c70ac528271"},
-            :player-map      {100 (assoc (m/make-player-state 100 10000 0)
+            :player-map      {100 (assoc (m/make-player-state 100 (js/BigInt 10000) 0)
                                          :status
                                          :player-status/acted),
-                              101 (assoc (m/make-player-state 101 10000 1)
+                              101 (assoc (m/make-player-state 101 (js/BigInt 10000) 1)
                                          :status
                                          :player-status/acted)},
             :btn             1,
@@ -735,9 +743,9 @@
         (=
          {:dispatch-event   [c/reset-timeout-delay
                              (m/make-event :system/reset state {} nil)],
-          :prize-map        {100 2000},
-          :chips-change-map {100 1000,
-                             101 -1000},
+          :prize-map        {100 (js/BigInt 2000)},
+          :chips-change-map {100 (js/BigInt 1000),
+                             101 (js/BigInt -1000)},
           :showdown-map     {100 {:category   :four-of-a-kind,
                                   :picks      [[:s :a] [:h :a] [:d :a] [:c :a] [:s :k]],
                                   :value      [7 14 14 14 14 13],
@@ -749,7 +757,7 @@
                                   :value      [6 14 14 14 12 12],
                                   :player-id  101,
                                   :hole-cards [[:s :q] [:d :q]]}},
-          :pots             [(m/make-pot #{100 101} 2000 #{100})]}
+          :pots             [(m/make-pot #{100 101} (js/BigInt 2000) #{100})]}
          (let [state (<! (sut/settle state nil))]
            (select-keys state
                         [:showdown-map :pots :prize-map :chips-change-map :dispatch-event])))))

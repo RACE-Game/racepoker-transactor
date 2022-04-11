@@ -5,31 +5,28 @@
    [depk.transactor.game.event-handler.misc :as misc]
    [depk.transactor.constant :as c]
    [depk.transactor.log :as log]
-   [cljs.core.async :refer [go <!]]))
+   [depk.transactor.event.protocol :as ep]
+   [cljs.core.async :refer [go <!]]
+   ["uuid" :as uuid]))
+
 
 (defmulti handle-event
   (fn [_state event]
     (:type event)))
 
 (defmethod handle-event :default
-  [state event]
-  (println "event ignored:" event)
+  [state _event]
   state)
 
 ;; implementations
 
 ;; system/sync-state
-;; receiving this event when game account reflect there's a new player
-;; will only success when game is in init status.
+;; receiving this event when game account reflect there's an update from onchain state
 (defmethod handle-event :system/sync-state
-  [{:keys [status], :as state} {{:keys [players game-account-state]} :data, :as event}]
-
-  (when-not (= :game-status/init status)
-    (misc/invalid-game-status! state event))
-
+  [{:keys [status], :as state} {{:keys [game-account-state]} :data, :as event}]
   (-> state
-      (misc/merge-sync-state players game-account-state)
-      (misc/dispatch-start-game)))
+      (misc/merge-sync-state game-account-state)
+      (misc/reserve-dispatch)))
 
 ;; system/reset
 ;; receiving this event for reset states
@@ -40,7 +37,11 @@
     (misc/invalid-game-status! state event))
 
   (-> state
-      (misc/reset-game-state)))
+      (misc/reset-game-state)
+      (misc/with-next-game-no)
+      (misc/add-joined-player)
+      (misc/request-sync-state)
+      (misc/dispatch-start-game)))
 
 ;; system/start-game
 ;; Receiving this event to trigger game start.
@@ -57,43 +58,52 @@
     (misc/invalid-game-status! state event))
 
   (log/infof "Start game, players [%s]" (vals player-map))
+  ;; (log/infof "Start game, state: %s" (prn-str state))
 
   ;; Start when all players ready
   ;; otherwise kick all non-ready players
   (cond
     ;; If any client is not ready, kick it
     (not (every? #(= :normal (:online-status %)) (vals player-map)))
-    (-> state
-        (misc/kick-dropout-players)
-        (misc/reset-game-state))
+    (do
+      (log/debugf "Not all players are ready")
+      (-> state
+          (misc/kick-dropout-players)
+          (misc/reset-game-state)))
 
     ;; If the number of players is not enough for starting
     ;; Require further alive event from the only client
     (= (count player-map) 1)
-    (-> state
-        (misc/mark-dropout-players (keys player-map))
-        (misc/dispatch-start-game))
+    (do
+      (log/debugf "No enough players to start")
+      (-> state
+          (misc/mark-dropout-players (keys player-map))
+          (misc/dispatch-start-game)))
 
     ;; No players
     ;; Reset game state, and do nothing
     ;; Waiting a player to join
     (zero? (count player-map))
-    (-> state
-        (misc/reset-game-state))
+    (do
+      (log/debugf "No players to start")
+      (-> state
+          (misc/reset-game-state)))
 
     :else
     (go
-     (let [ciphers (encrypt/cards->card-strs misc/default-deck-of-cards)
-           data    (-> (<! (encrypt/encrypt-ciphers-with-default-shuffle-key ciphers))
-                       (encrypt/ciphers->hex))]
+     (let [next-btn (misc/next-btn state)
+           ciphers  (encrypt/cards->card-strs misc/default-deck-of-cards)
+           data     (-> (<! (encrypt/encrypt-ciphers-with-default-shuffle-key ciphers))
+                        (encrypt/ciphers->hex))]
        (-> state
+           (assoc :btn next-btn)
            (assoc :prepare-cards [{:data      data,
                                    :op        :init,
                                    :player-id nil}]
-                  :btn           btn
-                  :shuffle-player-id (:player-id (misc/get-player-by-position state btn))
+                  :shuffle-player-id (:player-id (misc/get-player-by-position state next-btn))
                   :status        :game-status/shuffle)
-           (misc/dispatch-shuffle-timeout))))))
+           (misc/dispatch-shuffle-timeout)
+           (doto prn-str))))))
 
 ;; client/shuffle-cards
 ;; receiving this event when player submit shuffled cards
@@ -339,7 +349,7 @@
           (misc/kick-dropout-players))
 
       ;; Game is running, calculate next state
-      true
+      :else
       (-> state
           (update :released-keys-map assoc :player-id released-keys)
           (misc/take-released-keys)
@@ -362,7 +372,7 @@
     (misc/invalid-game-status! state event))
 
   (-> state
-      (assoc :released-keys-map player-id released-keys)
+      (assoc-in [:released-keys-map player-id] released-keys)
       (misc/take-released-keys)
       (misc/reserve-dispatch)))
 
@@ -394,14 +404,14 @@
   (when-not (= action-player-id player-id)
     (misc/player-not-in-action! state event))
 
-  (let [bet            (get bet-map player-id 0)
+  (let [bet            (get bet-map player-id (js/BigInt 0))
         player         (get player-map player-id)
         amount-to-call (- street-bet bet)
         [bet player allin?] (misc/take-bet-from-player player amount-to-call)
         status         (if allin? :player-status/allin :player-status/acted)]
     (-> state
         (assoc-in [:player-map player-id] player)
-        (update-in [:bet-map player-id] (fnil + 0) bet)
+        (update-in [:bet-map player-id] (fnil + (js/BigInt 0)) bet)
         (assoc-in [:player-map player-id :status] status)
         (update :player-actions
                 conj
@@ -443,10 +453,12 @@
 
   (when-not (or
              (nil? street-bet)
-             (zero? street-bet))
+             (= (js/BigInt 0) street-bet))
     (misc/player-cant-bet! state event))
 
-  (when-not (pos-int? amount)
+  (when-not (and
+             (= js/BigInt (type amount))
+             (> amount (js/BigInt 0)))
     (misc/invalid-amount! state event))
 
   (when (< amount min-raise)
@@ -472,7 +484,7 @@
     player-id        :player-id,
     :as              event}]
 
-  (let [curr-bet (get bet-map player-id 0)]
+  (let [curr-bet (get bet-map player-id (js/BigInt 0))]
 
     (when-not (= :game-status/play status)
       (misc/invalid-game-status! state event))
@@ -480,10 +492,11 @@
     (when-not (= action-player-id player-id)
       (misc/player-not-in-action! state event))
 
-    (when (zero? street-bet)
+    (when (= (js/BigInt 0) street-bet)
       (misc/player-cant-raise! state event))
 
-    (when-not (> amount 0)
+    (when-not (and (= js/BigInt (type amount))
+                   (> amount (js/BigInt 0)))
       (misc/invalid-amount! state event))
 
     (when (< (+ curr-bet amount) (+ street-bet min-raise))
@@ -495,7 +508,7 @@
           new-min-raise  (- new-street-bet street-bet)]
       (-> state
           (assoc-in [:player-map player-id] player)
-          (update-in [:bet-map player-id] (fnil + 0) bet)
+          (update-in [:bet-map player-id] (fnil + (js/BigInt 0)) bet)
           (assoc-in [:player-map player-id :status]
                     (if allin? :player-status/allin :player-status/acted))
           (assoc :min-raise  new-min-raise
