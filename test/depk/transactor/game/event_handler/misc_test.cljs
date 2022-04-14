@@ -124,14 +124,6 @@
                 [101 :hole-card 0]
                 101))))
 
-(t/deftest with-next-game-no
-  (t/testing "inc"
-    (t/is (= (sut/with-next-game-no {:game-no 10})
-             {:game-no 11})))
-  (t/testing "reset"
-    (t/is (= (sut/with-next-game-no {:game-no 1000000})
-             {:game-no 1}))))
-
 (t/deftest list-missing-key-idents
   (t/is (= #{[100 :hole-card 1]}
            (sut/list-missing-key-idents

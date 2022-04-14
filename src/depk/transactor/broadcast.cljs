@@ -15,10 +15,10 @@
       (condp = type
         :system/broadcast-state
         (let [{:keys [state game-id]} data]
-          (log/debugf "Broadcast state, game-id: %s, state-id: %s, this-event: %s"
-                      game-id
-                      (:state-id state)
-                      (:this-event state))
+          ;; (log/debugf "Broadcast state, game-id: %s, state-id: %s, this-event: %s"
+          ;;             game-id
+          ;;             (:state-id state)
+          ;;             (:this-event state))
           ;; (js/console.debug "state: " state)
           (doseq [uid   (:any @connected-uids)
                   :when (= game-id (first uid))]

@@ -201,14 +201,15 @@
 
   Only apply when game-no is equal or greater."
   [state]
-  (let [{:keys [player-map game-account-state game-no]} state
-        players        (:players game-account-state)
-        player-map-new (m/players->player-map players)]
-    (log/infof "👤Game NO: Local: %s Remote: %s" game-no (:game-no game-account-state))
-    (if (>= (:game-no game-account-state) game-no)
-      (assoc state
-             :player-map (merge player-map-new player-map)
-             :game-no (:game-no game-account-state))
+  (let [{:keys [player-map game-account-state game-no joined-players]} state
+        player-map-new (m/players->player-map (seq joined-players))]
+    (log/infof "👤Maintain players. Game NO: Local: %s Remote: %s"
+               game-no
+               (:game-no game-account-state))
+    (if (> (:game-no game-account-state) game-no)
+      (-> state
+          (assoc :player-map (merge player-map-new player-map))
+          (assoc :game-no (:game-no game-account-state)))
       state)))
 
 (defn reset-player-map-status
@@ -905,18 +906,12 @@
       :runner            (prepare-runner state)
       (invalid-next-state-case! state))))
 
-(defn with-next-game-no
-  [state]
-  (let [{:keys [game-no]} state
-        new-game-no       (if (= 1000000 game-no)
-                            1
-                            (inc game-no))]
-    (assoc state :game-no new-game-no)))
-
 (defn merge-sync-state
   "Merge game account state."
-  [state game-account-state]
-  (assoc state :game-account-state game-account-state))
+  [state game-account-state joined-players]
+  (assoc state
+         :game-account-state game-account-state
+         :joined-players     joined-players))
 
 (defn reserve-dispatch
   [state]

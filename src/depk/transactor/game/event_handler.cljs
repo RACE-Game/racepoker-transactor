@@ -23,10 +23,10 @@
 ;; system/sync-state
 ;; receiving this event when game account reflect there's an update from onchain state
 (defmethod handle-event :system/sync-state
-  [{:keys [status], :as state} {{:keys [game-account-state]} :data, :as event}]
+  [{:keys [status], :as state} {{:keys [game-account-state joined-players]} :data, :as event}]
   (log/debugf "➕Merge sync state, current status: %s" status)
   (cond-> (-> state
-              (misc/merge-sync-state game-account-state)
+              (misc/merge-sync-state game-account-state joined-players)
               (misc/reserve-dispatch))
     (#{:game-status/init} status)
     (-> (misc/add-joined-player)
@@ -42,7 +42,6 @@
 
   (-> state
       (misc/reset-game-state)
-      (misc/with-next-game-no)
       (misc/add-joined-player)
       (misc/request-sync-state)
       (misc/dispatch-start-game)))
@@ -61,8 +60,7 @@
   (when-not (= :game-status/init status)
     (misc/invalid-game-status! state event))
 
-  (log/infof "Start game, players [%s]" (vals player-map))
-  ;; (log/infof "Start game, state: %s" (prn-str state))
+  (log/infof "Start game, number of players: %s" (count player-map))
 
   ;; Start when all players ready
   ;; otherwise kick all non-ready players

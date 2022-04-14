@@ -61,6 +61,7 @@
   [
    ;; sychronized onchain game state
    game-account-state
+   joined-players
    mint-info
 
    ;; ----------------------------------------------
@@ -197,7 +198,7 @@
               :game-account-state game-account-state,
               :state-id           state-id,
               :status             :game-status/init,
-              :game-no            (:game-no game-account-state),
+              :game-no            (:game-no game-account-state)
               :mint-info          mint-info,
               :player-map         (players->player-map (:players game-account-state))}))))))
 

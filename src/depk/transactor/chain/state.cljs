@@ -46,7 +46,7 @@
               ;; mint_pubkey
               :pubkey
               ;; level
-              (bl/enum :nl100 :nl200 :nl500 :nl1000 :sng)
+              (bl/enum :nl100 :nl200 :nl500 :nl1000 :bonus)
               ;; size
               :u8
               ;; game_type

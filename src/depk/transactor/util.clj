@@ -1,4 +1,5 @@
-(ns depk.transactor.util)
+(ns depk.transactor.util
+  (:require [depk.transactor.log]))
 
 (defmacro def-async-handler
   [name binding & body]

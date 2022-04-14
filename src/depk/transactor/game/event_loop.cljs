@@ -160,20 +160,20 @@
   (go-loop [state   init-state
             records []]
     (let [event (<! input)]
-      (log/debugf "Event loop receive: %s" (:type event))
+      ;; (log/debugf "Event loop receive: %s" (:type event))
       (if (event-list (:type event))
         (let [old-state state
 
               {:keys [result state api-requests dispatch-event]}
               (<! (handle-event state event))]
-          (log/debugf "Handle event: %s, result: %s" (:type event) result)
+          ;; (log/debugf "Handle event: %s, result: %s" (:type event) result)
           (if (= result :ok)
             (let [records
                   (collect-and-dispatch-game-history old-state state event records output)]
 
-              (.info js/console "event:" event)
-              (.info js/console "before:" old-state)
-              (.info js/console "after:" state)
+              ;; (.info js/console "event:" event)
+              ;; (.info js/console "before:" old-state)
+              ;; (.info js/console "after:" state)
 
               (dispatch-delay-event event dispatch-event input)
               (dispatch-api-request event api-requests output)

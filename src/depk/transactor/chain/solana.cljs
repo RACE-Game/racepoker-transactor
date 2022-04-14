@@ -48,14 +48,13 @@
   [player-ids chips-change-map player-status-map]
   (->> player-ids
        (keep (fn [pid]
-               (if pid
+               (if (and pid (get player-status-map pid))
                  (let [chip-change (get chips-change-map pid (js/BigInt 0))
                        status      (get player-status-map pid)]
                    [[(case status
                        :dropout settle-status-leave
                        :normal  settle-status-normal
-                       :leave   settle-status-leave
-                       nil      settle-status-normal)
+                       :leave   settle-status-leave)
                      1]
                     [(cond
                        (> chip-change (js/BigInt 0)) settle-type-chip-add
@@ -111,9 +110,13 @@
 
          {:keys [players stake-account-pubkey mint-pubkey]} game-account-state
 
+         _ (log/infof "Game stack account: %s" (str stake-account-pubkey))
+
          player-ids (for [p players]
                       (when p
                         (str (:pubkey p))))
+
+         _ (log/infof "On chain players: %s" players)
 
          ix-body (build-settle-ix-body player-ids chips-change-map player-status-map)
 
@@ -154,7 +157,7 @@
          sig (<!? (conn/send-transaction conn tx [fee-payer]))
 
          ret (<!? (conn/confirm-transaction conn sig "finalized"))]
-     (if (nil? (get-in ret [:value :err]))
+     (if (and ret (nil? (get-in ret [:value :err])))
        (log/infof "Transaction succeed")
        (log/errorf "Transaction failed")))))
 
@@ -212,8 +215,8 @@
 
  ep/IComponent
  (ep/-start [this opts]
-   (let [{:keys [input output]} this
-         {:keys [game-id]}      opts]
-     (sync-loop/start-sync-loop this game-id output)
+   (let [{:keys [input output]}       this
+         {:keys [game-id init-state]} opts]
+     (sync-loop/start-sync-loop this game-id output (:game-account-state init-state))
      (transact-loop/start-transact-loop this game-id input output))
    nil))

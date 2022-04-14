@@ -1,10 +1,10 @@
 (ns depk.transactor.util
   (:require-macros depk.transactor.util)
   (:require
-   ;; [depk.transactor.log :as log]
    [cljs.core.async   :refer [<! >! go-loop chan close!]]
    [clojure.walk      :as walk]
    [cognitect.transit :as transit]
+   [depk.transactor.log]
    [taoensso.sente.packers.transit :as sente-transit]))
 
 (def request-log-ignores
