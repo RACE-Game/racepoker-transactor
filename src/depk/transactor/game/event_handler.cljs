@@ -24,9 +24,13 @@
 ;; receiving this event when game account reflect there's an update from onchain state
 (defmethod handle-event :system/sync-state
   [{:keys [status], :as state} {{:keys [game-account-state]} :data, :as event}]
-  (-> state
-      (misc/merge-sync-state game-account-state)
-      (misc/reserve-dispatch)))
+  (log/debugf "➕Merge sync state, current status: %s" status)
+  (cond-> (-> state
+              (misc/merge-sync-state game-account-state)
+              (misc/reserve-dispatch))
+    (#{:game-status/init} status)
+    (-> (misc/add-joined-player)
+        (misc/dispatch-start-game))))
 
 ;; system/reset
 ;; receiving this event for reset states
@@ -68,7 +72,9 @@
     (do
       (log/debugf "Not all players are ready")
       (-> state
-          (misc/kick-dropout-players)
+          (misc/submit-dropout-players)
+          (misc/remove-dropout-players)
+          (misc/add-joined-player)
           (misc/reset-game-state)))
 
     ;; If the number of players is not enough for starting
@@ -78,6 +84,8 @@
       (log/debugf "No enough players to start")
       (-> state
           (misc/mark-dropout-players (keys player-map))
+          (misc/add-joined-player)
+          (misc/reset-game-state)
           (misc/dispatch-start-game)))
 
     ;; No players
@@ -87,6 +95,7 @@
     (do
       (log/debugf "No players to start")
       (-> state
+          (misc/add-joined-player)
           (misc/reset-game-state)))
 
     :else
@@ -242,7 +251,8 @@
           ;; preflop street, game should not start
           (-> state
               (misc/mark-dropout-players timeout-player-ids)
-              (misc/kick-dropout-players)
+              (misc/submit-dropout-players)
+              (misc/remove-dropout-players)
               (misc/reset-game-state))
           ;; other streets, continue game when possible
           ;; TODO
@@ -265,7 +275,8 @@
 
   (-> state
       (misc/mark-dropout-players [shuffle-player-id])
-      (misc/kick-dropout-players)
+      (misc/submit-dropout-players)
+      (misc/remove-dropout-players)
       (misc/reset-game-state)))
 
 ;; system/encrypt-timeout
@@ -282,7 +293,8 @@
 
   (-> state
       (misc/mark-dropout-players [encrypt-player-id])
-      (misc/kick-dropout-players)
+      (misc/submit-dropout-players)
+      (misc/remove-dropout-players)
       (misc/reset-game-state)))
 
 ;; system/player-action-timeout
@@ -346,7 +358,8 @@
       ;; Game is not running, can leave immetdiately
       (#{:game-status/init :game-status/settle :game-status/showdown} status)
       (-> state
-          (misc/kick-dropout-players))
+          (misc/submit-dropout-players)
+          (misc/remove-dropout-players))
 
       ;; Game is running, calculate next state
       :else

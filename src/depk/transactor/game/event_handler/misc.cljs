@@ -99,31 +99,41 @@
                   {:state state,
                    :event event})))
 
+(defn invalid-next-state-case!
+  [state]
+  (throw (ex-info "Invalid next state case"
+                  {:state state})))
+
 ;; helpers
 
 (def suits #{:d :s :h :c})
 
 (def kinds #{:a :2 :3 :4 :5 :6 :7 :8 :9 :t :j :q :k})
 
-(defn kick-dropout-players
+(defn remove-dropout-players
   "Remove all players who not send alive events"
   [{:keys [player-map], :as state}]
-  (let [dropout-players (->> player-map
-                             vals
-                             (filter #(not= :normal (:online-status %))))
-        request         {:type :system/settle-failed,
-                         :data {:player-status-map
-                                (->> (for [[id p] player-map]
-                                       [id
-                                        (if (= :normal (:online-status p))
-                                          :normal
-                                          :leave)
-                                        (:online-status p :leave)])
-                                     (into {}))}}]
+  (let [dropout-pids (->> player-map
+                          vals
+                          (filter #(not= :normal (:online-status %)))
+                          (map :player-id))]
+    (log/infof "❌Remove dropout players: %s" dropout-pids)
+    (update state :player-map (fn [m] (apply dissoc m dropout-pids)))))
+
+(defn submit-dropout-players
+  "Remove all players who not send alive events"
+  [{:keys [player-map], :as state}]
+  (let [request {:type :system/settle-failed,
+                 :data {:player-status-map
+                        (->> (for [[id p] player-map]
+                               [id
+                                (if (= :normal (:online-status p))
+                                  :normal
+                                  :leave)
+                                (:online-status p :leave)])
+                             (into {}))}}]
     ;; send settlement for leaving players
-    (-> state
-        (update :player-map (fn [m] (apply dissoc m (map :player-id dropout-players))))
-        (update :api-requests conj request))))
+    (update state :api-requests conj request)))
 
 (defn valid-card?
   [card]
@@ -187,20 +197,25 @@
                        (+ 10000 position))))))))
 
 (defn add-joined-player
+  "Add joined players found in game-account-state.
+
+  Only apply when game-no is equal or greater."
   [state]
-  (let [{:keys [player-map game-account-state]} state
+  (let [{:keys [player-map game-account-state game-no]} state
         players        (:players game-account-state)
         player-map-new (m/players->player-map players)]
-    (assoc state
-           :player-map
-           (merge player-map-new player-map))))
+    (log/infof "👤Game NO: Local: %s Remote: %s" game-no (:game-no game-account-state))
+    (if (= (:game-no game-account-state) game-no)
+      (assoc state :player-map (merge player-map-new player-map))
+      state)))
 
 (defn reset-player-map-status
   [player-map]
   (->> (for [[pid p] player-map]
-         [pid (assoc p
-                     :status :player-status/wait
-                     :online-status :dropout)])
+         [pid
+          (assoc p
+                 :status        :player-status/wait
+                 :online-status :dropout)])
        (into {})))
 
 (defn reset-game-state
@@ -719,6 +734,7 @@
         (update-prize-map)
         (update-chips-change-map)
         (submit-game-result)
+        (remove-dropout-players)
         (dispatch-reset)
         ;; TODO, new status/type ?
         (assoc :status       :game-status/settle
@@ -751,6 +767,7 @@
          (apply-prize-map)
          (update-chips-change-map)
          (submit-game-result)
+         (remove-dropout-players)
          (dispatch-reset)
          (assoc :status       :game-status/showdown
                 :winning-type winning-type)))))
@@ -771,6 +788,7 @@
                 (update :pots conj (m/make-pot (set (keys bet-map)) bet-sum #{player-id})))
         (update-in [:chips-change-map player-id] (fnil + (js/BigInt 0)) bet-sum)
         (submit-game-result)
+        (remove-dropout-players)
         (dispatch-reset)
         (assoc :status       :game-status/settle
                :winning-type :last-player
@@ -882,7 +900,8 @@
       :ask-player-for-action (ask-player-for-action state v)
       :change-street     (change-street state v)
       :showdown          (prepare-showdown state)
-      :runner            (prepare-runner state))))
+      :runner            (prepare-runner state)
+      (invalid-next-state-case! state))))
 
 (defn with-next-game-no
   [state]

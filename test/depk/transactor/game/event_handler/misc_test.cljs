@@ -240,7 +240,9 @@
               :api-requests [{:type :system/settle-failed,
                               :data {:player-status-map {100 :leave,
                                                          200 :normal}}}]}
-             (sut/kick-dropout-players state)))))
+             (-> state
+                 (sut/submit-dropout-players)
+                 (sut/remove-dropout-players))))))
 
 (t/deftest update-prize-map
   (let [state {:pots [(m/make-pot #{100 101 102} (js/BigInt 1500) #{100})

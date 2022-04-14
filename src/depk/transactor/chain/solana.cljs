@@ -54,12 +54,13 @@
                    [[(case status
                        :dropout settle-status-leave
                        :normal  settle-status-normal
-                       :leave   settle-status-leave)
+                       :leave   settle-status-leave
+                       nil      settle-status-normal)
                      1]
                     [(cond
-                       (zero? chip-change) settle-type-no-update
-                       (pos? chip-change)  settle-type-chip-add
-                       :else               settle-type-chip-sub)
+                       (> chip-change (js/BigInt 0)) settle-type-chip-add
+                       (< chip-change (js/BigInt 0)) settle-type-chip-sub
+                       :else                         settle-type-no-update)
                      1]
                     [(u/abs chip-change) 8]])
                  ;; empty entries

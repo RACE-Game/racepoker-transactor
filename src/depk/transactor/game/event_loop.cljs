@@ -170,6 +170,11 @@
           (if (= result :ok)
             (let [records
                   (collect-and-dispatch-game-history old-state state event records output)]
+
+              (.info js/console "event:" event)
+              (.info js/console "before:" old-state)
+              (.info js/console "after:" state)
+
               (dispatch-delay-event event dispatch-event input)
               (dispatch-api-request event api-requests output)
               (dispatch-broadcast-state game-id state output)
