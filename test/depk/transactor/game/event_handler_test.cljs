@@ -38,9 +38,11 @@
 ;;     (let [state      (-> (m/make-game-state {:btn 0} {})
 ;;                          (assoc :status :game-status/init))
 ;;           player-map {"100"
-;;                       (m/make-player-state "100" (js/BigInt 1000) 0 :player-status/wait :dropout),
+;;                       (m/make-player-state "100" (js/BigInt 1000) 0 :player-status/wait
+;;                       :dropout),
 ;;                       "101"
-;;                       (m/make-player-state "101" (js/BigInt 10000) 2 :player-status/wait :dropout)}
+;;                       (m/make-player-state "101" (js/BigInt 10000) 2 :player-status/wait
+;;                       :dropout)}
 ;;           event      (m/make-event
 ;;                       :system/sync-state
 ;;                       state
@@ -415,21 +417,20 @@
 (t/deftest client-leave
   (t/testing "success, not the player in action"
     (let [state (-> (m/make-game-state {:btn 0} {})
-                    (assoc :player-map       {100 {:status    :player-status/acted,
-                                                   :player-id 100,
-                                                   :chips     (js/BigInt 200)},
-                                              200 {:status    :player-status/in-action,
-                                                   :player-id 200,
-                                                   :chips     (js/BigInt 200)}}
+                    (assoc :player-map       {100 {:status        :player-status/acted,
+                                                   :player-id     100,
+                                                   :online-status :normal,
+                                                   :chips         (js/BigInt 200)},
+                                              200 {:status        :player-status/in-action,
+                                                   :player-id     200,
+                                                   :online-status :normal,
+                                                   :chips         (js/BigInt 200)}}
                            :status           :game-status/play
                            :action-player-id 200))]
-      (t/is (= {:player-map {100 {:status        :player-status/fold,
-                                  :player-id     100,
-                                  :online-status :leave,
-                                  :chips         (js/BigInt 200)},
-                             200 {:status    :player-status/in-action,
-                                  :player-id 200,
-                                  :chips     (js/BigInt 200)}}}
+      (t/is (= {:player-map {200 {:status        :player-status/in-action,
+                                  :player-id     200,
+                                  :online-status :normal,
+                                  :chips         (js/BigInt 200)}}}
                (-> state
                    (sut/handle-event (m/make-event :client/leave
                                                    state

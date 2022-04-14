@@ -205,8 +205,10 @@
         players        (:players game-account-state)
         player-map-new (m/players->player-map players)]
     (log/infof "👤Game NO: Local: %s Remote: %s" game-no (:game-no game-account-state))
-    (if (= (:game-no game-account-state) game-no)
-      (assoc state :player-map (merge player-map-new player-map))
+    (if (>= (:game-no game-account-state) game-no)
+      (assoc state
+             :player-map (merge player-map-new player-map)
+             :game-no (:game-no game-account-state))
       state)))
 
 (defn reset-player-map-status

@@ -109,7 +109,7 @@
 
          dealer-program-id (pubkey/make-public-key (get @config :dealer-program-address))
 
-         {:keys [players stack-account-pubkey mint-pubkey]} game-account-state
+         {:keys [players stake-account-pubkey mint-pubkey]} game-account-state
 
          player-ids (for [p players]
                       (when p
@@ -119,7 +119,7 @@
 
          ix-data (apply ib/make-instruction-data (cons c/instruction-header-settle ix-body))
 
-         [pda] (<!? (pubkey/find-program-address #js [(buffer-from "stack")] dealer-program-id))
+         [pda] (<!? (pubkey/find-program-address #js [(buffer-from "stake")] dealer-program-id))
 
          ata-keys (<!? (find-player-ata-keys player-ids mint-pubkey player-status-map))
 
@@ -131,7 +131,7 @@
            {:pubkey     game-account-pubkey,
             :isSigner   false,
             :isWritable true}
-           {:pubkey     stack-account-pubkey,
+           {:pubkey     stake-account-pubkey,
             :isSigner   false,
             :isWritable true}
            {:pubkey     pda,

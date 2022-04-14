@@ -29,7 +29,7 @@
 
 (def player-layout (bl/struct ->Player [:pubkey :u64 :u8]))
 
-(defrecord GameState [is-initialized game-no players stack-account-pubkey mint-pubkey
+(defrecord GameState [is-initialized game-no players stake-account-pubkey mint-pubkey
                       level size game-type transactor-pubkey owner-pubkey rake status
                       bonus-pubkey name])
 
@@ -41,7 +41,7 @@
               :u32
               ;; players
               (bl/array max-players-num (bl/option player-layout))
-              ;; stack_account_pubkey
+              ;; stake_account_pubkey
               :pubkey
               ;; mint_pubkey
               :pubkey
