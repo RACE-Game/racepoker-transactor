@@ -8,16 +8,16 @@
 
   game-id: pubkey, the pubkey of game account.
   player-state-map: map, player-id to its state, which contains chips and status."
-  [chain-api game-id chips-change-map player-status-map]
-  (p/-settle-finished-game chain-api game-id chips-change-map player-status-map))
+  [chain-api game-id chips-change-map player-status-map expected-player-map]
+  (p/-settle-finished-game chain-api game-id chips-change-map player-status-map expected-player-map))
 
 (defn settle-failed-game
   "Settle a failed game.
 
   game-id: pubkey, the pubkey of game account.
   player-state-map: map, player-id to its state, which contains chips and status."
-  [chain-api game-id player-status-map]
-  (p/-settle-failed-game chain-api game-id player-status-map))
+  [chain-api game-id player-status-map expected-player-map]
+  (p/-settle-failed-game chain-api game-id player-status-map expected-player-map))
 
 (defn fetch-game-account
   "Fetch account of a game."

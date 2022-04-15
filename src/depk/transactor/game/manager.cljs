@@ -43,7 +43,7 @@
                                                           (str (:mint-pubkey
                                                                 game-account-state))))
            init-state         (m/make-game-state game-account-state mint-info {:game-id game-id})]
-       ;; (log/debugf "Try start game: %s" game-id)
+       ;; (log/infof "Try start game: %s" game-id)
        (let [{:keys [game-handle-map]} manager]
          (swap! game-handle-map assign-new-game-handle game-id init-state (:ws-conn manager))))
    )))

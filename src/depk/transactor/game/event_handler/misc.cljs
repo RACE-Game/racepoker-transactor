@@ -110,8 +110,18 @@
 
 (def kinds #{:a :2 :3 :4 :5 :6 :7 :8 :9 :t :j :q :k})
 
+(defn remove-eliminated-players
+  "Remove all players who have no chips"
+  [{:keys [player-map], :as state}]
+  (let [eliminated-pids (->> player-map
+                             vals
+                             (filter #(= (js/BigInt 0) (:chips %)))
+                             (map :player-id))]
+    (log/infof "🧹Remove eliminated players: %s" eliminated-pids)
+    (update state :player-map (fn [m] (apply dissoc m eliminated-pids)))))
+
 (defn remove-dropout-players
-  "Remove all players who not send alive events"
+  "Remove all players who not send alive events."
   [{:keys [player-map], :as state}]
   (let [dropout-pids (->> player-map
                           vals
@@ -121,7 +131,7 @@
     (update state :player-map (fn [m] (apply dissoc m dropout-pids)))))
 
 (defn submit-dropout-players
-  "Remove all players who not send alive events"
+  "Remove all players who not send alive events."
   [{:keys [player-map], :as state}]
   (let [request {:type :system/settle-failed,
                  :data {:player-status-map
@@ -131,7 +141,9 @@
                                   :normal
                                   :leave)
                                 (:online-status p :leave)])
-                             (into {}))}}]
+                             (into {})),
+                        :expected-player-map
+                        player-map}}]
     ;; send settlement for leaving players
     (update state :api-requests conj request)))
 
@@ -196,22 +208,6 @@
                        (- position last-pos)
                        (+ 10000 position))))))))
 
-(defn add-joined-player
-  "Add joined players found in game-account-state.
-
-  Only apply when game-no is equal or greater."
-  [state]
-  (let [{:keys [player-map game-account-state game-no joined-players]} state
-        player-map-new (m/players->player-map (seq joined-players))]
-    (log/infof "🚌Maintain players. Game NO: Local: %s Remote: %s"
-               game-no
-               (:game-no game-account-state))
-    (if (> (:game-no game-account-state) game-no)
-      (-> state
-          (assoc :player-map (merge player-map-new player-map))
-          (assoc :game-no (:game-no game-account-state)))
-      state)))
-
 (defn reset-player-map-status
   [player-map]
   (->> (for [[pid p] player-map]
@@ -225,6 +221,7 @@
   "Reset game state based on `event-type`."
   [state]
   (-> state
+      (remove-eliminated-players)
       (update :player-map reset-player-map-status)
       (merge
        {:status             :game-status/init,
@@ -705,12 +702,13 @@
 
 (defn- submit-game-result
   "Add request to :api-requests, submit game result."
-  [{:keys [chips-change-map player-map game-no], :as state}]
+  [{:keys [chips-change-map player-map], :as state}]
   (let [request {:type :system/settle-finished,
-                 :data {:chips-change-map  chips-change-map,
-                        :player-status-map (->> (for [[id p] player-map]
-                                                  [id (:online-status p :normal)])
-                                                (into {}))}}]
+                 :data {:chips-change-map    chips-change-map,
+                        :expected-player-map player-map,
+                        :player-status-map   (->> (for [[id p] player-map]
+                                                    [id (:online-status p :normal)])
+                                                  (into {}))}}]
     (update state :api-requests conj request)))
 
 (defn terminate
@@ -896,6 +894,7 @@
 (defn next-state
   [state]
   (let [[c v :as x] (next-state-case state)]
+    (log/infof "💡Next state: %s %s" c v)
     (case c
       :terminate         (terminate state v)
       :blind-bets        (blind-bets state)
@@ -906,12 +905,35 @@
       :runner            (prepare-runner state)
       (invalid-next-state-case! state))))
 
+(defn add-joined-player
+  "Add joined players found in game-account-state.
+
+  Only apply when game-no is equal or greater."
+  [state]
+  (let [{:keys [player-map game-account-state game-no joined-players]} state]
+    (log/infof "🚌Maintain players. Game NO: Local: %s Remote: %s, joined-players: %s"
+               game-no
+               (:game-no game-account-state)
+               joined-players)
+    (if (and joined-players (> (:game-no game-account-state) game-no))
+      (-> state
+          (assoc :player-map
+                 (merge (m/players->player-map joined-players)
+                        player-map))
+          (assoc :game-no (:game-no game-account-state))
+          (assoc :joined-players nil))
+      state)))
+
+(defn merge-joined-players
+  [o n]
+  (mapv #(or %1 %2) (or o (repeat 9 nil)) n))
+
 (defn merge-sync-state
   "Merge game account state."
   [state game-account-state joined-players]
-  (assoc state
-         :game-account-state game-account-state
-         :joined-players     joined-players))
+  (-> state
+      (assoc :game-account-state game-account-state)
+      (update :joined-players merge-joined-players joined-players)))
 
 (defn reserve-dispatch
   [state]

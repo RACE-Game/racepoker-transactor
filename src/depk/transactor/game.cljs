@@ -17,7 +17,7 @@
   [game-manager game-id player-id]
   {:pre [(string? game-id)]}
   (go-try
-   (log/infof "player[%s] attach to game [%s]" player-id game-id)
+   (log/infof "👔player[%s] attach to game [%s]" player-id game-id)
    (manager/try-start-game game-manager game-id)))
 
 (defn state
@@ -33,7 +33,7 @@
   {:pre [(string? game-id)
          (vector? released-keys)]}
   (go-try
-   (log/infof "player[%s] leave game [%s]" player-id game-id)
+   ;; (log/infof "player[%s] leave game [%s]" player-id game-id)
    (if-let [game-handle (manager/find-game game-manager game-id)]
      (handle/send-event game-handle
                         (m/make-event :client/leave
@@ -63,7 +63,7 @@
          (string? player-id)
          (some? data)]}
   (go-try
-   (log/infof "player[%s] shuffle cards" player-id)
+   ;; (log/infof "player[%s] shuffle cards" player-id)
    (if-let [game-handle (manager/find-game game-manager game-id)]
      (handle/send-event game-handle
                         (m/make-event :client/shuffle-cards
@@ -78,7 +78,7 @@
          (string? player-id)
          (some? data)]}
   (go-try
-   (log/infof "player[%s] encrypt cards" player-id)
+   ;; (log/infof "player[%s] encrypt cards" player-id)
    (if-let [game-handle (manager/find-game game-manager game-id)]
      (handle/send-event game-handle
                         (m/make-event :client/encrypt-cards
@@ -93,7 +93,7 @@
          (string? player-id)
          (map? share-keys)]}
   (go-try
-   (log/infof "player[%s] share keys" player-id)
+   ;; (log/infof "player[%s] share keys" player-id)
    (if-let [game-handle (manager/find-game game-manager game-id)]
      (handle/send-event game-handle
                         (m/make-event :client/share-keys
@@ -108,7 +108,7 @@
          (string? player-id)
          (vector? released-keys)]}
   (go-try
-   (log/infof "player[%s] release keys" player-id)
+   ;; (log/infof "player[%s] release keys" player-id)
    (if-let [game-handle (manager/find-game game-manager game-id)]
      (handle/send-event game-handle
                         (m/make-event :client/release
@@ -123,7 +123,7 @@
          (string? player-id)
          (> amount 0)]}
   (go-try
-   (log/infof "player[%s] bet" player-id)
+   ;; (log/infof "player[%s] bet" player-id)
    (if-let [game-handle (manager/find-game game-manager game-id)]
      (handle/send-event game-handle
                         (m/make-event :player/bet
@@ -139,7 +139,7 @@
          (string? player-id)
          (> amount 0)]}
   (go-try
-   (log/infof "player[%s] raise" player-id)
+   ;; (log/infof "player[%s] raise" player-id)
    (if-let [game-handle (manager/find-game game-manager game-id)]
      (handle/send-event game-handle
                         (m/make-event :player/raise
@@ -153,7 +153,7 @@
   {:pre [(string? game-id)
          (string? player-id)]}
   (go-try
-   (log/infof "player[%s] call" player-id)
+   ;; (log/infof "player[%s] call" player-id)
    (if-let [game-handle (manager/find-game game-manager game-id)]
      (handle/send-event game-handle
                         (m/make-event :player/call
@@ -167,7 +167,7 @@
   {:pre [(string? game-id)
          (string? player-id)]}
   (go-try
-   (log/infof "player[%s] fold" player-id)
+   ;; (log/infof "player[%s] fold" player-id)
    (if-let [game-handle (manager/find-game game-manager game-id)]
      (handle/send-event game-handle
                         (m/make-event :player/fold
@@ -181,7 +181,7 @@
   {:pre [(string? game-id)
          (string? player-id)]}
   (go-try
-   (log/infof "player[%s] check" player-id)
+   ;; (log/infof "player[%s] check" player-id)
    (if-let [game-handle (manager/find-game game-manager game-id)]
      (handle/send-event game-handle
                         (m/make-event :player/check

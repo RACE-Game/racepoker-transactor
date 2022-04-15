@@ -1,5 +1,7 @@
 (ns depk.transactor.constant)
 
+(def max-player-num 9)
+
 (def continue-start-game-delay 100)
 (def default-start-game-delay 8000)
 (def key-share-timeout-delay 3000)

@@ -24,7 +24,7 @@
 ;; receiving this event when game account reflect there's an update from onchain state
 (defmethod handle-event :system/sync-state
   [{:keys [status], :as state} {{:keys [game-account-state joined-players]} :data, :as event}]
-  (log/debugf "➕Merge sync state, current status: %s" status)
+  (log/infof "➕Merge sync state, current status: %s" status)
   (cond-> (-> state
               (misc/merge-sync-state game-account-state joined-players)
               (misc/reserve-dispatch))
@@ -55,7 +55,7 @@
 ;; - ask the first player (BTN) to shuffle the cards.
 (defmethod handle-event :system/start-game
   [{:keys [status player-map], :as state}
-   {{:keys [btn]} :data, :as event}]
+   event]
 
   (when-not (= :game-status/init status)
     (misc/invalid-game-status! state event))
@@ -68,7 +68,7 @@
     ;; If any client is not ready, kick it
     (not (every? #(= :normal (:online-status %)) (vals player-map)))
     (do
-      (log/debugf "🛑Not all players are ready")
+      (log/infof "🛑Not all players are ready")
       (-> state
           (misc/submit-dropout-players)
           (misc/remove-dropout-players)
@@ -79,7 +79,7 @@
     ;; Require further alive event from the only client
     (= (count player-map) 1)
     (do
-      (log/debugf "🛑No enough players to start")
+      (log/infof "🛑No enough players to start")
       (-> state
           (misc/mark-dropout-players (keys player-map))
           (misc/add-joined-player)
@@ -91,7 +91,7 @@
     ;; Waiting a player to join
     (zero? (count player-map))
     (do
-      (log/debugf "🛑No players to start")
+      (log/infof "🛑No players to start")
       (-> state
           (misc/add-joined-player)
           (misc/reset-game-state)))
@@ -244,19 +244,21 @@
 
   (let [missing-key-idents (misc/list-missing-key-idents state)]
     (if (seq missing-key-idents)
-      (let [timeout-player-ids (map first missing-key-idents)]
-        (if (= :street/preflop street)
-          ;; preflop street, game should not start
-          (-> state
-              (misc/mark-dropout-players timeout-player-ids)
-              (misc/submit-dropout-players)
-              (misc/remove-dropout-players)
-              (misc/reset-game-state))
-          ;; other streets, continue game when possible
-          ;; TODO
-          (-> state
-              (misc/mark-dropout-players timeout-player-ids)
-              (misc/next-state))))
+      (do
+        (log/debugf "🔐Missing key idents: %s" missing-key-idents)
+        (let [timeout-player-ids (map first missing-key-idents)]
+          (if (= :street/preflop street)
+            ;; preflop street, game should not start
+            (-> state
+                (misc/mark-dropout-players timeout-player-ids)
+                (misc/submit-dropout-players)
+                (misc/remove-dropout-players)
+                (misc/reset-game-state))
+            ;; other streets, continue game when possible
+            ;; TODO
+            (-> state
+                (misc/mark-dropout-players timeout-player-ids)
+                (misc/next-state)))))
       state)))
 
 ;; system/shuffle-timeout

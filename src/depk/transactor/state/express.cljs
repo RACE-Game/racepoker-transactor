@@ -38,7 +38,7 @@
   (let [cookie-secret "the shiz"]
     (doto express-app
      (.use (fn [req res next]
-             (log/debugf "Request: %s" (.-originalUrl ^js req))
+             (log/infof "Request: %s" (.-originalUrl ^js req))
              (next)))
      (.use (session
             #js
@@ -56,7 +56,7 @@
 
 (defn start-selected-web-server!
   [port]
-  (log/infof "Starting express...")
+  (log/infof "🏁Starting express...")
   (let [express-app       (express)
         express-ws-server (express-ws express-app)]
 

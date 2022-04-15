@@ -5,7 +5,7 @@
    [depk.transactor.game.event-handler :as event-handler]
    ["uuid" :as uuid]
    [depk.transactor.log :as log]
-   [depk.transactor.game.models :refer [game-state->resp]]
+   [depk.transactor.game.models :refer [game-state->resp make-event]]
    [depk.transactor.event.protocol :as ep]
    [depk.transactor.util :refer [go-try <!?]]))
 
@@ -82,28 +82,29 @@
               new-state    (event-handler/handle-event (assoc state :state-id new-state-id) event)]
           (if (map? new-state)
             (do
-              ;; (log/debugf "Handle event success: %s" (:type event))
+              ;; (log/infof "Handle event success: %s" (:type event))
               ;; (js/console.debug "state: " new-state)
               (handle-result event {:result :ok, :state new-state}))
             (let [v (<! new-state)]
               (if (map? v)
                 (do
-                  ;; (log/debugf "Handle event success %s" (:type event))
+                  ;; (log/infof "Handle event success %s" (:type event))
                   ;; (js/console.debug "state: " v)
                   (handle-result event {:result :ok, :state v}))
                 (do
-                  ;; (log/debugf "Error in event handler: %s, event: %s"
+                  ;; (log/infof "Error in event handler: %s, event: %s"
                   ;;             (ex-message v)
                   ;;             (prn-str event))
                   {:result :err, :state state, :error v})))))
 
         (catch ExceptionInfo e
-          ;; (log/debugf "Error in event handler: %s, event: %s"
+          ;; (log/infof "🧱Error in event handler: %s, event: %s"
           ;;             (ex-message e)
           ;;             (prn-str event))
           {:result :err, :state state, :error e})
         (catch js/Error e
-          ;; (log/errorf "Error in event handler: %s, event: %s"
+          (js/console.log "e: " e)
+          ;; (log/errorf "🧱Error in event handler: %s, event: %s"
           ;;             (ex-message e)
           ;;             (prn-str event))
           {:result :err, :state state, :error e}))))
@@ -115,7 +116,7 @@
   [event dispatch-event input]
   (when dispatch-event
     (let [[ms evt] dispatch-event]
-      (log/debugf "⏲️Event[%s] dispatch event[%s] after %sms"
+      (log/infof "⌛Event [%s] dispatch event[%s] after %sms"
                   (str (:type event))
                   (str (:type evt))
                   (str ms))
@@ -128,7 +129,7 @@
   [event api-requests output]
   (doseq [req api-requests]
     (when req
-      (log/debugf "⏲️Event[%s] dispatch api request[%s]" (str (:type event)) (prn-str req))
+      (log/infof "⌛Event [%s] dispatch api request[%s]" (str (:type event)) (prn-str req))
       (put! output req))))
 
 (defn collect-and-dispatch-game-history
@@ -157,16 +158,18 @@
 (defn run-event-loop
   [game-id init-state input output]
   (log/infof "🏁Start event loop for game[%s]" game-id)
+  ;; Put initial event
+  (go (a/>! input (make-event :system/start-game init-state)))
   (go-loop [state   init-state
             records []]
     (let [event (<! input)]
-      ;; (log/debugf "Event loop receive: %s" (:type event))
+      ;; (log/infof "Event loop receive: %s" (:type event))
       (if (event-list (:type event))
         (let [old-state state
 
               {:keys [result state api-requests dispatch-event]}
               (<! (handle-event state event))]
-          ;; (log/debugf "Handle event: %s, result: %s" (:type event) result)
+
           (if (= result :ok)
             (let [records
                   (collect-and-dispatch-game-history old-state state event records output)]

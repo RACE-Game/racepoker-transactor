@@ -85,18 +85,35 @@
                       (a/map vector))]
      (<!? ata-keys-ch))))
 
+(defn state-match?
+  [state expected-player-map]
+  (when state
+    (let [{:keys [players]} state]
+      (every? (fn [p]
+                (or
+                 ;; empty seat
+                 (nil? p)
+                 (let [pid   (str (:pubkey p))
+                       chips (:chips p)]
+                   (or
+                    ;; new joined player
+                    (not (get expected-player-map pid))
+                    ;; updated player, in this case, the chips must match
+                    (= chips (get-in expected-player-map [pid :chips]))))))
+              players))))
+
 (defn settle
-  [game-id chips-change-map player-status-map]
+  [game-id chips-change-map player-status-map expected-player-map]
   (when-not (transduce (map val) + (js/BigInt 0) chips-change-map)
     (throw (ex-info "Can't settel, invalid chips change!" {:chips-change-map chips-change-map})))
 
-  (log/infof "Settle game result on Solana: game[%s]" game-id)
-  (log/infof "Chips-change-map: %s" (prn-str chips-change-map))
-  (log/infof "Player-status-map: %s" (prn-str player-status-map))
+  (log/infof "🚀Settle game result on Solana: game[%s]" game-id)
+  (log/infof "📝Chips-change-map: %s" (prn-str chips-change-map))
+  (log/infof "📝Player-status-map: %s" (prn-str player-status-map))
   (go-try
-   (let [fee-payer (load-private-key)
+   (let [fee-payer          (load-private-key)
 
-         conn (conn/make-connection (get @config :solana-rpc-endpoint))
+         conn               (conn/make-connection (get @config :solana-rpc-endpoint))
          game-account-pubkey (pubkey/make-public-key game-id)
          game-account-state (some-> (<!?
                                      (conn/get-account-info conn game-account-pubkey "finalized"))
@@ -104,27 +121,29 @@
                                     (parse-state-data))
 
          _ (when-not (some? game-account-state)
-             (log/errorf "game account not found: game[%s]" game-id))
+             (log/errorf "🚨game account not found: game[%s]" game-id))
 
-         dealer-program-id (pubkey/make-public-key (get @config :dealer-program-address))
+         dealer-program-id  (pubkey/make-public-key (get @config :dealer-program-address))
 
          {:keys [players stake-account-pubkey mint-pubkey]} game-account-state
 
-         _ (log/infof "Game stack account: %s" (str stake-account-pubkey))
+         ;; _ (log/infof "Game stack account: %s" (str stake-account-pubkey))
 
-         player-ids (for [p players]
-                      (when p
-                        (str (:pubkey p))))
+         player-ids         (for [p players]
+                              (when p
+                                (str (:pubkey p))))
 
-         _ (log/infof "On chain players: %s" players)
+         _ (log/infof "📝On chain players: %s" players)
 
-         ix-body (build-settle-ix-body player-ids chips-change-map player-status-map)
+         ix-body            (build-settle-ix-body player-ids chips-change-map player-status-map)
 
-         ix-data (apply ib/make-instruction-data (cons c/instruction-header-settle ix-body))
+         ix-data            (apply ib/make-instruction-data
+                                   (cons c/instruction-header-settle ix-body))
 
-         [pda] (<!? (pubkey/find-program-address #js [(buffer-from "stake")] dealer-program-id))
+         [pda]              (<!? (pubkey/find-program-address #js [(buffer-from "stake")]
+                                                              dealer-program-id))
 
-         ata-keys (<!? (find-player-ata-keys player-ids mint-pubkey player-status-map))
+         ata-keys           (<!? (find-player-ata-keys player-ids mint-pubkey player-status-map))
 
          ix-keys
          (into
@@ -154,12 +173,31 @@
          (doto (transaction/make-transaction)
           (transaction/add ix))
 
-         sig (<!? (conn/send-transaction conn tx [fee-payer]))
+         sig                (<!? (conn/send-transaction conn tx [fee-payer]))
 
-         ret (<!? (conn/confirm-transaction conn sig "finalized"))]
-     (if (and ret (nil? (get-in ret [:value :err])))
-       (log/infof "Transaction succeed")
-       (log/errorf "Transaction failed")))))
+         ret                (<!? (conn/confirm-transaction conn sig "finalized"))
+
+         new-state          (some-> (<!?
+                                     (conn/get-account-info conn game-account-pubkey "finalized"))
+                                    :data
+                                    (parse-state-data))
+
+         no-err?            (and ret (nil? (get-in ret [:value :err])))
+
+         match?             (state-match? new-state expected-player-map)]
+     (cond
+       (and match? no-err?)
+       (do (log/infof "🎉Transaction succeed") :ok)
+
+       no-err?
+       (do (log/error "💥Transaction succeed, state mismatch!")
+           (log/errorf "💥On-chain players: %s" (:players new-state))
+           (log/errorf "💥Expected player map: %s" expected-player-map)
+
+           :ok)
+
+       :else
+       (do (log/errorf "🚨Transaction failed") :err)))))
 
 ;;; Implementations
 
@@ -167,7 +205,7 @@
 
 (defn make-solana-api
   []
-  (log/debug "Use Solana chain api.")
+  (log/info "🏁Use Solana chain api.")
   (let [input      (a/chan 30)
         output     (a/chan 30)
         pending    (atom [])
@@ -178,12 +216,20 @@
  p/IChainApi
 
  (p/-settle-finished-game
-   [this game-id chips-change-map player-status-map]
-   (settle game-id chips-change-map player-status-map))
+   [this game-id chips-change-map player-status-map expected-player-map]
+   (a/go-loop [cnt 1]
+     (let [rs (<!? (settle game-id chips-change-map player-status-map expected-player-map))]
+       (when (and (not= rs :ok) (< cnt 4))
+         (log/infof "Retry, count: %s" cnt)
+         (recur (inc cnt))))))
 
  (p/-settle-failed-game
-   [this game-id player-status-map]
-   (settle game-id {} player-status-map))
+   [this game-id player-status-map expected-player-map]
+   (a/go-loop [cnt 1]
+     (let [rs (<!? (settle game-id {} player-status-map expected-player-map))]
+       (when (and (not= rs :ok) (< cnt 4))
+         (log/infof "Retry, count: %s" cnt)
+         (recur (inc cnt))))))
 
  (p/-fetch-game-account
    [this game-id]

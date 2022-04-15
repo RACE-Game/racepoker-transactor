@@ -14,9 +14,15 @@
  (p/-start [this _opts]
    (let [{:keys [input output]} this]
      (a/go-loop [it (a/<! input)]
-       (if-not (:type it)
+       (cond
+         (not (:type it))
          (log/errorf "☠️Invalid Event: %s" it)
-         (log/debugf "✉️Event: %s" (:type it)))
+
+         (:player-id it)
+         (log/infof "🤡Event: %s Player: %s" (:type it) (:player-id it))
+
+         :else
+         (log/infof "👽️️Event: %s" (:type it)))
        (a/>! output it)
        (recur (a/<! input))))
    this)

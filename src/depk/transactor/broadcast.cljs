@@ -7,15 +7,15 @@
 
 (defn start-broadcast-loop
   [broadcaster opts]
-  (log/debugf "🏁Start broadcaster for game[%s]" (:game-id opts))
+  (log/infof "🏁Start broadcaster for game[%s]" (:game-id opts))
   (let [{:keys [ws-conn input snapshot]}    broadcaster
         {:keys [chsk-send! connected-uids]} ws-conn]
     (a/go-loop [{:keys [type data]} (a/<! input)]
-      ;; (log/debugf "Broadcaster receive: %s" type)
+      ;; (log/infof "Broadcaster receive: %s" type)
       (condp = type
         :system/broadcast-state
         (let [{:keys [state game-id]} data]
-          ;; (log/debugf "Broadcast state, game-id: %s, state-id: %s, this-event: %s"
+          ;; (log/infof "Broadcast state, game-id: %s, state-id: %s, this-event: %s"
           ;;             game-id
           ;;             (:state-id state)
           ;;             (:this-event state))
@@ -23,7 +23,7 @@
           (doseq [uid   (:any @connected-uids)
                   :when (= game-id (first uid))]
             (reset! snapshot state)
-            ;; (log/debugf "Send state to uid: %s" uid)
+            ;; (log/infof "Send state to uid: %s" uid)
             (chsk-send! uid [:game/state state])))
         :noop)
       (recur (a/<! input)))))

@@ -8,7 +8,7 @@
 
 (defn make-fake-store-api
   []
-  (log/debug "Use fake store api.")
+  (log/info "🏁Use fake store api.")
   (->FakeStoreApi))
 
 (extend-type FakeStoreApi
