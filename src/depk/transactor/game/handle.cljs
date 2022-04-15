@@ -26,7 +26,7 @@
 
 (defn make-game-handle
   [game-id init-state ws-conn]
-  (log/debugf "Create game handle for game: %s" game-id)
+  (log/debugf "🕹️Create game handle for game: %s" game-id)
   (let [opts        {:game-id game-id, :init-state init-state}
         chain-api   (chain/make-solana-api)
         event-bus   (event/make-mem-event-bus)

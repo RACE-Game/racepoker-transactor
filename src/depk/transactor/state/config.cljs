@@ -17,7 +17,7 @@
   []
   (let [conf (config/env)
         e    (str (name @env) "-")]
-    (log/infof "Current environment: %s" @env)
+    (log/infof "⚙️Current environment: %s" @env)
     (->> (for [[k v] conf]
            (if (str/starts-with? (name k) e)
              [(keyword (str/replace-first (name k) e ""))

@@ -7,7 +7,7 @@
 
 (defn start-broadcast-loop
   [broadcaster opts]
-  (log/debugf "Start broadcaster for game[%s]" (:game-id opts))
+  (log/debugf "🏁Start broadcaster for game[%s]" (:game-id opts))
   (let [{:keys [ws-conn input snapshot]}    broadcaster
         {:keys [chsk-send! connected-uids]} ws-conn]
     (a/go-loop [{:keys [type data]} (a/<! input)]

@@ -60,7 +60,7 @@
   (when-not (= :game-status/init status)
     (misc/invalid-game-status! state event))
 
-  (log/infof "Start game, number of players: %s" (count player-map))
+  (log/infof "🎰Start game, number of players: %s" (count player-map))
 
   ;; Start when all players ready
   ;; otherwise kick all non-ready players
@@ -68,7 +68,7 @@
     ;; If any client is not ready, kick it
     (not (every? #(= :normal (:online-status %)) (vals player-map)))
     (do
-      (log/debugf "Not all players are ready")
+      (log/debugf "🛑Not all players are ready")
       (-> state
           (misc/submit-dropout-players)
           (misc/remove-dropout-players)
@@ -79,7 +79,7 @@
     ;; Require further alive event from the only client
     (= (count player-map) 1)
     (do
-      (log/debugf "No enough players to start")
+      (log/debugf "🛑No enough players to start")
       (-> state
           (misc/mark-dropout-players (keys player-map))
           (misc/add-joined-player)
@@ -91,7 +91,7 @@
     ;; Waiting a player to join
     (zero? (count player-map))
     (do
-      (log/debugf "No players to start")
+      (log/debugf "🛑No players to start")
       (-> state
           (misc/add-joined-player)
           (misc/reset-game-state)))

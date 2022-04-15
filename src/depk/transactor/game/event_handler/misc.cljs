@@ -117,7 +117,7 @@
                           vals
                           (filter #(not= :normal (:online-status %)))
                           (map :player-id))]
-    (log/infof "❌Remove dropout players: %s" dropout-pids)
+    (log/infof "🧹Remove dropout players: %s" dropout-pids)
     (update state :player-map (fn [m] (apply dissoc m dropout-pids)))))
 
 (defn submit-dropout-players
@@ -203,7 +203,7 @@
   [state]
   (let [{:keys [player-map game-account-state game-no joined-players]} state
         player-map-new (m/players->player-map (seq joined-players))]
-    (log/infof "👤Maintain players. Game NO: Local: %s Remote: %s"
+    (log/infof "🚌Maintain players. Game NO: Local: %s Remote: %s"
                game-no
                (:game-no game-account-state))
     (if (> (:game-no game-account-state) game-no)

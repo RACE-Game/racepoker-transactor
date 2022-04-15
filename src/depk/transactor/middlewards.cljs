@@ -6,6 +6,6 @@
     (try
       (handler request callback raise)
       (catch js/Error e
-        (log/error e "error processing request")
+        (log/error e "☠️error processing request")
         (callback {:status 500
                    :body "Error"})))))

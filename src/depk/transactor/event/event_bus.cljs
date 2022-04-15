@@ -15,8 +15,8 @@
    (let [{:keys [input output]} this]
      (a/go-loop [it (a/<! input)]
        (if-not (:type it)
-         (log/errorf "Invalid Event: %s" it)
-         (log/debugf "Event: %s" (:type it)))
+         (log/errorf "☠️Invalid Event: %s" it)
+         (log/debugf "✉️Event: %s" (:type it)))
        (a/>! output it)
        (recur (a/<! input))))
    this)

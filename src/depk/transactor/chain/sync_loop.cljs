@@ -9,7 +9,7 @@
 (defn start-sync-loop
   "Fetch game state through chain API, emit :system/sync-state event to game handle."
   [chain-api game-id output init-game-account-state]
-  (log/infof "Start state sync loop for game[%s]" game-id)
+  (log/infof "🏁Start state sync loop for game[%s]" game-id)
   (a/go-loop [last-state init-game-account-state]
     (a/<! (a/timeout 2000))
     ;; (log/debugf "Fetch game account state, game[%s]" game-id)

@@ -10,7 +10,7 @@
   "Send transact through chain API, emit :system/transaction-succeed or :system/transaction-failed
   when complete."
   [chain-api game-id input output]
-  (log/infof "Start transact loop for game[%s]" game-id)
+  (log/infof "🏁Start transact loop for game[%s]" game-id)
   (a/go-loop [{:keys [type data]} (a/<! input)]
     ;; (log/debugf "Transact loop receive: %s" type)
     (let [{:keys [confirming pending]} chain-api]
