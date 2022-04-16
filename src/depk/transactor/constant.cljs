@@ -9,6 +9,7 @@
 (def encrypt-timeout-delay 10000)
 (def player-action-timeout-delay 30000)
 (def reset-timeout-delay 1000)
+(def sng-next-game-timeout-delay 15000)
 
 (def instruction-head-settle [3 1])
 (def instruction-head-set-winner [8 1])

@@ -292,6 +292,9 @@
        :else
        (do (log/error "🚨Transaction failed") :err)))))
 
+(comment
+  (set-winner "6R1A1mddhrJw5CKQfXCsq2gkPvvotr3xoCHCV2tpnF4r" "DfgtACV9VzRUKUqRjuzxRHmeycyomcCzfRHgVyDPha9F"))
+
 ;;; Implementations
 
 (defrecord SolanaApi [input output pending confirming])

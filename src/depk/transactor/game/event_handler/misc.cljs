@@ -254,6 +254,7 @@
         :prize-map          nil,
         :player-actions     [],
         :winning-type       nil,
+        :winner-id          nil,
         :after-key-share    nil})))
 
 (defn request-sync-state
@@ -277,7 +278,9 @@
   [state]
   (assoc state
          :dispatch-event
-         [c/reset-timeout-delay
+         [(if (:winner-id state)
+            c/sng-next-game-timeout-delay
+            c/reset-timeout-delay)
           (m/make-event :system/reset state {})]))
 
 (defn next-btn
@@ -731,19 +734,20 @@
 
 (defn- submit-game-result-sng
   [{:keys [player-map], :as state}]
-  (if (= 1 (count player-map))
-    (let [winner-id (->> player-map
-                         vals
-                         (filter some?)
-                         first
-                         :player-id)
-          request   {:type :system/set-winner,
-                     :data {:winner-id winner-id}}]
-      (-> state
-          (update :api-requests conj request)
-          (assoc :winner-id  winner-id
-                 :player-map {})))
-    state))
+  (let [live-players (->> player-map
+                          vals
+                          (filter #(> (:chips %) (js/BigInt 0))))]
+    (if (= 1 (count live-players))
+      (let [winner-id (->> live-players
+                           first
+                           :player-id)
+            request   {:type :system/set-winner,
+                       :data {:winner-id winner-id}}]
+        (-> state
+            (update :api-requests conj request)
+            (assoc :winner-id  winner-id
+                   :player-map {})))
+      state)))
 
 (defn- submit-game-result
   "Add request to :api-requests, submit game result."
@@ -828,7 +832,7 @@
 
 (defn single-player-win
   "Single player win the game."
-  [{:keys [total-bet-map] :as state} player-id]
+  [{:keys [total-bet-map], :as state} player-id]
   ;; We have to use bet-sum to calculate the total prize
   ;; because pots are not complete here.
   (let [bet-sum (reduce + (js/BigInt 0) (vals total-bet-map))]
@@ -837,6 +841,9 @@
         (assoc :prize-map {player-id bet-sum})
         (apply-prize-map)
         (update-chips-change-map)
+        ;; Append a pot for current bet
+        ;; NOTE: this pot is not accurate
+        (update :pots conj (m/make-pot #{player-id} bet-sum #{player-id}))
         (submit-game-result)
         (remove-dropout-players)
         (dispatch-reset)

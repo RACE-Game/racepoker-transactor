@@ -44,7 +44,7 @@
 (defn handle-result
   "Handle the result of event handler.
 
-  Flush :dispatch-event, :api-requests and :reserve-dispatch-id
+  Flush :dispatch-event, :api-requests
   Set :dispatch-id and :this-event."
   [event {:keys [state], :as res}]
   (let [{:keys [dispatch-event reserve-dispatch-id api-requests state-id]} state
