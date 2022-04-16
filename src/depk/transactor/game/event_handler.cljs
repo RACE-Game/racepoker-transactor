@@ -54,7 +54,7 @@
 ;; - generate a default deck of cards
 ;; - ask the first player (BTN) to shuffle the cards.
 (defmethod handle-event :system/start-game
-  [{:keys [status player-map], :as state}
+  [{:keys [status player-map game-type size], :as state}
    event]
 
   (when-not (= :game-status/init status)
@@ -65,6 +65,15 @@
   ;; Start when all players ready
   ;; otherwise kick all non-ready players
   (cond
+    ;; SNG type without full table
+    (and (#{:bonus :sng :tournament} game-type)
+         (< (count player-map) size))
+    (do
+      (log/infof "🚧No enough players for SNG/Bonus game.")
+      (-> state
+          (misc/add-joined-player)
+          (misc/reset-game-state)))
+
     ;; If any client is not ready, kick it
     (not (every? #(= :normal (:online-status %)) (vals player-map)))
     (do
@@ -345,29 +354,50 @@
 ;; 2. Game is not running
 ;; Send a claim transaction for player
 (defmethod handle-event :client/leave
-  [{:keys [status player-map], :as state}
+  [{:keys [status player-map action-player-id], :as state}
    {{:keys [released-keys]} :data,
     player-id :player-id,
     :as       event}]
-  (let [state (update-in state
-                         [:player-map player-id]
-                         assoc
-                         :online-status :leave
-                         :status        :player-status/fold)]
+  (let [new-state      (update-in state
+                                  [:player-map player-id]
+                                  assoc
+                                  :online-status :leave
+                                  :status        :player-status/fold)
+
+        remain-players (->> (:player-map new-state)
+                            vals
+                            (filter (comp #{:player-status/allin :player-status/acted
+                                            :player-status/wait :player-status/in-action}
+                                          :status)))]
+
     (cond
       ;; Game is not running, can leave immetdiately
       (#{:game-status/init :game-status/settle :game-status/showdown} status)
-      (-> state
-          (misc/submit-dropout-players)
-          (misc/remove-dropout-players))
+      (do
+        (log/infof "⏪️Player leave: %s" player-id)
+        (-> new-state
+            (misc/submit-dropout-players)
+            (misc/remove-dropout-players)))
+
+      ;; The last player will win immediately
+      (= 1 (count remain-players))
+      (do
+        (log/infof "⏪️Player leave: %s. The left player win: %s"
+                   player-id
+                   (:player-id (first remain-players)))
+        (misc/single-player-win new-state (:player-id (first remain-players))))
 
       ;; Game is running, calculate next state
       :else
-      (-> state
-          (update :released-keys-map assoc :player-id released-keys)
-          (misc/take-released-keys)
-          (misc/next-state)
-          (misc/reserve-dispatch)))))
+      (do
+        (log/infof "⏪️In-action player leave: %s" player-id)
+        (cond-> (-> new-state
+                    (update :released-keys-map assoc :player-id released-keys)
+                    (misc/take-released-keys)
+                    (misc/reserve-dispatch))
+
+          (= player-id action-player-id)
+          (misc/next-state))))))
 
 ;; ;; client/release
 ;; ;; Received when a fold client give up its keys

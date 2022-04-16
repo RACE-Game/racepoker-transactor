@@ -102,6 +102,8 @@
                     (= chips (get-in expected-player-map [pid :chips]))))))
               players))))
 
+;;; FIXME: what if players GC his ATA
+
 (defn settle
   [game-id chips-change-map player-status-map expected-player-map]
   (when-not (transduce (map val) + (js/BigInt 0) chips-change-map)
@@ -116,7 +118,7 @@
          conn               (conn/make-connection (get @config :solana-rpc-endpoint))
          game-account-pubkey (pubkey/make-public-key game-id)
          game-account-state (some-> (<!?
-                                     (conn/get-account-info conn game-account-pubkey "finalized"))
+                                     (conn/get-account-info conn game-account-pubkey "confirmed"))
                                     :data
                                     (parse-state-data))
 
@@ -138,7 +140,7 @@
          ix-body            (build-settle-ix-body player-ids chips-change-map player-status-map)
 
          ix-data            (apply ib/make-instruction-data
-                                   (cons c/instruction-header-settle ix-body))
+                                   (cons c/instruction-head-settle ix-body))
 
          [pda]              (<!? (pubkey/find-program-address #js [(buffer-from "stake")]
                                                               dealer-program-id))
@@ -175,10 +177,10 @@
 
          sig                (<!? (conn/send-transaction conn tx [fee-payer]))
 
-         ret                (<!? (conn/confirm-transaction conn sig "finalized"))
+         ret                (<!? (conn/confirm-transaction conn sig "confirmed"))
 
          new-state          (some-> (<!?
-                                     (conn/get-account-info conn game-account-pubkey "finalized"))
+                                     (conn/get-account-info conn game-account-pubkey "confirmed"))
                                     :data
                                     (parse-state-data))
 
@@ -195,6 +197,83 @@
            (log/errorf "💥Expected player map: %s" expected-player-map)
 
            :ok)
+
+       :else
+       (do (log/errorf "🚨Transaction failed") :err)))))
+
+(defn set-winner
+  [game-id winner-id]
+  (go-try
+   (let [_ (log/infof "📝SNG winner: %s" winner-id)
+         fee-payer (load-private-key)
+
+         conn (conn/make-connection (get @config :solana-rpc-endpoint))
+         game-account-pubkey (pubkey/make-public-key game-id)
+         game-account-state (some-> (<!?
+                                     (conn/get-account-info conn game-account-pubkey "finalized"))
+                                    :data
+                                    (parse-state-data))
+
+         _ (when-not (some? game-account-state)
+             (log/errorf "🚨game account not found: game[%s]" game-id))
+
+         dealer-program-id (pubkey/make-public-key (get @config :dealer-program-address))
+
+         {:keys [players stake-account-pubkey mint-pubkey]} game-account-state
+
+         _ (log/infof "📝On chain players: %s" players)
+
+         ix-data (ib/make-instruction-data c/instruction-head-set-winner)
+
+         [pda] (<!? (pubkey/find-program-address #js [(buffer-from "stake")]
+                                                 dealer-program-id))
+
+         winner-pubkey (pubkey/make-public-key winner-id)
+
+         ata-pubkey (<!?
+                     (spl-token/get-associated-token-address
+                      mint-pubkey
+                      winner-pubkey))
+
+         ix-keys [{:pubkey     (keypair/public-key fee-payer),
+                   :isSigner   true,
+                   :isWritable false}
+                  {:pubkey     game-account-pubkey,
+                   :isSigner   false,
+                   :isWritable true}
+                  {:pubkey     stake-account-pubkey,
+                   :isSigner   false,
+                   :isWritable true}
+                  {:pubkey     pda,
+                   :isSigner   false,
+                   :isWritable false}
+                  {:pubkey     winner-pubkey,
+                   :isSigner   false,
+                   :isWritable false}
+                  {:pubkey     ata-pubkey,
+                   :isSigner   false,
+                   :isWritable true}
+                  {:pubkey     spl-token/token-program-id,
+                   :isSigner   false,
+                   :isWritable false}]
+
+         ix
+         (transaction/make-transaction-instruction
+          {:keys      ix-keys,
+           :programId (pubkey/make-public-key dealer-program-id),
+           :data      ix-data})
+         tx
+         (doto (transaction/make-transaction)
+          (transaction/add ix))
+
+         sig (<!? (conn/send-transaction conn tx [fee-payer]))
+
+         ret (<!? (conn/confirm-transaction conn sig "finalized"))
+
+         no-err? (and ret (nil? (get-in ret [:value :err])))]
+     (cond
+       no-err?
+       (do (log/error "🎉Transaction succeed") :ok)
 
        :else
        (do (log/errorf "🚨Transaction failed") :err)))))
@@ -216,7 +295,7 @@
  p/IChainApi
 
  (p/-settle-finished-game
-   [this game-id chips-change-map player-status-map expected-player-map]
+   [_this game-id chips-change-map player-status-map expected-player-map]
    (a/go-loop [cnt 1]
      (let [rs (<!? (settle game-id chips-change-map player-status-map expected-player-map))]
        (when (and (not= rs :ok) (< cnt 4))
@@ -224,9 +303,17 @@
          (recur (inc cnt))))))
 
  (p/-settle-failed-game
-   [this game-id player-status-map expected-player-map]
+   [_this game-id player-status-map expected-player-map]
    (a/go-loop [cnt 1]
      (let [rs (<!? (settle game-id {} player-status-map expected-player-map))]
+       (when (and (not= rs :ok) (< cnt 4))
+         (log/infof "Retry, count: %s" cnt)
+         (recur (inc cnt))))))
+
+ (p/-set-winner
+   [_this game-id winner-id]
+   (a/go-loop [cnt 1]
+     (let [rs (<!? (set-winner game-id winner-id))]
        (when (and (not= rs :ok) (< cnt 4))
          (log/infof "Retry, count: %s" cnt)
          (recur (inc cnt))))))
@@ -237,7 +324,7 @@
     (let [conn (conn/make-connection (get @config :solana-rpc-endpoint))
           game-account-pubkey (pubkey/make-public-key game-id)
           game-account-state (some-> (<!?
-                                      (conn/get-account-info conn game-account-pubkey "finalized"))
+                                      (conn/get-account-info conn game-account-pubkey "confirmed"))
                                      :data
                                      (parse-state-data))]
       game-account-state)))

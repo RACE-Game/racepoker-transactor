@@ -82,6 +82,10 @@
    player-map
 
    ;; ----------------------------------------------
+   ;; SNG
+   winner-id
+
+   ;; ----------------------------------------------
    ;; encryption data and keys
    card-ciphers
    ;; player-id to shared keys
@@ -155,12 +159,18 @@
 (defn get-blind-bet
   "Get blind bet amount as [sb, bb]."
   [game-account-state mint-info]
-  (let [{:keys [level]} game-account-state
-        {:keys [decimals]} mint-info
-        {:keys [sb bb]} (get c/level-info-map level)
-        base (js/BigInt (js/Math.pow 10 decimals))]
-    [(* base sb)
-     (* base bb)]))
+  (let [{:keys [level game-type]} game-account-state]
+    (case game-type
+      :cash
+      (let [{:keys [decimals]} mint-info
+            {:keys [sb bb]} (get c/level-info-map level)
+            base (js/BigInt (js/Math.pow 10 decimals))]
+        [(* base sb)
+         (* base bb)])
+
+      (:sng :bonus :tournament)
+      [(js/BigInt 100)
+       (js/BigInt 200)])))
 
 (defn players->player-map
   [players]
@@ -198,7 +208,9 @@
               :game-account-state game-account-state,
               :state-id           state-id,
               :status             :game-status/init,
-              :game-no            (:game-no game-account-state)
+              :game-no            (:game-no game-account-state),
+              :game-type          (:game-type game-account-state),
+              :size               (:size game-account-state),
               :mint-info          mint-info,
               :player-map         (players->player-map (:players game-account-state))}))))))
 
@@ -214,4 +226,4 @@
                 :shuffle-player-id :encrypt-player-id
                 :btn :sb :bb :require-key-idents :share-key-map
                 :card-ciphers :player-actions :winning-type :dispatch-id
-                :game-id :this-event]))
+                :game-id :this-event :winner-id]))

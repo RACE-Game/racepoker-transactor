@@ -113,7 +113,7 @@
   "Dispatch dispatch-events to input channel.
 
   dispatch-events is a map from timeout millis to event."
-  [event dispatch-event input]
+  [event dispatch-event output]
   (when dispatch-event
     (let [[ms evt] dispatch-event]
       (log/infof "⌛Event [%s] dispatch event[%s] after %sms"
@@ -122,7 +122,7 @@
                   (str ms))
       (go-try
        (<!? (timeout ms))
-       (put! input evt)))))
+       (put! output evt)))))
 
 (defn dispatch-api-request
   "Dispatch api-requests to output channel."
@@ -178,7 +178,7 @@
               ;; (.info js/console "before:" old-state)
               ;; (.info js/console "after:" state)
 
-              (dispatch-delay-event event dispatch-event input)
+              (dispatch-delay-event event dispatch-event output)
               (dispatch-api-request event api-requests output)
               (dispatch-broadcast-state game-id state output)
               (recur state records))

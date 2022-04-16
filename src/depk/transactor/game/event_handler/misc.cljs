@@ -49,6 +49,12 @@
                   {:state state,
                    :event event})))
 
+(defn cant-leave-game!
+  [state event]
+  (throw (ex-info "Can't leave game"
+                  {:state state,
+                   :event event})))
+
 (defn community-cards-decryption-failed!
   [err-data]
   (throw (ex-info "Community cards decryption failed" err-data)))
@@ -132,20 +138,22 @@
 
 (defn submit-dropout-players
   "Remove all players who not send alive events."
-  [{:keys [player-map], :as state}]
-  (let [request {:type :system/settle-failed,
-                 :data {:player-status-map
-                        (->> (for [[id p] player-map]
-                               [id
-                                (if (= :normal (:online-status p))
-                                  :normal
-                                  :leave)
-                                (:online-status p :leave)])
-                             (into {})),
-                        :expected-player-map
-                        player-map}}]
-    ;; send settlement for leaving players
-    (update state :api-requests conj request)))
+  [{:keys [player-map game-account-state], :as state}]
+  (if (= :open (:status game-account-state))
+    (let [request {:type :system/settle-failed,
+                   :data {:player-status-map
+                          (->> (for [[id p] player-map]
+                                 [id
+                                  (if (= :normal (:online-status p))
+                                    :normal
+                                    :leave)
+                                  (:online-status p :leave)])
+                               (into {})),
+                          :expected-player-map
+                          player-map}}]
+      ;; send settlement for leaving players
+      (update state :api-requests conj request))
+    state))
 
 (defn valid-card?
   [card]
@@ -700,8 +708,7 @@
           (group-by first)
           (update-vals #(mapv last %))))))
 
-(defn- submit-game-result
-  "Add request to :api-requests, submit game result."
+(defn- submit-game-result-cash
   [{:keys [chips-change-map player-map], :as state}]
   (let [request {:type :system/settle-finished,
                  :data {:chips-change-map    chips-change-map,
@@ -710,6 +717,32 @@
                                                     [id (:online-status p :normal)])
                                                   (into {}))}}]
     (update state :api-requests conj request)))
+
+(defn- submit-game-result-sng
+  [{:keys [player-map], :as state}]
+  (if (= 1 (count player-map))
+    (let [winner-id (->> player-map
+                         vals
+                         (filter some?)
+                         first
+                         :player-id)
+          request   {:type :system/set-winner,
+                     :data {:winner-id winner-id}}]
+      (-> state
+          (update :api-requests conj request)
+          (assoc :winner-id  winner-id
+                 :player-map {})))
+    state))
+
+(defn- submit-game-result
+  "Add request to :api-requests, submit game result."
+  [{:keys [game-type], :as state}]
+  (case game-type
+    :cash
+    (submit-game-result-cash state)
+
+    (:sng :bonus :tournament)
+    (submit-game-result-sng state)))
 
 (defn terminate
   "Terminate current game.
@@ -868,6 +901,10 @@
       (and (= :street/preflop street)
            (nil? bet-map))
       [:blind-bets]
+
+      ;; only one player in game
+      (= 1 (count player-map))
+      [:single-player-win (:player-id (first (vals player-map)))]
 
       ;; single player win, all others fold
       (= 1 (count remain-players))

@@ -26,5 +26,10 @@
                                    (:player-status-map data)
                                    (:expected-player-map data)))
 
+      :system/set-winner
+      (a/<! (p/-set-winner chain-api
+                           game-id
+                           (:winner-id data)))
+
       :noop)
     (recur (a/<! input))))
