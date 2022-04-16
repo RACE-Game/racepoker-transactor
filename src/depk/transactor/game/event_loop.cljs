@@ -22,7 +22,6 @@
     :system/player-action-timeout
     :client/alive
     :client/leave
-    :client/release
     :player/fold
     :player/call
     :player/check

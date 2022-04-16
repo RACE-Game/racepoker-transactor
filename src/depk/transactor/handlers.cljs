@@ -79,15 +79,6 @@
      (a/<! (game/share-keys @game-manager game-id player-id share-keys))
      (?reply-fn {:result :ok}))))
 
-(defmethod event-msg-handler :client/release
-  [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
-  ;; (log/infof "Client release keys: %s" uid)
-  (a/go
-   (let [[game-id player-id]     uid
-         {:keys [released-keys]} ?data]
-     (a/<! (game/release @game-manager game-id player-id released-keys))
-     (?reply-fn {:result :ok}))))
-
 (defmethod event-msg-handler :player/call
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
   ;; (log/infof "Call: %s" uid)

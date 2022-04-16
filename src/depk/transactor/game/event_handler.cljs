@@ -390,7 +390,7 @@
       ;; Game is running, calculate next state
       :else
       (do
-        (log/infof "⏪️In-action player leave: %s" player-id)
+        (log/infof "⏪️player leave: %s. Game continue." player-id)
         (cond-> (-> new-state
                     (update :released-keys-map assoc :player-id released-keys)
                     (misc/take-released-keys)
@@ -398,26 +398,6 @@
 
           (= player-id action-player-id)
           (misc/next-state))))))
-
-;; ;; client/release
-;; ;; Received when a fold client give up its keys
-;; ;; Can only be sent when status is play
-(defmethod handle-event :client/release
-  [{:keys [status after-key-share player-map], :as state}
-   {{:keys [released-keys]} :data,
-    player-id :player-id,
-    :as       event}]
-
-  (when-not (seq released-keys)
-    (misc/empty-released-keys! state event))
-
-  (when-not (#{:game-status/play :game-status/key-share} status)
-    (misc/invalid-game-status! state event))
-
-  (-> state
-      (assoc-in [:released-keys-map player-id] released-keys)
-      (misc/take-released-keys)
-      (misc/reserve-dispatch)))
 
 (defmethod handle-event :player/fold
   [{:keys [status action-player-id state-id], :as state}
