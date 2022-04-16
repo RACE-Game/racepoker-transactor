@@ -128,13 +128,15 @@
 
 (defn remove-dropout-players
   "Remove all players who not send alive events."
-  [{:keys [player-map], :as state}]
-  (let [dropout-pids (->> player-map
-                          vals
-                          (filter #(not= :normal (:online-status %)))
-                          (map :player-id))]
-    (log/infof "🧹Remove dropout players: %s" dropout-pids)
-    (update state :player-map (fn [m] (apply dissoc m dropout-pids)))))
+  [{:keys [player-map game-account-state], :as state}]
+  (if (= :open (:status game-account-state))
+    (let [dropout-pids (->> player-map
+                            vals
+                            (filter #(not= :normal (:online-status %)))
+                            (map :player-id))]
+      (log/infof "🧹Remove dropout players: %s" dropout-pids)
+      (update state :player-map (fn [m] (apply dissoc m dropout-pids))))
+    state))
 
 (defn submit-dropout-players
   "Remove all players who not send alive events."

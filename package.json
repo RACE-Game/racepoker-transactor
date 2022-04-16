@@ -10,6 +10,7 @@
     "content-type": "^1.0.4",
     "cookie-parser": "^1.4.6",
     "cookies": "^0.8.0",
+    "cors": "^2.8.5",
     "crypto": "^1.0.1",
     "csurf": "^1.11.0",
     "encoding": "^0.1.13",

@@ -273,10 +273,10 @@
          no-err? (and ret (nil? (get-in ret [:value :err])))]
      (cond
        no-err?
-       (do (log/error "🎉Transaction succeed") :ok)
+       (do (log/info "🎉Transaction succeed") :ok)
 
        :else
-       (do (log/errorf "🚨Transaction failed") :err)))))
+       (do (log/error "🚨Transaction failed") :err)))))
 
 ;;; Implementations
 

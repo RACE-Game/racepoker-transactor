@@ -133,9 +133,9 @@
 
 (defmethod event-msg-handler :message/text
   [{:as ev-msg, :keys [connected-uids event id uid ?data ring-req ?reply-fn send-fn]}]
-  ;; (log/infof "Player send text message: %s" uid)
+  (log/infof "Player send text message: %s" ?data)
   (let [[game-id player-id] uid
-        msg {:game-id    game-id,
+        msg {:game-id    (:game-id ?data),
              :sender     player-id,
              :text       (:text ?data),
              :message/id (uuid/v4)}]

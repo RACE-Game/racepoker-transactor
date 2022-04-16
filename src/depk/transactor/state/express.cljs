@@ -4,21 +4,28 @@
    [depk.transactor.log :as log]
    [depk.transactor.state.websocket :refer [websocket]]
    [taoensso.sente]
-   [mount.core :as mount]
-   [cljs.core.async :as a]
-   ["http" :as http]
-   ["express" :as express]
-   ["express-ws" :as express-ws]
-   ["ws" :as ws]
-   ["cookie-parser" :as cookie-parser]
-   ["body-parser" :as body-parser]
-   ["express-session" :as session]
-   ["csurf" :as csurf]))
+   [mount.core          :as mount]
+   [cljs.core.async     :as a]
+   ["http"              :as http]
+   ["express"           :as express]
+   ["express-ws"        :as express-ws]
+   ["ws"                :as ws]
+   ["cookie-parser"     :as cookie-parser]
+   ["body-parser"       :as body-parser]
+   ["express-session"   :as session]
+   ["csurf"             :as csurf]
+   ["cors"              :as cors]
+   [clojure.string      :as str]
+   [goog.string         :as gstr]))
+
+(def cors-opts
+  #js {:origin #".*"})
 
 (defn setup-routes
   [^js express-app]
   (h/attach-event-handler @websocket)
   (doto express-app
+   (.use (cors))
    (.ws "/api"
         (fn [ws req next]
           ((:ajax-get-or-ws-handshake @websocket)
@@ -29,7 +36,12 @@
             :websocket  ws})))
    (.get "/api" (:ajax-get-or-ws-handshake @websocket))
    (.post "/api" (:ajax-post @websocket))
-   (.use (fn [req res next]
+   (.get "/status"
+         (fn [_req res]
+           (let [{:keys [connected-uids]} @websocket
+                 uids (distinct (map second (:any @connected-uids)))]
+             (.send res "Official transactor connected."))))
+   (.use (fn [req _res next]
            (log/warnf "Unhandled request: %s" (.-originalUrl ^js req))
            (next)))))
 
