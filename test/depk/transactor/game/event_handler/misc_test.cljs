@@ -762,52 +762,52 @@
           :bb               200,
           :action-player-id 100})))))
 
-(t/deftest settle
-  (t/async done
-    (go
-     (let [state
-           {:game-account-state {:status :open},
-            :game-type          :cash,
-            :community-cards    [[:h :a] [:d :a] [:c :a] [:s :j] [:s :t]],
-            :pots               [(m/make-pot #{100 101} (js/BigInt 2000))],
-            :card-ciphers       "9e3f-3a42-0056-2ac3",
-            :share-key-map      {[100 :showdown-card 0] "24918f4ffc066105629863d68a92596b",
-                                 [100 :showdown-card 1] "c35ad7e22a9a7164e7980ad3c16b39c7",
-                                 [100 :showdown-card 2] "69478fb7684ca45644630ce173c76200",
-                                 [100 :showdown-card 3] "294dfbaeb33849ab44689163a335ebcc",
+;; (t/deftest settle
+;;   (t/async done
+;;     (go
+;;      (let [state
+;;            {:game-account-state {:status :open},
+;;             :game-type          :cash,
+;;             :community-cards    [[:h :a] [:d :a] [:c :a] [:s :j] [:s :t]],
+;;             :pots               [(m/make-pot #{100 101} (js/BigInt 2000))],
+;;             :card-ciphers       "9e3f-3a42-0056-2ac3",
+;;             :share-key-map      {[100 :showdown-card 0] "24918f4ffc066105629863d68a92596b",
+;;                                  [100 :showdown-card 1] "c35ad7e22a9a7164e7980ad3c16b39c7",
+;;                                  [100 :showdown-card 2] "69478fb7684ca45644630ce173c76200",
+;;                                  [100 :showdown-card 3] "294dfbaeb33849ab44689163a335ebcc",
 
-                                 [101 :showdown-card 0] "af65251070d5a0386b2e7c97881a978c",
-                                 [101 :showdown-card 1] "72dc6cfefd32565c610b5cd892bc1f7d",
-                                 [101 :showdown-card 2] "d5f9ea1a7f4c0ca3eab9e239cea0ae8f",
-                                 [101 :showdown-card 3] "867f57da487c4f9672359c70ac528271"},
-            :player-map         {100 (assoc (m/make-player-state 100 (js/BigInt 10000) 0)
-                                            :status
-                                            :player-status/acted),
-                                 101 (assoc (m/make-player-state 101 (js/BigInt 10000) 1)
-                                            :status
-                                            :player-status/acted)},
-            :btn                1,
-            :state-id           1}]
-       (t/is
-        (=
-         {:dispatch-event   [c/reset-timeout-delay
-                             (m/make-event :system/reset state {} nil)],
-          :prize-map        {100 (js/BigInt 2000)},
-          :chips-change-map {100 (js/BigInt 1000),
-                             101 (js/BigInt -1000)},
-          :showdown-map     {100 {:category   :four-of-a-kind,
-                                  :picks      [[:s :a] [:h :a] [:d :a] [:c :a] [:s :k]],
-                                  :value      [7 14 14 14 14 13],
-                                  :player-id  100,
-                                  :hole-cards [[:s :a] [:s :k]]},
+;;                                  [101 :showdown-card 0] "af65251070d5a0386b2e7c97881a978c",
+;;                                  [101 :showdown-card 1] "72dc6cfefd32565c610b5cd892bc1f7d",
+;;                                  [101 :showdown-card 2] "d5f9ea1a7f4c0ca3eab9e239cea0ae8f",
+;;                                  [101 :showdown-card 3] "867f57da487c4f9672359c70ac528271"},
+;;             :player-map         {100 (assoc (m/make-player-state 100 (js/BigInt 10000) 0)
+;;                                             :status
+;;                                             :player-status/acted),
+;;                                  101 (assoc (m/make-player-state 101 (js/BigInt 10000) 1)
+;;                                             :status
+;;                                             :player-status/acted)},
+;;             :btn                1,
+;;             :state-id           1}]
+;;        (t/is
+;;         (=
+;;          {:dispatch-event   [c/reset-timeout-delay
+;;                              (m/make-event :system/reset state {} nil)],
+;;           :prize-map        {100 (js/BigInt 2000)},
+;;           :chips-change-map {100 (js/BigInt 1000),
+;;                              101 (js/BigInt -1000)},
+;;           :showdown-map     {100 {:category   :four-of-a-kind,
+;;                                   :picks      [[:s :a] [:h :a] [:d :a] [:c :a] [:s :k]],
+;;                                   :value      [7 14 14 14 14 13],
+;;                                   :player-id  100,
+;;                                   :hole-cards [[:s :a] [:s :k]]},
 
-                             101 {:category   :full-house,
-                                  :picks      [[:h :a] [:d :a] [:c :a] [:s :q] [:d :q]],
-                                  :value      [6 14 14 14 12 12],
-                                  :player-id  101,
-                                  :hole-cards [[:s :q] [:d :q]]}},
-          :pots             [(m/make-pot #{100 101} (js/BigInt 2000) #{100})]}
-         (let [state (<! (sut/settle state nil))]
-           (select-keys state
-                        [:showdown-map :pots :prize-map :chips-change-map :dispatch-event])))))
-     (done))))
+;;                              101 {:category   :full-house,
+;;                                   :picks      [[:h :a] [:d :a] [:c :a] [:s :q] [:d :q]],
+;;                                   :value      [6 14 14 14 12 12],
+;;                                   :player-id  101,
+;;                                   :hole-cards [[:s :q] [:d :q]]}},
+;;           :pots             [(m/make-pot #{100 101} (js/BigInt 2000) #{100})]}
+;;          (let [state (<! (sut/settle state nil))]
+;;            (select-keys state
+;;                         [:showdown-map :pots :prize-map :chips-change-map :dispatch-event])))))
+;;      (done))))

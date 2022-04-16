@@ -781,7 +781,9 @@
                                (map (fn [[pid p]]
                                       [pid (update p :chips + (get bet-map pid (js/BigInt 0)))]))
                                (into {}))]
-    (log/infof "🩹Terminate game, winner ids: %s" winner-player-ids)
+    (log/infof "🩹Terminate game, winner ids: %s, revert bet-map: %s"
+               winner-player-ids
+               bet-map)
     (-> state
         (assoc :bet-map nil)
         (assoc :player-map player-map)
@@ -794,6 +796,11 @@
         ;; TODO, new status/type ?
         (assoc :status       :game-status/settle
                :winning-type :last-player))))
+
+(defn- compare-value [v1 v2]
+  (->> (map compare v2 v1)
+       (remove #{0})
+       first))
 
 (defn settle
   [{:keys [community-cards], :as state} winning-type]
@@ -810,7 +817,7 @@
                                 (into {}))
          winner-id-sets    (->> showdown
                                 (group-by (comp :value second))
-                                (sort-by first >)
+                                (sort-by first compare-value)
                                 (mapv #(set (mapv first (second %)))))]
 
      (-> state
