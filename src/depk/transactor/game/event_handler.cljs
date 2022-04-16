@@ -254,7 +254,7 @@
   (let [missing-key-idents (misc/list-missing-key-idents state)]
     (if (seq missing-key-idents)
       (do
-        (log/debugf "🔐Missing key idents: %s" missing-key-idents)
+        (log/debugf "🔒️Missing key idents: %s" missing-key-idents)
         (let [timeout-player-ids (map first missing-key-idents)]
           (if (= :street/preflop street)
             ;; preflop street, game should not start
@@ -392,8 +392,7 @@
       (do
         (log/infof "⏪️player leave: %s. Game continue." player-id)
         (cond-> (-> new-state
-                    (update :released-keys-map assoc :player-id released-keys)
-                    (misc/take-released-keys)
+                    (update :released-keys-map assoc player-id released-keys)
                     (misc/reserve-dispatch))
 
           (= player-id action-player-id)

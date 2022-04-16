@@ -129,7 +129,7 @@
 (defn remove-dropout-players
   "Remove all players who not send alive events."
   [{:keys [player-map game-account-state], :as state}]
-  (if (= :open (:status game-account-state))
+  (if (#{:open nil} (:status game-account-state))
     (let [dropout-pids (->> player-map
                             vals
                             (filter #(not= :normal (:online-status %)))
@@ -208,11 +208,14 @@
    (list-players-in-order state (:btn state)))
   ([state last-pos]
    (list-players-in-order state last-pos (constantly true)))
-  ([state last-pos status-filter]
-   (let [{:keys [player-map]} state]
+  ([state last-pos filter-or-status-set]
+   (let [{:keys [player-map]} state
+         f (if (set? filter-or-status-set)
+             (comp filter-or-status-set :status)
+             filter-or-status-set)]
      (->> player-map
           vals
-          (filter (comp status-filter :status))
+          (filter f)
           (sort-by (fn [{:keys [position]}]
                      (if (> position last-pos)
                        (- position last-pos)
@@ -355,20 +358,17 @@
 
   If a client released its keys and left the game,
   its released keys should be visible to all."
-  [{:keys [require-key-idents share-key-map player-map released-keys-map],
+  [{:keys [require-key-idents share-key-map released-keys-map],
     :as   state}]
-  (let [released-player-ids    (->> player-map
-                                    (vals)
-                                    (filter #(not= :normal (:status %)))
-                                    (map :player-id))
-
-        released-share-key-map (->> require-key-idents
+  (let [released-share-key-map (->> require-key-idents
                                     (filter (complement (or share-key-map {})))
                                     (keep
                                      (fn [[pid _type idx :as idt]]
                                        (when-let [k (get-in released-keys-map [pid idx])]
                                          [idt k])))
                                     (into {}))]
+    ;; (log/infof "released-keys-map: %s" released-keys-map)
+    (log/infof "🔐Take released keys: %s" released-share-key-map)
     (-> state
         (update :share-key-map merge released-share-key-map))))
 
@@ -446,13 +446,29 @@
   "Update prize-map in state.
 
   Depends on pots."
-  [{:keys [pots], :as state}]
-  (let [prize-map (->> pots
-                       (mapcat (fn [{:keys [amount winner-ids]}]
-                                 (let [prize (/ amount (js/BigInt (count winner-ids)))]
-                                   (for [id winner-ids]
-                                     {id prize}))))
-                       (apply merge-with +))]
+  [{:keys [pots sb btn], :as state}]
+  ;; (log/infof "Update prize map: %s" pots)
+  (let [prize-map          (->> pots
+                                (mapcat (fn [{:keys [amount winner-ids]}]
+                                          (let [cnt      (js/BigInt (count winner-ids))
+                                                reminder (mod amount (* sb cnt))
+                                                prize    (/ (- amount reminder) cnt)]
+                                            (cons
+                                             {:reminder reminder}
+                                             (for [id winner-ids]
+                                               {id prize})))))
+                                (apply merge-with +))
+        reminder           (get prize-map :reminder (js/BigInt 0))
+        prize-map          (dissoc prize-map :reminder)
+        reminder-player-id (-> (list-players-in-order
+                                state
+                                btn
+                                (fn [{:keys [player-id status]}]
+                                  (and (#{:player-status/acted :player-status/allin} status)
+                                       (get prize-map player-id))))
+                               first
+                               :player-id)
+        prize-map          (update prize-map reminder-player-id + reminder)]
     (assoc state :prize-map prize-map)))
 
 (defn update-chips-change-map
@@ -460,6 +476,7 @@
 
   Depends on player-map and pots."
   [{:keys [pots player-map bet-map], :as state}]
+  ;; (log/infof "Update chips change map: %s %s %s" pots player-map bet-map)
   (let [chips-change-map (reduce
                           (fn [acc pot]
                             (let [{:keys [owner-ids winner-ids amount]} pot
@@ -547,6 +564,7 @@
 
   winner-id-sets is a list of player-id set, ranked from strongest hands to weakest."
   [{:keys [pots], :as state} winner-id-sets]
+  ;; (log/infof "Assign winner to pots: %s" winner-id-sets)
   (let [new-pots (->> pots
                       (mapv (fn [pot]
                               (loop [[id-set & rest-id-sets] winner-id-sets]
@@ -763,10 +781,11 @@
                                (map (fn [[pid p]]
                                       [pid (update p :chips + (get bet-map pid (js/BigInt 0)))]))
                                (into {}))]
+    (log/infof "🩹Terminate game, winner ids: %s" winner-player-ids)
     (-> state
         (assoc :bet-map nil)
         (assoc :player-map player-map)
-        (assign-winner-to-pots winner-player-ids)
+        (assign-winner-to-pots [winner-player-ids])
         (update-prize-map)
         (update-chips-change-map)
         (submit-game-result)

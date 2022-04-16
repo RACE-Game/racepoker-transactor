@@ -426,8 +426,13 @@
                                                    :online-status :normal,
                                                    :chips         (js/BigInt 200)}}
                            :status           :game-status/play
-                           :action-player-id 200))]
-      (t/is (= {:player-map {200 {:status        :player-status/in-action,
+                           :action-player-id 200
+                           :game-type        :cash))]
+      (t/is (= {:player-map {100 {:status        :player-status/fold,
+                                  :player-id     100,
+                                  :online-status :leave,
+                                  :chips         (js/BigInt 200)},
+                             200 {:status        :player-status/in-action,
                                   :player-id     200,
                                   :online-status :normal,
                                   :chips         (js/BigInt 200)}}}
@@ -441,7 +446,9 @@
   (t/testing "success, the player in action"
     (let [state (-> (m/make-game-state {:btn 0} {})
                     (assoc
-                     :status     :game-status/play
+                     :game-type        :cash
+                     :status           :game-status/play
+                     :action-player-id 100
                      :player-map
                      {100 {:status    :player-status/in-action,
                            :player-id 100},
