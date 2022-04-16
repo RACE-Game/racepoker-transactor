@@ -21,7 +21,7 @@
 
 (defn invalid-game-status!
   [state event]
-  (throw (ex-info (gstr/format "Invalid game status: %s" (:status state))
+  (throw (ex-info "Invalid game status"
                   {:state state,
                    :event event})))
 
@@ -248,6 +248,7 @@
         :min-raise          nil,
         :street-bet         nil,
         :bet-map            nil,
+        :total-bet-map      {},
         :pots               [],
         :showdown-map       nil,
         :prize-map          nil,
@@ -475,29 +476,18 @@
   "Update chips-change-map in state.
 
   Depends on player-map and pots."
-  [{:keys [pots player-map bet-map], :as state}]
-  ;; (log/infof "Update chips change map: %s %s %s" pots player-map bet-map)
-  (let [chips-change-map (reduce
-                          (fn [acc pot]
-                            (let [{:keys [owner-ids winner-ids amount]} pot
-                                  bet-amount   (/ amount (js/BigInt (count owner-ids)))
-                                  prize-amount (/ amount (js/BigInt (count winner-ids)))]
-                              (as-> acc $
-                                (reduce (fn [acc owner-id]
-                                          (update acc owner-id - bet-amount))
-                                        $
-                                        owner-ids)
-                                (reduce (fn [acc winner-id]
-                                          (update acc winner-id + prize-amount))
-                                        $
-                                        winner-ids))))
-                          (->> (for [[pid] player-map]
-                                 [pid (js/BigInt 0)])
-                               (into {}))
-                          pots)
-        chips-change-map (merge-with (fnil - (js/BigInt 0))
-                                     chips-change-map
-                                     bet-map)]
+  [{:keys [total-bet-map prize-map player-map], :as state}]
+  (log/infof "total-bet-map: %s" total-bet-map)
+  (log/infof "prize-map: %s" prize-map)
+  (let [init-map         (->> (for [[pid] player-map]
+                                [pid (js/BigInt 0)])
+                              (into {}))
+
+        chips-change-map (->> (merge-with (fnil - (js/BigInt 0) (js/BigInt 0))
+                                          init-map
+                                          total-bet-map)
+                              (merge-with (fnil + (js/BigInt 0) (js/BigInt 0))
+                                          prize-map))]
     (assoc state :chips-change-map chips-change-map)))
 
 (defn take-bet-from-player
@@ -544,10 +534,11 @@
                                 new-bb-player)]
     (-> state
         (assoc
-         :bet-map    bet-map
-         :player-map new-player-map
-         :min-raise  bb
-         :street-bet bb)
+         :bet-map       bet-map
+         :total-bet-map bet-map
+         :player-map    new-player-map
+         :min-raise     bb
+         :street-bet    bb)
         (ask-player-for-action action-player-id))))
 
 (defn apply-prize-map
@@ -797,7 +788,8 @@
         (assoc :status       :game-status/settle
                :winning-type :last-player))))
 
-(defn- compare-value [v1 v2]
+(defn- compare-value
+  [v1 v2]
   (->> (map compare v2 v1)
        (remove #{0})
        first))
@@ -836,19 +828,15 @@
 
 (defn single-player-win
   "Single player win the game."
-  [{:keys [pots bet-map], :as state} player-id]
-  (let [bet-sum   (reduce + (js/BigInt 0) (map val bet-map))
-        prize-map {player-id (+ (transduce (map :amount) + (js/BigInt 0) pots)
-                                bet-sum)}]
+  [{:keys [total-bet-map] :as state} player-id]
+  ;; We have to use bet-sum to calculate the total prize
+  ;; because pots are not complete here.
+  (let [bet-sum (reduce + (js/BigInt 0) (vals total-bet-map))]
     (-> state
         (assign-winner-to-pots [#{player-id}])
-        (assoc :prize-map prize-map)
+        (assoc :prize-map {player-id bet-sum})
         (apply-prize-map)
         (update-chips-change-map)
-        ;; Append a pot collected from current street
-        (cond-> (> bet-sum (js/BigInt 0))
-                (update :pots conj (m/make-pot (set (keys bet-map)) bet-sum #{player-id})))
-        (update-in [:chips-change-map player-id] (fnil + (js/BigInt 0)) bet-sum)
         (submit-game-result)
         (remove-dropout-players)
         (dispatch-reset)

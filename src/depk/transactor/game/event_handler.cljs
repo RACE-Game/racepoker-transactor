@@ -434,6 +434,7 @@
     (-> state
         (assoc-in [:player-map player-id] player)
         (update-in [:bet-map player-id] (fnil + (js/BigInt 0)) bet)
+        (update-in [:total-bet-map player-id] (fnil + (js/BigInt 0) (js/BigInt 0)) bet)
         (assoc-in [:player-map player-id :status] status)
         (update :player-actions
                 conj
@@ -491,6 +492,7 @@
     (-> state
         (assoc-in [:player-map player-id] player)
         (assoc-in [:bet-map player-id] bet)
+        (update-in [:total-bet-map player-id] (fnil + (js/BigInt 0) (js/BigInt 0)) bet)
         (assoc-in [:player-map player-id :status]
                   (if allin? :player-status/allin :player-status/acted))
         (assoc :min-raise  bet
@@ -531,6 +533,7 @@
       (-> state
           (assoc-in [:player-map player-id] player)
           (update-in [:bet-map player-id] (fnil + (js/BigInt 0)) bet)
+          (update-in [:total-bet-map player-id] (fnil + (js/BigInt 0) (js/BigInt 0)) bet)
           (assoc-in [:player-map player-id :status]
                     (if allin? :player-status/allin :player-status/acted))
           (assoc :min-raise  new-min-raise

@@ -110,8 +110,8 @@
     (throw (ex-info "Can't settel, invalid chips change!" {:chips-change-map chips-change-map})))
 
   (log/infof "🚀Settle game result on Solana: game[%s]" game-id)
-  (log/infof "📝Chips-change-map: %s" (prn-str chips-change-map))
-  (log/infof "📝Player-status-map: %s" (prn-str player-status-map))
+
+
   (go-try
    (let [fee-payer          (load-private-key)
 
@@ -122,6 +122,13 @@
                                     :data
                                     (parse-state-data))
 
+         _ (log/info "📝Current on-chain players")
+         _ (doseq [p     (:players game-account-state)
+                   :when p]
+             (log/info "📝-" (str (:pubkey p)) (:chips p)))
+         _ (log/info "📝Settle updates")
+         _ (doseq [[p c] chips-change-map]
+             (log/info "📝-" p c (get player-status-map p)))
          _ (when-not (some? game-account-state)
              (log/errorf "🚨game account not found: game[%s]" game-id))
 
@@ -134,8 +141,6 @@
          player-ids         (for [p players]
                               (when p
                                 (str (:pubkey p))))
-
-         _ (log/infof "📝On chain players: %s" players)
 
          ix-body            (build-settle-ix-body player-ids chips-change-map player-status-map)
 
@@ -189,13 +194,22 @@
          match?             (state-match? new-state expected-player-map)]
      (cond
        (and match? no-err?)
-       (do (log/infof "🎉Transaction succeed") :ok)
+       (do (log/info "🎉Transaction succeed")
+           (log/info "🎉On-chain players")
+           (doseq [p     (:players new-state)
+                   :when p]
+             (log/info "🎉-" (str (:pubkey p)) (:chips p)))
+           :ok)
 
        no-err?
-       (do (log/error "💥Transaction succeed, state mismatch!")
-           (log/errorf "💥On-chain players: %s" (:players new-state))
-           (log/errorf "💥Expected player map: %s" expected-player-map)
-
+       (do (log/info "💥Transaction succeed, but state mismatch!")
+           (log/info "💥On-chain players")
+           (doseq [p     (:players new-state)
+                   :when p]
+             (log/info "💥-" (:pubkey p) (:chips p)))
+           (log/info "💥Expected players")
+           (doseq [[_ p] expected-player-map]
+             (log/info "💥-" (:player-id p) (:chips p)))
            :ok)
 
        :else

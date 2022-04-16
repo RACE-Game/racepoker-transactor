@@ -116,9 +116,9 @@
   (when dispatch-event
     (let [[ms evt] dispatch-event]
       (log/infof "⌛Event [%s] dispatch event[%s] after %sms"
-                  (str (:type event))
-                  (str (:type evt))
-                  (str ms))
+                 (str (:type event))
+                 (str (:type evt))
+                 (str ms))
       (go-try
        (<!? (timeout ms))
        (put! output evt)))))
@@ -128,7 +128,7 @@
   [event api-requests output]
   (doseq [req api-requests]
     (when req
-      (log/infof "⌛Event [%s] dispatch api request[%s]" (str (:type event)) (prn-str req))
+      (log/infof "⌛Event [%s] dispatch api request" (:type event))
       (put! output req))))
 
 (defn collect-and-dispatch-game-history
