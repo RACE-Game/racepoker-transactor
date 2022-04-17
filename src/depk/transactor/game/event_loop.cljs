@@ -48,13 +48,21 @@
   Flush :dispatch-event, :api-requests
   Set :dispatch-id and :this-event."
   [event {:keys [state], :as res}]
-  (let [{:keys [dispatch-event reserve-dispatch-id api-requests state-id]} state
-        state (cond-> (dissoc state :dispatch-event :api-requests :reserve-dispatch-id)
+  (let [{:keys [dispatch-event reserve-dispatch-id api-requests state-id overwrite-this-event]}
+        state
+        state (cond-> (dissoc state
+                              :dispatch-event
+                              :api-requests
+                              :reserve-dispatch-id
+                              :overwrite-this-event)
+
                 (not reserve-dispatch-id)
                 (assoc :dispatch-id state-id)
 
                 true
-                (assoc :this-event (:type event)))]
+                (assoc :this-event
+                       (or overwrite-this-event
+                           (:type event))))]
     (assoc res
            :state          state
            :dispatch-event dispatch-event

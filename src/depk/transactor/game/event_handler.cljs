@@ -502,7 +502,7 @@
       (misc/next-state)))
 
 (defmethod handle-event :player/bet
-  [{:keys [bet-map player-map status min-raise action-player-id street-bet state-id], :as state}
+  [{:keys [bet-map player-map bb status min-raise action-player-id street-bet state-id], :as state}
    {{:keys [amount]} :data,
     player-id        :player-id,
     :as              event}]
@@ -526,7 +526,8 @@
              (> amount (js/BigInt 0)))
     (misc/invalid-amount! state event))
 
-  (when (< amount min-raise)
+  (when-not (or (>= amount bb)
+                (= amount (get-in player-map [player-id :chips])))
     (misc/player-bet-too-small! state event))
 
   (let [player (get player-map player-id)
@@ -542,6 +543,7 @@
         (update :player-actions
                 conj
                 {:action :bet, :amount amount, :player-id player-id, :state-id state-id})
+        (assoc :overwrite-this-event (if allin? :player/allin :player/bet))
         (misc/next-state))))
 
 (defmethod handle-event :player/raise
@@ -584,4 +586,5 @@
           (update :player-actions
                   conj
                   {:action :raise, :amount amount, :player-id player-id, :state-id state-id})
+          (assoc :overwrite-this-event (if allin? :player/allin :player/raise))
           (misc/next-state)))))

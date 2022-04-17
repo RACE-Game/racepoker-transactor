@@ -543,7 +543,6 @@
 
   Depends on player-map and pots."
   [{:keys [total-bet-map prize-map player-map], :as state}]
-  (log/infof "🪙Update chips change map")
   (let [init-map         (->> (for [[pid] player-map]
                                 [pid (js/BigInt 0)])
                               (into {}))
@@ -902,7 +901,7 @@
         (update-chips-change-map)
         ;; Append a pot for current bet
         ;; NOTE: this pot is not accurate
-        (update :pots conj (m/make-pot #{player-id} bet-sum #{player-id}))
+        (update :pots conj (m/make-pot (set (keys total-bet-map)) bet-sum #{player-id}))
         (submit-game-result)
         (remove-dropout-players)
         (dispatch-reset)

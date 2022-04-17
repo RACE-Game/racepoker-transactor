@@ -158,6 +158,11 @@
 
    ;; winning type: last-player showdown runner
    winning-type
+
+   ;; Affect the :this-event key in state broadcast.
+   ;; The default value of :this-event is the type of current event.
+   ;; Set this value to overwrite.
+   overwrite-this-event
   ])
 
 ;;; Initial state builder
