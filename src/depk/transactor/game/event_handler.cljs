@@ -58,7 +58,6 @@
   (-> state
       (misc/reset-game-state)
       (misc/add-joined-player)
-      (misc/request-sync-state)
       (misc/dispatch-start-game)))
 
 ;; system/start-game
@@ -69,7 +68,7 @@
 ;; - generate a default deck of cards
 ;; - ask the first player (BTN) to shuffle the cards.
 (defmethod handle-event :system/start-game
-  [{:keys [status player-map game-type size start-time], :as state}
+  [{:keys [status player-map game-type size start-time game-account-state], :as state}
    event]
 
   (when-not (= :game-status/init status)
@@ -82,15 +81,16 @@
   (cond
     ;; SNG type without full table
     (and (#{:bonus :sng :tournament} game-type)
-         (< (count player-map) size))
+         (< (count player-map) size)
+         (= :open (:status game-account-state)))
     (do
       (log/infof "🚧No enough players for SNG/Bonus game.")
       (-> state
-          (misc/add-joined-player)
-          (misc/reset-game-state)))
+          (misc/add-joined-player)))
 
     ;; If any client is not ready, kick it
-    (not (every? #(= :normal (:online-status %)) (vals player-map)))
+    (and (= :cash game-type)
+         (not (every? #(= :normal (:online-status %)) (vals player-map))))
     (do
       (log/infof "🛑Not all players are ready")
       (-> state
@@ -127,16 +127,17 @@
            data       (-> (<! (encrypt/encrypt-ciphers-with-default-shuffle-key ciphers))
                           (encrypt/ciphers->hex))
            start-time (if (and (nil? start-time)
-                                 (#{:sng :bonus} game-type))
+                               (#{:sng :bonus} game-type))
                         (.getTime (js/Date.))
                         start-time)]
        (-> state
            (assoc :start-time start-time)
            (assoc :btn next-btn)
+           (misc/set-operation-player-ids)
+           (misc/with-next-op-player-id-as :shuffle-player-id)
            (assoc :prepare-cards [{:data      data,
                                    :op        :init,
                                    :player-id nil}]
-                  :shuffle-player-id (:player-id (misc/get-player-by-position state next-btn))
                   :status        :game-status/shuffle)
            (misc/dispatch-shuffle-timeout)
            (doto prn-str))))))
@@ -145,7 +146,7 @@
 ;; receiving this event when player submit shuffled cards
 ;; each player will shuffle cards and encrypt with their shuffle key.
 (defmethod handle-event :client/shuffle-cards
-  [{:keys [shuffle-player-id btn prepare-cards status], :as state}
+  [{:keys [op-player-ids shuffle-player-id btn prepare-cards status], :as state}
    {{:keys [data]} :data, player-id :player-id, :as event}]
 
   (when-not (= :game-status/shuffle status)
@@ -154,18 +155,18 @@
   (when-not (= shuffle-player-id player-id)
     (misc/invalid-player-id! state event))
 
-  (let [new-shuffle-player-id (misc/next-player-id state shuffle-player-id)
+  (let [new-shuffle-player-id (misc/next-op-player-id state shuffle-player-id)
         new-prepare-cards     (conj prepare-cards
                                     {:data      data,
                                      :op        :shuffle,
                                      :player-id player-id})]
     (cond
       ;; shuffle finished
-      (misc/btn-player-id? state new-shuffle-player-id)
+      (= (first op-player-ids) new-shuffle-player-id)
       (-> state
           (assoc :prepare-cards new-prepare-cards
                  :shuffle-player-id nil
-                 :encrypt-player-id (:player-id (misc/get-player-by-position state btn))
+                 :encrypt-player-id new-shuffle-player-id
                  :status        :game-status/encrypt)
           (misc/dispatch-encrypt-timeout))
 
@@ -179,7 +180,7 @@
 ;; receiving this event when player submit encrypted cards
 ;; each player will remove its shuffle key, and encrypt each cards with encrypt keys respectly.
 (defmethod handle-event :client/encrypt-cards
-  [{:keys [encrypt-player-id prepare-cards status], :as state}
+  [{:keys [op-player-ids encrypt-player-id prepare-cards status], :as state}
    {{:keys [data]} :data, player-id :player-id, :as event}]
 
   (when-not (= :game-status/encrypt status)
@@ -188,7 +189,7 @@
   (when-not (= encrypt-player-id player-id)
     (misc/invalid-player-id! state event))
 
-  (let [new-encrypt-player-id (misc/next-player-id state encrypt-player-id)
+  (let [new-encrypt-player-id (misc/next-op-player-id state encrypt-player-id)
         new-prepare-cards     (conj prepare-cards
                                     {:data      data,
                                      :op        :encrypt,
@@ -197,7 +198,7 @@
 
      (cond
        ;; encrypt finished
-       (misc/btn-player-id? state new-encrypt-player-id)
+       (= (first op-player-ids) new-encrypt-player-id)
        (let [ciphers  (<! (-> (encrypt/hex->ciphers data)
                               (encrypt/decrypt-ciphers-with-default-shuffle-key)))
              new-data (encrypt/ciphers->hex ciphers)]

@@ -20,6 +20,7 @@
                                (catch js/Error _))]
       (let [game-no (:game-no game-account-state)]
         (a/>! output
-              {:type :system/sync-state,
-               :data {:game-account-state game-account-state}}))
+              {:type    :system/sync-state,
+               :game-id game-id,
+               :data    {:game-account-state game-account-state}}))
       (recur))))

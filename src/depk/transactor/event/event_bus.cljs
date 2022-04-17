@@ -21,6 +21,9 @@
          (:player-id it)
          (log/infof "🤡Event: %s Player: %s" (:type it) (:player-id it))
 
+         (:game-id it)
+         (log/infof "👽️️Event: %s Game: %s" (:type it) (:game-id it))
+
          :else
          (log/infof "👽️️Event: %s" (:type it)))
        (a/>! output it)

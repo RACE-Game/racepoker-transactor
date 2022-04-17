@@ -208,6 +208,10 @@
   [state player-id]
   (= (:btn state) (get-in state [:player-map player-id :position])))
 
+(defn player-online?
+  [player]
+  (= (:online-status player) :normal))
+
 (defn get-player-by-position
   "Find player state in player-map by position."
   [state position]
@@ -237,6 +241,29 @@
                      (if (> position last-pos)
                        (- position last-pos)
                        (+ 10000 position))))))))
+
+(defn set-operation-player-ids
+  "Return a list of player ids, participate in encryption.
+
+  Dropout players will not be counted."
+  [state]
+  (let [{:keys [btn]} state
+        player-ids    (list-players-in-order state btn player-online?)]
+    (log/infof "🫱Op player ids: %s" player-ids)
+    (assoc state :op-player-ids player-ids)))
+
+(defn next-op-player-id [state current-player-id]
+  (let [{:keys [op-player-ids]} state]
+    (if (not current-player-id)
+      (first op-player-ids)
+      (let [rest (next (drop-while #(not= % current-player-id) op-player-ids))]
+        (if (seq rest)
+          (first rest)
+          (first op-player-ids))))))
+
+(defn with-next-op-player-id-as [state k]
+  (let [id (next-op-player-id state (get state k))]
+    (assoc state k id)))
 
 (defn reset-player-map-status
   [player-map]
@@ -294,12 +321,6 @@
         :winning-type       nil,
         :winner-id          nil,
         :after-key-share    nil})))
-
-(defn request-sync-state
-  [state]
-  (let [request {:type :system/request-sync-state,
-                 :data {:game-no (:game-no state)}}]
-    (update state :api-requests conj request)))
 
 (defn get-player-hole-card-indices
   [{:keys [btn player-map], :as state}]
@@ -415,8 +436,8 @@
         (update :share-key-map merge released-share-key-map))))
 
 (defn- list-require-hole-cards-key-idents
-  [player-ids card-idx-2d]
-  (let [player-id-set (set player-ids)]
+  [op-player-ids player-ids card-idx-2d]
+  (let [player-id-set (set op-player-ids)]
     (->> (mapcat (fn [player-id card-idxs]
                    (for [other-player-id (disj player-id-set player-id)
                          card-idx        card-idxs]
@@ -426,28 +447,27 @@
          (into #{}))))
 
 (defn- list-require-community-cards-key-idents
-  [player-ids card-idxs]
-  (->> (for [player-id player-ids
+  [op-player-ids card-idxs]
+  (->> (for [player-id op-player-ids
              card-idx  card-idxs]
          [player-id :community-card card-idx])
        (into #{})))
 
 (defn- list-require-showdown-key-idents
   "Return key indents for all hole-cards of those players who have not fold their cards."
-  [{:keys [player-map], :as state}]
-  (let [hole-card-indices (get-player-hole-card-indices state)
-        player-ids        (keys player-map)]
+  [{:keys [player-map op-player-ids], :as state}]
+  (let [hole-card-indices (get-player-hole-card-indices state)]
     (->> player-map
          vals
          (filter (comp #{:player-status/acted :player-status/allin} :status))
          (mapcat (fn [{:keys [player-id]}]
                    (for [idx (get hole-card-indices player-id)
-                         pid player-ids]
+                         pid op-player-ids]
                      [pid :showdown-card idx])))
          (into #{}))))
 
 (defn list-require-key-idents
-  [{:keys [btn street after-key-share], :as state}]
+  [{:keys [btn street after-key-share op-player-ids], :as state}]
   ;; {:pre [(some? street) (int? btn)]}
   (let [player-ids (->> (list-players-in-order state btn)
                         (map :player-id))]
@@ -457,22 +477,22 @@
       (let [skip (* 2 (count player-ids))]
         (set/union
          (list-require-showdown-key-idents state)
-         (list-require-community-cards-key-idents player-ids (range skip (+ skip 5)))))
+         (list-require-community-cards-key-idents op-player-ids (range skip (+ skip 5)))))
 
       (= :street/preflop street)
-      (list-require-hole-cards-key-idents player-ids (partition 2 (range)))
+      (list-require-hole-cards-key-idents op-player-ids player-ids (partition 2 (range)))
 
       (= :street/flop street)
       (let [skip (* 2 (count player-ids))]
-        (list-require-community-cards-key-idents player-ids (range skip (+ skip 3))))
+        (list-require-community-cards-key-idents op-player-ids (range skip (+ skip 3))))
 
       (= :street/turn street)
       (let [idx (+ (* 2 (count player-ids)) 3)]
-        (list-require-community-cards-key-idents player-ids [idx]))
+        (list-require-community-cards-key-idents op-player-ids [idx]))
 
       (= :street/river street)
       (let [idx (+ (* 2 (count player-ids)) 4)]
-        (list-require-community-cards-key-idents player-ids [idx]))
+        (list-require-community-cards-key-idents op-player-ids [idx]))
 
       (= :street/showdown street)
       (list-require-showdown-key-idents state))))

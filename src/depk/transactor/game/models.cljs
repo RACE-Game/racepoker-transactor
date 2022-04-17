@@ -105,6 +105,7 @@
    ;; released-keys is a list of encrypt-key
    released-keys-map
 
+
    ;; ----------------------------------------------
    ;; prepare states
 
@@ -113,6 +114,7 @@
    ;; * data, card data, usually encrypted
    ;; * op, can be :init, :shuffle or :encrypt
    ;; * player-id, the operator id
+   op-player-ids
    prepare-cards
    shuffle-player-id
    encrypt-player-id
