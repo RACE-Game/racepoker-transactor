@@ -23,14 +23,29 @@
 ;; system/sync-state
 ;; receiving this event when game account reflect there's an update from onchain state
 (defmethod handle-event :system/sync-state
-  [{:keys [status], :as state} {{:keys [game-account-state joined-players]} :data, :as event}]
-  (log/infof "➕Merge sync state, current status: %s" status)
+  [{:keys [status game-no], :as state}
+   {{:keys [game-account-state]} :data, :as event}]
+  (when (<= (:game-no game-account-state) game-no)
+    (misc/state-already-merged! state event))
+
+  (log/infof "✨New game account state with game-no: %s" game-no)
+
   (cond-> (-> state
-              (misc/merge-sync-state game-account-state joined-players)
+              (misc/merge-sync-state game-account-state)
               (misc/reserve-dispatch))
     (#{:game-status/init} status)
     (-> (misc/add-joined-player)
         (misc/dispatch-start-game))))
+
+;; system/force-sync-state
+;; receiving this event when something goes wrong.
+(defmethod handle-event :system/force-sync-state
+  [state {:keys [game-account-state], :as event}]
+  (log/infof "🏥Force sync state, players: %s" (:players game-account-state))
+  (-> state
+      (misc/reset-game-state)
+      (assoc :player-map {} :game-account-state nil)
+      (misc/merge-sync-state game-account-state)))
 
 ;; system/reset
 ;; receiving this event for reset states
@@ -54,7 +69,7 @@
 ;; - generate a default deck of cards
 ;; - ask the first player (BTN) to shuffle the cards.
 (defmethod handle-event :system/start-game
-  [{:keys [status player-map game-type size], :as state}
+  [{:keys [status player-map game-type size start-time], :as state}
    event]
 
   (when-not (= :game-status/init status)
@@ -107,11 +122,16 @@
 
     :else
     (go
-     (let [next-btn (misc/next-btn state)
-           ciphers  (encrypt/cards->card-strs misc/default-deck-of-cards)
-           data     (-> (<! (encrypt/encrypt-ciphers-with-default-shuffle-key ciphers))
-                        (encrypt/ciphers->hex))]
+     (let [next-btn   (misc/next-btn state)
+           ciphers    (encrypt/cards->card-strs misc/default-deck-of-cards)
+           data       (-> (<! (encrypt/encrypt-ciphers-with-default-shuffle-key ciphers))
+                          (encrypt/ciphers->hex))
+           start-time (if (and (nil? start-time)
+                                 (#{:sng :bonus} game-type))
+                        (.getTime (js/Date.))
+                        start-time)]
        (-> state
+           (assoc :start-time start-time)
            (assoc :btn next-btn)
            (assoc :prepare-cards [{:data      data,
                                    :op        :init,
@@ -354,7 +374,7 @@
 ;; 2. Game is not running
 ;; Send a claim transaction for player
 (defmethod handle-event :client/leave
-  [{:keys [status player-map action-player-id], :as state}
+  [{:keys [status player-map action-player-id game-type game-account-state], :as state}
    {{:keys [released-keys]} :data,
     player-id :player-id,
     :as       event}]
@@ -371,6 +391,10 @@
                                           :status)))]
 
     (cond
+      (and (#{:bonus :sng} game-type)
+           (not= :open (:status game-account-state)))
+      (misc/cant-leave-game! state event)
+
       ;; Game is not running, can leave immetdiately
       (#{:game-status/init :game-status/settle :game-status/showdown} status)
       (do
@@ -523,7 +547,8 @@
                    (> amount (js/BigInt 0)))
       (misc/invalid-amount! state event))
 
-    (when (< (+ curr-bet amount) (+ street-bet min-raise))
+    (when-not (or (>= (+ curr-bet amount) (+ street-bet min-raise))
+                  (= amount (get-in player-map [player-id :chips])))
       (misc/player-raise-too-small! state event))
 
     (let [player         (get player-map player-id)

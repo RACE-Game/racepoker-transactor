@@ -84,6 +84,9 @@
    ;; ----------------------------------------------
    ;; SNG
    winner-id
+   start-time
+   base-sb
+   base-bb
 
    ;; ----------------------------------------------
    ;; encryption data and keys
@@ -206,6 +209,8 @@
              init-state
              {:sb                 sb,
               :bb                 bb,
+              :base-sb            sb
+              :base-bb            bb
               :game-account-state game-account-state,
               :state-id           state-id,
               :status             :game-status/init,

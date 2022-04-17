@@ -292,8 +292,22 @@
        :else
        (do (log/error "🚨Transaction failed") :err)))))
 
+(defn force-sync
+  [game-id output]
+  (a/go
+   (let [conn (conn/make-connection (get @config :solana-rpc-endpoint))
+         game-account-pubkey (pubkey/make-public-key game-id)
+         game-account-state (some-> (a/<!
+                                     (conn/get-account-info conn game-account-pubkey "finalized"))
+                                    :data
+                                    (parse-state-data))]
+     (a/>! output
+           {:type :system/force-sync-state,
+            :data {:game-account-state game-account-state}}))))
+
 (comment
-  (set-winner "6R1A1mddhrJw5CKQfXCsq2gkPvvotr3xoCHCV2tpnF4r" "DfgtACV9VzRUKUqRjuzxRHmeycyomcCzfRHgVyDPha9F"))
+  (set-winner "6R1A1mddhrJw5CKQfXCsq2gkPvvotr3xoCHCV2tpnF4r"
+              "F6JoJgWrVZEUaRVpA2uQyRQDNdZXyhyiD8KqdfXcjXQN"))
 
 ;;; Implementations
 
@@ -312,28 +326,55 @@
  p/IChainApi
 
  (p/-settle-finished-game
-   [_this game-id chips-change-map player-status-map expected-player-map]
+   [this game-id chips-change-map player-status-map expected-player-map]
    (a/go-loop [cnt 1]
      (let [rs (<!? (settle game-id chips-change-map player-status-map expected-player-map))]
-       (when (and (not= rs :ok) (< cnt 4))
-         (log/infof "Retry, count: %s" cnt)
-         (recur (inc cnt))))))
+       (cond
+         (= rs :ok)
+         nil
+
+         (< cnt 4)
+         (do
+           (log/infof "Retry, count: %s" cnt)
+           (a/<! (a/timeout 10000))
+           (recur (inc cnt)))
+
+         :else
+         (force-sync game-id (:output this))))))
 
  (p/-settle-failed-game
-   [_this game-id player-status-map expected-player-map]
+   [this game-id player-status-map expected-player-map]
    (a/go-loop [cnt 1]
      (let [rs (<!? (settle game-id {} player-status-map expected-player-map))]
-       (when (and (not= rs :ok) (< cnt 4))
-         (log/infof "Retry, count: %s" cnt)
-         (recur (inc cnt))))))
+       (cond
+         (= rs :ok)
+         nil
+
+         (< cnt 4)
+         (do
+           (log/infof "Retry, count: %s" cnt)
+           (a/<! (a/timeout 10000))
+           (recur (inc cnt)))
+
+         :else
+         (force-sync game-id (:output this))))))
 
  (p/-set-winner
-   [_this game-id winner-id]
+   [this game-id winner-id]
    (a/go-loop [cnt 1]
      (let [rs (<!? (set-winner game-id winner-id))]
-       (when (and (not= rs :ok) (< cnt 4))
-         (log/infof "Retry, count: %s" cnt)
-         (recur (inc cnt))))))
+       (cond
+         (= rs :ok)
+         nil
+
+         (< cnt 4)
+         (do
+           (log/infof "Retry, count: %s" cnt)
+           ;; (a/<! (a/timeout 10000))
+           (recur (inc cnt)))
+
+         :else
+         (force-sync game-id (:output this))))))
 
  (p/-fetch-game-account
    [this game-id]

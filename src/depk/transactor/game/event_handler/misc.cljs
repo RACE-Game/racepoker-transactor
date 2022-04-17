@@ -19,6 +19,12 @@
                   {:state state,
                    :event event})))
 
+(defn state-already-merged!
+  [state event]
+  (throw (ex-info "State already merged."
+                  {:state state,
+                   :event event})))
+
 (defn invalid-game-status!
   [state event]
   (throw (ex-info "Invalid game status"
@@ -126,6 +132,16 @@
     (log/infof "🧹Remove eliminated players: %s" eliminated-pids)
     (update state :player-map (fn [m] (apply dissoc m eliminated-pids)))))
 
+(defn remove-winner-player
+  [{:keys [winner-id base-sb base-bb], :as state}]
+  (if winner-id
+    (assoc state
+           :player-map {}
+           :start-time nil
+           :sb         base-sb
+           :bb         base-bb)
+    state))
+
 (defn remove-dropout-players
   "Remove all players who not send alive events."
   [{:keys [player-map game-account-state], :as state}]
@@ -141,6 +157,7 @@
 (defn submit-dropout-players
   "Remove all players who not send alive events."
   [{:keys [player-map game-account-state], :as state}]
+  (log/infof "🧹Submit left players, game-status: %s" (:status game-account-state))
   (if (= :open (:status game-account-state))
     (let [request {:type :system/settle-failed,
                    :data {:player-status-map
@@ -230,11 +247,32 @@
                  :online-status :dropout)])
        (into {})))
 
+(defn increase-blinds
+  [{:keys [base-sb base-bb game-type start-time], :as state}]
+  (if (and (#{:sng :bonus} game-type)
+           start-time)
+    (let [cnt (js/BigInt
+               (inc (int (/ (- (.getTime (js/Date.)) start-time)
+                            c/increase-blinds-interval))))
+          sb  (* base-sb cnt)
+          bb  (* base-bb cnt)]
+      (log/infof "🌶️Maintain blinds, start-time: %s count: % sb: %s bb: %s"
+                 start-time
+                 cnt
+                 sb
+                 bb)
+      (-> state
+          (assoc :sb sb
+                 :bb bb)))
+    state))
+
 (defn reset-game-state
   "Reset game state based on `event-type`."
   [state]
   (-> state
       (remove-eliminated-players)
+      (remove-winner-player)
+      (increase-blinds)
       (update :player-map reset-player-map-status)
       (merge
        {:status             :game-status/init,
@@ -455,7 +493,7 @@
   (let [prize-map          (->> pots
                                 (mapcat (fn [{:keys [amount winner-ids]}]
                                           (let [cnt      (js/BigInt (count winner-ids))
-                                                reminder (mod amount (* sb cnt))
+                                                reminder (mod amount cnt)
                                                 prize    (/ (- amount reminder) cnt)]
                                             (cons
                                              {:reminder reminder}
@@ -745,8 +783,7 @@
                        :data {:winner-id winner-id}}]
         (-> state
             (update :api-requests conj request)
-            (assoc :winner-id  winner-id
-                   :player-map {})))
+            (assoc :winner-id winner-id)))
       state)))
 
 (defn- submit-game-result
@@ -970,17 +1007,13 @@
 
   Only apply when game-no is equal or greater."
   [state]
-  (let [{:keys [player-map game-account-state game-no joined-players]} state]
-    (log/infof "🚌Maintain players. Game NO: Local: %s Remote: %s, joined-players: %s"
-               game-no
-               (:game-no game-account-state)
-               joined-players)
-    (if (and joined-players (> (:game-no game-account-state) game-no))
+  (let [{:keys [player-map joined-players]} state]
+    (log/infof "🚌Maintain players. Joined-players: %s" joined-players)
+    (if (seq joined-players)
       (-> state
           (assoc :player-map
                  (merge (m/players->player-map joined-players)
                         player-map))
-          (assoc :game-no (:game-no game-account-state))
           (assoc :joined-players nil))
       state)))
 
@@ -988,12 +1021,27 @@
   [o n]
   (mapv #(or %1 %2) (or o (repeat 9 nil)) n))
 
+(def empty-players (vec (repeat c/max-player-num nil)))
+
 (defn merge-sync-state
   "Merge game account state."
-  [state game-account-state joined-players]
-  (-> state
-      (assoc :game-account-state game-account-state)
-      (update :joined-players merge-joined-players joined-players)))
+  [state game-account-state]
+  (let [old-state      (:game-account-state state)
+        old-players    (or (:players old-state) empty-players)
+        new-players    (:players game-account-state)
+        joined-players (map (fn [idx]
+                              (let [o (nth old-players idx)
+                                    n (nth new-players idx)]
+                                (cond
+                                  o        nil
+                                  (nil? n) nil
+                                  :else    n)))
+                            (range 9))]
+    (log/infof "😀Joined players: %s" (map :pubkey joined-players))
+    (-> state
+        (assoc :game-account-state game-account-state
+               :game-no (:game-no game-account-state))
+        (update :joined-players merge-joined-players joined-players))))
 
 (defn reserve-dispatch
   [state]

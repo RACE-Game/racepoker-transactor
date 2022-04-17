@@ -40,7 +40,7 @@
          (fn [_req res]
            (let [{:keys [connected-uids]} @websocket
                  uids (distinct (map second (:any @connected-uids)))]
-             (.send res "Official transactor connected."))))
+             (.send res "Transactor connected."))))
    (.use (fn [req _res next]
            (log/warnf "Unhandled request: %s" (.-originalUrl ^js req))
            (next)))))

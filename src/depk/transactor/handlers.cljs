@@ -81,7 +81,7 @@
 
 (defmethod event-msg-handler :player/call
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
-  ;; (log/infof "Call: %s" uid)
+  (log/infof "⚽Call: %s" uid)
   (a/go
    (let [[game-id player-id] uid]
      (a/<! (game/player-call @game-manager game-id player-id))
@@ -89,16 +89,16 @@
 
 (defmethod event-msg-handler :player/raise
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
-  ;; (log/infof "Raise: %s" uid)
   (a/go
    (let [[game-id player-id] uid
          {:keys [amount]}    ?data]
+     (log/infof "⚽Raise: %s %s" uid amount)
      (a/<! (game/player-raise @game-manager game-id player-id amount))
      (?reply-fn {:result :ok}))))
 
 (defmethod event-msg-handler :player/check
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
-  ;; (log/infof "Check: %s" uid)
+  (log/infof "⚽Check: %s" uid)
   (a/go
    (let [[game-id player-id] uid]
      (a/<! (game/player-check @game-manager game-id player-id))
@@ -106,16 +106,16 @@
 
 (defmethod event-msg-handler :player/bet
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
-  ;; (log/infof "Bet: %s" uid)
   (a/go
    (let [[game-id player-id] uid
          {:keys [amount]}    ?data]
+     (log/infof "⚽Bet: %s %s" uid amount)
      (a/<! (game/player-bet @game-manager game-id player-id amount))
      (?reply-fn {:result :ok}))))
 
 (defmethod event-msg-handler :player/fold
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
-  ;; (log/infof "Fold: %s" uid)
+  (log/infof "⚽Fold: %s" uid)
   (a/go
    (let [[game-id player-id]  uid
          {:keys [share-keys]} ?data]
@@ -124,7 +124,7 @@
 
 (defmethod event-msg-handler :message/text
   [{:as ev-msg, :keys [connected-uids event id uid ?data ring-req ?reply-fn send-fn]}]
-  (log/infof "Player send text message: %s" ?data)
+  ;; (log/infof "Player send text message: %s" ?data)
   (let [[game-id player-id] uid
         msg {:game-id    (:game-id ?data),
              :sender     player-id,

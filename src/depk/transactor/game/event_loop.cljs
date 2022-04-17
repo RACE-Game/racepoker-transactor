@@ -11,6 +11,7 @@
 
 (def event-list
   #{:system/sync-state
+    :system/force-sync-state
     :system/reset
     :system/start-game
     :client/shuffle-cards
@@ -91,21 +92,21 @@
                   ;; (js/console.debug "state: " v)
                   (handle-result event {:result :ok, :state v}))
                 (do
-                  ;; (log/infof "Error in event handler: %s, event: %s"
-                  ;;             (ex-message v)
-                  ;;             (prn-str event))
+                  ;; (log/infof "🧱Error in event handler: %s, event: %s"
+                  ;;            (ex-message v)
+                  ;;            (:type event))
                   {:result :err, :state state, :error v})))))
 
         (catch ExceptionInfo e
-          ;; (log/infof "🧱Error in event handler: %s, event: %s"
-          ;;             (ex-message e)
-          ;;             (prn-str event))
+          (when (:player-id event)
+            (log/infof "🧱Error in event handler: %s, event: %s"
+                       (ex-message e)
+                       (:type event)))
           {:result :err, :state state, :error e})
         (catch js/Error e
-          (js/console.log "e: " e)
           ;; (log/errorf "🧱Error in event handler: %s, event: %s"
           ;;             (ex-message e)
-          ;;             (prn-str event))
+          ;;             (:type event))
           {:result :err, :state state, :error e}))))
 
 (defn dispatch-delay-event
