@@ -234,4 +234,4 @@
                 :shuffle-player-id :encrypt-player-id
                 :btn :sb :bb :require-key-idents :share-key-map
                 :card-ciphers :player-actions :winning-type :dispatch-id
-                :game-id :this-event :winner-id :size]))
+                :game-id :this-event :winner-id :size :op-player-ids]))

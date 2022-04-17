@@ -248,11 +248,12 @@
   Dropout players will not be counted."
   [state]
   (let [{:keys [btn]} state
-        player-ids    (list-players-in-order state btn player-online?)]
+        player-ids    (map :player-id (list-players-in-order state btn player-online?))]
     (log/infof "🫱Op player ids: %s" player-ids)
     (assoc state :op-player-ids player-ids)))
 
-(defn next-op-player-id [state current-player-id]
+(defn next-op-player-id
+  [state current-player-id]
   (let [{:keys [op-player-ids]} state]
     (if (not current-player-id)
       (first op-player-ids)
@@ -261,7 +262,8 @@
           (first rest)
           (first op-player-ids))))))
 
-(defn with-next-op-player-id-as [state k]
+(defn with-next-op-player-id-as
+  [state k]
   (let [id (next-op-player-id state (get state k))]
     (assoc state k id)))
 
@@ -395,10 +397,12 @@
           (m/make-event :system/key-share-timeout state {})]))
 
 (defn dispatch-player-action-timeout
-  [state]
+  [{:keys [action-player-id player-map], :as state}]
   (assoc state
          :dispatch-event
-         [c/player-action-timeout-delay
+         [(if (= :normal (get-in player-map [action-player-id :online-status]))
+            c/player-action-timeout-delay
+            c/droupout-player-action-timeout-delay)
           (m/make-event :system/player-action-timeout state {})]))
 
 (defn valid-key-ident?
@@ -508,8 +512,8 @@
   "Update prize-map in state.
 
   Depends on pots."
-  [{:keys [pots sb btn], :as state}]
-  ;; (log/infof "Update prize map: %s" pots)
+  [{:keys [pots btn], :as state}]
+  (log/infof "🏆Update prize map: %s" pots)
   (let [prize-map          (->> pots
                                 (mapcat (fn [{:keys [amount winner-ids]}]
                                           (let [cnt      (js/BigInt (count winner-ids))
@@ -519,17 +523,18 @@
                                              {:reminder reminder}
                                              (for [id winner-ids]
                                                {id prize})))))
-                                (apply merge-with +))
+                                (apply merge-with (fnil + (js/BigInt 0) (js/BigInt 0))))
         reminder           (get prize-map :reminder (js/BigInt 0))
         prize-map          (dissoc prize-map :reminder)
         reminder-player-id (-> (list-players-in-order
                                 state
                                 btn
                                 (fn [{:keys [player-id status]}]
-                                  (and (#{:player-status/acted :player-status/allin} status)
+                                  (and (#{:player-status/acted :player-status/allin :player-status/wait} status)
                                        (get prize-map player-id))))
                                first
                                :player-id)
+        _ (log/infof "🍀Reminder player id: %s" reminder-player-id)
         prize-map          (update prize-map reminder-player-id + reminder)]
     (assoc state :prize-map prize-map)))
 
@@ -538,8 +543,7 @@
 
   Depends on player-map and pots."
   [{:keys [total-bet-map prize-map player-map], :as state}]
-  (log/infof "total-bet-map: %s" total-bet-map)
-  (log/infof "prize-map: %s" prize-map)
+  (log/infof "🪙Update chips change map")
   (let [init-map         (->> (for [[pid] player-map]
                                 [pid (js/BigInt 0)])
                               (into {}))
@@ -702,7 +706,7 @@
        (into {})))
 
 (defn- decrypt-community-cards
-  [{:keys [player-map share-key-map card-ciphers], :as state}]
+  [{:keys [op-player-ids player-map share-key-map card-ciphers], :as state}]
   (go-try
    (let [offset    (* 2 (count player-map))
          idxs      (->> offset
@@ -712,8 +716,7 @@
          ciphers   (e/hex->ciphers card-ciphers)
          ciphers   (mapv ciphers idxs)
          aes-keys  (<!?
-                    (->> player-map
-                         keys
+                    (->> op-player-ids
                          (mapcat (fn [id]
                                    (vec
                                     (for [idx idxs]
@@ -732,7 +735,7 @@
      cards)))
 
 (defn- decrypt-showdown-card-map
-  [{:keys [card-ciphers share-key-map player-map], :as state}]
+  [{:keys [op-player-ids card-ciphers share-key-map player-map], :as state}]
   (go-try
    (let [orig-ciphers      (e/hex->ciphers card-ciphers)
 
@@ -751,8 +754,7 @@
          idxs              (mapv second rel)
          ids               (mapv last rel)
 
-         aes-keys          (<!? (->> player-map
-                                     (keys)
+         aes-keys          (<!? (->> op-player-ids
                                      (mapcat (fn [id]
                                                (vec
                                                 (for [idx idxs]

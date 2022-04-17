@@ -107,6 +107,7 @@
           ;; (log/errorf "🧱Error in event handler: %s, event: %s"
           ;;             (ex-message e)
           ;;             (:type event))
+          (js/console.error e)
           {:result :err, :state state, :error e}))))
 
 (defn dispatch-delay-event

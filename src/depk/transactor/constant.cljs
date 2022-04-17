@@ -8,6 +8,7 @@
 (def shuffle-timeout-delay 15000)
 (def encrypt-timeout-delay 10000)
 (def player-action-timeout-delay 30000)
+(def droupout-player-action-timeout-delay 5000)
 (def reset-timeout-delay 1000)
 (def sng-next-game-timeout-delay 30000)
 

@@ -76,9 +76,15 @@
 
   (log/infof "🎰Start game, number of players: %s" (count player-map))
 
-  ;; Start when all players ready
-  ;; otherwise kick all non-ready players
   (cond
+    ;; Bonus game closed
+    (and (= :bonus game-type)
+         (not (#{:open :in-progress} (:status game-account-state))))
+    (do
+      (log/infof "🛑Bonus game is closed.")
+      (-> state
+          (misc/add-joined-player)))
+
     ;; SNG type without full table
     (and (#{:bonus :sng :tournament} game-type)
          (< (count player-map) size)
@@ -96,6 +102,17 @@
       (-> state
           (misc/submit-dropout-players)
           (misc/remove-dropout-players)
+          (misc/add-joined-player)
+          (misc/reset-game-state)))
+
+    ;; At least one player is ready.
+    ;; Otherwise the SNG game can not start.
+    (and (#{:sng :bonus} game-type)
+         (every? #(not= :normal (:online-status %)) (vals player-map))
+         (= :in-progress (:status game-account-state)))
+    (do
+      (log/infof "🛑All players are not ready (SNG)")
+      (-> state
           (misc/add-joined-player)
           (misc/reset-game-state)))
 
