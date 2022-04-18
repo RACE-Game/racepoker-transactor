@@ -158,7 +158,8 @@
   "Remove all players who not send alive events."
   [{:keys [player-map game-account-state], :as state}]
   (log/infof "🧹Submit left players, game-status: %s" (:status game-account-state))
-  (if (= :open (:status game-account-state))
+  (if (and (= :open (:status game-account-state))
+           (some #{:dropout :leave} (map :online-status (vals player-map))))
     (let [request {:type :system/settle-failed,
                    :data {:player-status-map
                           (->> (for [[id p] player-map]
@@ -355,13 +356,26 @@
         [next-btn _] (next-position-player state btn)]
     (assoc state :btn next-btn)))
 
+(defn can-quick-start?
+  [{:keys [player-map game-type size]}]
+  (let [all-alive? (and (every? #(= :normal (:online-status %)) (vals player-map))
+                        (>= (count player-map) 2))]
+    (or (and (= :cash game-type)
+             all-alive?)
+
+        (and (#{:bonus :sng} game-type)
+             (= (count player-map) size)
+             all-alive?))))
+
 (defn dispatch-start-game
   [state & [start-delay]]
-  (let [{:keys [next-start-ts]} state]
-    (-> state
-        (assoc :dispatch-event
-               [(or start-delay c/default-start-game-delay)
-                (m/make-event :system/start-game state {})]))))
+  (-> state
+      (assoc :dispatch-event
+             [(cond
+                start-delay start-delay
+                (can-quick-start? state) c/continue-start-game-delay
+                :else c/default-start-game-delay)
+              (m/make-event :system/start-game state {})])))
 
 (defn mark-dropout-players
   [state player-ids]
@@ -530,7 +544,9 @@
                                 state
                                 btn
                                 (fn [{:keys [player-id status]}]
-                                  (and (#{:player-status/acted :player-status/allin :player-status/wait} status)
+                                  (and (#{:player-status/acted :player-status/allin
+                                          :player-status/wait}
+                                        status)
                                        (get prize-map player-id))))
                                first
                                :player-id)

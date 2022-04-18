@@ -127,8 +127,8 @@
                    :when p]
              (log/info "📝-" (str (:pubkey p)) (:chips p)))
          _ (log/info "📝Settle updates")
-         _ (doseq [[p c] chips-change-map]
-             (log/info "📝-" p c (get player-status-map p)))
+         _ (doseq [[p s] player-status-map]
+             (log/info "📝-" p (get chips-change-map p "N/A") s))
          _ (when-not (some? game-account-state)
              (log/errorf "🚨game account not found: game[%s]" game-id))
 
@@ -198,7 +198,7 @@
            (log/info "🎉On-chain players")
            (doseq [p     (:players new-state)
                    :when p]
-             (log/info "🎉-" (str (:pubkey p)) (:chips p)))
+             (log/info "🎉-" (str (:pubkey p)) (:chips p) (:status p)))
            :ok)
 
        no-err?

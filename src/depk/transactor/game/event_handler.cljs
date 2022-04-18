@@ -29,13 +29,15 @@
     (misc/state-already-merged! state event))
 
   (log/infof "✨New game account state with game-no: %s" game-no)
-
   (cond-> (-> state
-              (misc/merge-sync-state game-account-state)
-              (misc/reserve-dispatch))
+              (misc/merge-sync-state game-account-state))
+
     (#{:game-status/init} status)
     (-> (misc/add-joined-player)
-        (misc/dispatch-start-game))))
+        (misc/dispatch-start-game))
+
+    (not (#{:game-status/init} status))
+    (misc/reserve-dispatch)))
 
 ;; system/force-sync-state
 ;; receiving this event when something goes wrong.
@@ -86,15 +88,19 @@
           (misc/add-joined-player)))
 
     ;; SNG type without full table
+    ;; Kick the non-ready players
     (and (#{:bonus :sng :tournament} game-type)
          (< (count player-map) size)
-         (= :open (:status game-account-state)))
+         (nil? start-time))
     (do
       (log/infof "🚧No enough players for SNG/Bonus game.")
       (-> state
-          (misc/add-joined-player)))
+          (misc/submit-dropout-players)
+          (misc/remove-dropout-players)
+          (misc/add-joined-player)
+          (misc/reset-game-state)))
 
-    ;; If any client is not ready, kick it
+    ;; In cash game, if any client is not ready, kick it
     (and (= :cash game-type)
          (not (every? #(= :normal (:online-status %)) (vals player-map))))
     (do
@@ -362,7 +368,7 @@
 ;; A event received when a client is ready for next game
 ;; All client whiout this event will be kicked when game start
 (defmethod handle-event :client/alive
-  [{:keys [status player-map], :as state}
+  [{:keys [status player-map game-type size], :as state}
    {player-id :player-id,
     :as       event}]
 
@@ -375,14 +381,10 @@
   (when-not (= status :game-status/init)
     (misc/invalid-game-status! state event))
 
-  (let [player-map (assoc-in player-map [player-id :online-status] :normal)
-        all-alive? (and (every? #(= :normal (:online-status %)) (vals player-map))
-                        (>= (count player-map) 2))]
+  (let [player-map (assoc-in player-map [player-id :online-status] :normal)]
     (-> state
         (assoc :player-map player-map)
-        (misc/dispatch-start-game (if all-alive?
-                                    c/continue-start-game-delay
-                                    c/default-start-game-delay)))))
+        (misc/dispatch-start-game))))
 
 ;; client/leave
 ;; A event received when a player leave game
@@ -392,7 +394,7 @@
 ;; 2. Game is not running
 ;; Send a claim transaction for player
 (defmethod handle-event :client/leave
-  [{:keys [status player-map action-player-id game-type game-account-state], :as state}
+  [{:keys [status player-map action-player-id game-type game-account-state start-time], :as state}
    {{:keys [released-keys]} :data,
     player-id :player-id,
     :as       event}]
@@ -410,7 +412,7 @@
 
     (cond
       (and (#{:bonus :sng} game-type)
-           (not= :open (:status game-account-state)))
+           (some? start-time))
       (misc/cant-leave-game! state event)
 
       ;; Game is not running, can leave immetdiately
