@@ -29,15 +29,10 @@
     (misc/state-already-merged! state event))
 
   (log/infof "✨New game account state with game-no: %s" game-no)
-  (cond-> (-> state
-              (misc/merge-sync-state game-account-state))
-
-    (#{:game-status/init} status)
-    (-> (misc/add-joined-player)
-        (misc/dispatch-start-game))
-
-    (not (#{:game-status/init} status))
-    (misc/reserve-dispatch)))
+  (-> state
+      (misc/merge-sync-state game-account-state)
+      (misc/reserve-dispatch)
+      (misc/dispatch-start-game)))
 
 ;; system/force-sync-state
 ;; receiving this event when something goes wrong.
@@ -52,14 +47,16 @@
 ;; system/reset
 ;; receiving this event for reset states
 (defmethod handle-event :system/reset
-  [{:keys [status], :as state} event]
-
-  (when-not (#{:game-status/settle :game-status/showdown} status)
-    (misc/invalid-game-status! state event))
-
+  [{:keys [player-map], :as state} event]
+  ;; (log/infof "Reset, player-map: %s" player-map)
   (-> state
-      (misc/reset-game-state)
+      (misc/remove-eliminated-players)
+      (misc/reset-sng-state)
+      (misc/submit-non-alive-players)
+      (misc/remove-non-alive-players)
       (misc/add-joined-player)
+      (misc/increase-blinds)            ; For SNG only
+      (misc/reset-game-state)
       (misc/dispatch-start-game)))
 
 ;; system/start-game
@@ -77,16 +74,10 @@
     (misc/invalid-game-status! state event))
 
   (log/infof "🎰Start game, number of players: %s" (count player-map))
+  (doseq [[id p] player-map]
+    (log/infof "🎰-%s %s" id (:online-status p)))
 
   (cond
-    ;; Bonus game closed
-    (and (= :bonus game-type)
-         (not (#{:open :in-progress} (:status game-account-state))))
-    (do
-      (log/infof "🛑Bonus game is closed.")
-      (-> state
-          (misc/add-joined-player)))
-
     ;; SNG type without full table
     ;; Kick the non-ready players
     (and (#{:bonus :sng :tournament} game-type)
@@ -95,10 +86,7 @@
     (do
       (log/infof "🚧No enough players for SNG/Bonus game.")
       (-> state
-          (misc/submit-dropout-players)
-          (misc/remove-dropout-players)
-          (misc/add-joined-player)
-          (misc/reset-game-state)))
+          (misc/dispatch-reset)))
 
     ;; In cash game, if any client is not ready, kick it
     (and (= :cash game-type)
@@ -106,10 +94,7 @@
     (do
       (log/infof "🛑Not all players are ready")
       (-> state
-          (misc/submit-dropout-players)
-          (misc/remove-dropout-players)
-          (misc/add-joined-player)
-          (misc/reset-game-state)))
+          (misc/dispatch-reset)))
 
     ;; At least one player is ready.
     ;; Otherwise the SNG game can not start.
@@ -119,8 +104,7 @@
     (do
       (log/infof "🛑All players are not ready (SNG)")
       (-> state
-          (misc/add-joined-player)
-          (misc/reset-game-state)))
+          (misc/dispatch-reset)))
 
     ;; If the number of players is not enough for starting
     ;; Require further alive event from the only client
@@ -128,10 +112,7 @@
     (do
       (log/infof "🛑No enough players to start")
       (-> state
-          (misc/mark-dropout-players (keys player-map))
-          (misc/add-joined-player)
-          (misc/reset-game-state)
-          (misc/dispatch-start-game)))
+          (misc/dispatch-reset)))
 
     ;; No players
     ;; Reset game state, and do nothing
@@ -140,10 +121,11 @@
     (do
       (log/infof "🛑No players to start")
       (-> state
-          (misc/add-joined-player)
-          (misc/reset-game-state)))
+          (misc/dispatch-reset)))
 
     :else
+    ;; Enough players and all players are ready
+    ;; Can start immediately
     (go
      (let [next-btn   (misc/next-btn state)
            ciphers    (encrypt/cards->card-strs misc/default-deck-of-cards)
@@ -304,9 +286,7 @@
             ;; preflop street, game should not start
             (-> state
                 (misc/mark-dropout-players timeout-player-ids)
-                (misc/submit-dropout-players)
-                (misc/remove-dropout-players)
-                (misc/reset-game-state))
+                (misc/terminate timeout-player-ids))
             ;; other streets, continue game when possible
             ;; TODO
             (-> state
@@ -328,9 +308,7 @@
 
   (-> state
       (misc/mark-dropout-players [shuffle-player-id])
-      (misc/submit-dropout-players)
-      (misc/remove-dropout-players)
-      (misc/reset-game-state)))
+      (misc/dispatch-reset)))
 
 ;; system/encrypt-timeout
 ;; Receiving this event when encrypting is timeout
@@ -346,9 +324,7 @@
 
   (-> state
       (misc/mark-dropout-players [encrypt-player-id])
-      (misc/submit-dropout-players)
-      (misc/remove-dropout-players)
-      (misc/reset-game-state)))
+      (misc/dispatch-reset)))
 
 ;; system/player-action-timeout
 (defmethod handle-event :system/player-action-timeout
@@ -364,10 +340,10 @@
       (assoc-in [:player-map action-player-id :status] :player-status/fold)
       (misc/next-state)))
 
-;; client/alive
-;; A event received when a client is ready for next game
+;; system/dropout
+;; A event received when a client dropout its connection
 ;; All client whiout this event will be kicked when game start
-(defmethod handle-event :client/alive
+(defmethod handle-event :system/dropout
   [{:keys [status player-map game-type size], :as state}
    {player-id :player-id,
     :as       event}]
@@ -375,16 +351,29 @@
   (when-not (get player-map player-id)
     (misc/invalid-player-id! state event))
 
-  (when (= :normal (get-in player-map [player-id :online-status]))
-    (misc/player-already-alive! state event))
+  (log/infof "💔️Player dropout: %s" player-id)
 
-  (when-not (= status :game-status/init)
-    (misc/invalid-game-status! state event))
+  (let [player-map (assoc-in player-map [player-id :online-status] :dropout)]
+    (-> state
+        (assoc :player-map player-map)
+        (misc/reserve-dispatch))))
+
+;; system/dropout
+;; A event received when a client established
+(defmethod handle-event :system/alive
+  [{:keys [status player-map game-type size], :as state}
+   {player-id :player-id,
+    :as       event}]
+
+  (when-not (get player-map player-id)
+    (misc/invalid-player-id! state event))
+
+  (log/infof "❤️Player alive: %s" player-id)
 
   (let [player-map (assoc-in player-map [player-id :online-status] :normal)]
     (-> state
         (assoc :player-map player-map)
-        (misc/dispatch-start-game))))
+        (misc/reserve-dispatch))))
 
 ;; client/leave
 ;; A event received when a player leave game
@@ -424,8 +413,7 @@
       (do
         (log/infof "⏪️Player leave: %s" player-id)
         (-> new-state
-            (misc/submit-dropout-players)
-            (misc/remove-dropout-players)))
+            (misc/dispatch-reset)))
 
       ;; The last player will win immediately
       (= 1 (count remain-players))

@@ -210,7 +210,7 @@
            (log/info "💥Expected players")
            (doseq [[_ p] expected-player-map]
              (log/info "💥-" (:player-id p) (:chips p)))
-           :ok)
+           :out-of-sync)
 
        :else
        (do (log/errorf "🚨Transaction failed") :err)))))
@@ -333,6 +333,9 @@
          (= rs :ok)
          nil
 
+         (= rs :out-of-sync)
+         (force-sync game-id (:output this))
+
          (< cnt 4)
          (do
            (log/infof "Retry, count: %s" cnt)
@@ -349,6 +352,9 @@
        (cond
          (= rs :ok)
          nil
+
+         (= rs :out-of-sync)
+         (force-sync game-id (:output this))
 
          (< cnt 4)
          (do
@@ -370,7 +376,7 @@
          (< cnt 4)
          (do
            (log/infof "Retry, count: %s" cnt)
-           ;; (a/<! (a/timeout 10000))
+           (a/<! (a/timeout 10000))
            (recur (inc cnt)))
 
          :else

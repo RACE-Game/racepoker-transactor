@@ -42,14 +42,27 @@
                                       player-id))
      (throw (ex-info "game not exist" {:game-id game-id})))))
 
-;; Alive, confirmation before start
+;; Alive, reconnect
 (defn alive
   [game-manager game-id player-id]
   {:pre [(string? game-id)]}
   (go-try
    (if-let [game-handle (manager/find-game game-manager game-id)]
      (handle/send-event game-handle
-                        (m/make-event :client/alive
+                        (m/make-event :system/alive
+                                      (handle/get-snapshot game-handle)
+                                      {}
+                                      player-id))
+     (throw (ex-info "game not exist" {:game-id game-id})))))
+
+;; Dropout, disconnect
+(defn dropout
+  [game-manager game-id player-id]
+  {:pre [(string? game-id)]}
+  (go-try
+   (if-let [game-handle (manager/find-game game-manager game-id)]
+     (handle/send-event game-handle
+                        (m/make-event :system/dropout
                                       (handle/get-snapshot game-handle)
                                       {}
                                       player-id))

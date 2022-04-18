@@ -194,7 +194,7 @@
                                  (:chips p)
                                  idx
                                  :player-status/wait
-                                 :dropout)))))
+                                 :normal)))))
        (map (juxt :player-id identity))
        (into {})))
 

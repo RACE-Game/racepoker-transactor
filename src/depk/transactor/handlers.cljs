@@ -16,7 +16,16 @@
 (defmulti event-msg-handler :id)
 
 (defmethod event-msg-handler :default
-  [{:as ev-msg, :keys [event id ?data ring-req ?reply-fn send-fn]}])
+  [{:as ev-msg, :keys [event id ?data ring-req ?reply-fn send-fn]}]
+  (let [[ev-id ev-data] event]
+    (case ev-id
+      :chsk/uidport-close
+      (game/dropout @game-manager (first ev-data) (last ev-data))
+
+      :chsk/uidport-open
+      (game/alive @game-manager (first ev-data) (last ev-data))
+
+      :noop)))
 
 (defmethod event-msg-handler :game/attach
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]

@@ -22,6 +22,8 @@
     :system/encrypt-timeout
     :system/player-action-timeout
     :client/alive
+    :system/alive
+    :system/dropout
     :client/leave
     :player/fold
     :player/call
@@ -80,43 +82,41 @@
 
   An event with an invalid state-id is considered to be expired."
   [state event]
-  (go (try
-        ;; Check event expired?
-        (when (expired-event? state event)
-          (expired-event! state event))
-
-        ;; Process event
-        (let [new-state-id (uuid/v4)
-              new-state    (event-handler/handle-event (assoc state :state-id new-state-id) event)]
-          (if (map? new-state)
-            (do
-              ;; (log/infof "Handle event success: %s" (:type event))
-              ;; (js/console.debug "state: " new-state)
-              (handle-result event {:result :ok, :state new-state}))
-            (let [v (<! new-state)]
-              (if (map? v)
-                (do
-                  ;; (log/infof "Handle event success %s" (:type event))
-                  ;; (js/console.debug "state: " v)
-                  (handle-result event {:result :ok, :state v}))
-                (do
-                  ;; (log/infof "🧱Error in event handler: %s, event: %s"
-                  ;;            (ex-message v)
-                  ;;            (:type event))
-                  {:result :err, :state state, :error v})))))
-
-        (catch ExceptionInfo e
-          (when (:player-id event)
-            (log/infof "🧱Error in event handler: %s, event: %s"
-                       (ex-message e)
-                       (:type event)))
-          {:result :err, :state state, :error e})
-        (catch js/Error e
-          ;; (log/errorf "🧱Error in event handler: %s, event: %s"
-          ;;             (ex-message e)
-          ;;             (:type event))
-          (js/console.error e)
-          {:result :err, :state state, :error e}))))
+  (go
+   (try
+     (if (expired-event? state event)
+       {:result :expired, :state state}
+       ;; Process event
+       (let [new-state-id (uuid/v4)
+             new-state    (event-handler/handle-event (assoc state :state-id new-state-id) event)]
+         (if (map? new-state)
+           (do
+             ;; (log/infof "Handle event success: %s" (:type event))
+             ;; (js/console.debug "state: " new-state)
+             (handle-result event {:result :ok, :state new-state}))
+           (let [v (<! new-state)]
+             (if (map? v)
+               (do
+                 ;; (log/infof "Handle event success %s" (:type event))
+                 ;; (js/console.debug "state: " v)
+                 (handle-result event {:result :ok, :state v}))
+               (do
+                 ;; (log/infof "🧱Error in event handler: %s, event: %s"
+                 ;;            (ex-message v)
+                 ;;            (:type event))
+                 {:result :err, :state state, :error v}))))))
+     (catch ExceptionInfo e
+       (when (:player-id event)
+         (log/infof "🧱Error in event handler: %s, event: %s"
+                    (ex-message e)
+                    (:type event)))
+       {:result :err, :state state, :error e})
+     (catch js/Error e
+       ;; (log/errorf "🧱Error in event handler: %s, event: %s"
+       ;;             (ex-message e)
+       ;;             (:type event))
+       (js/console.error e)
+       {:result :err, :state state, :error e}))))
 
 (defn dispatch-delay-event
   "Dispatch dispatch-events to input channel.
@@ -172,13 +172,21 @@
   (go-loop [state   init-state
             records []]
     (let [event (<! input)]
-      ;; (log/infof "Event loop receive: %s" (:type event))
+
       (if (event-list (:type event))
         (let [old-state state
 
-              {:keys [result state api-requests dispatch-event]}
+              {:keys [result state api-requests dispatch-event error]}
               (<! (handle-event state event))]
 
+          (log/infof "🤡Event loop process %s %s player-id: %s %s"
+                     (case result
+                       :ok      "🟩"
+                       :err     "🟥"
+                       :expired "🟨")
+                     (:type event)
+                     (:player-id event)
+                     (if error (ex-message error) ""))
           (if (= result :ok)
             (let [records
                   (collect-and-dispatch-game-history old-state state event records output)]

@@ -16,6 +16,8 @@
       (condp = type
         :system/broadcast-state
         (let [{:keys [state game-id]} data]
+          ;; Do not dispatch reset event.
+          (log/infof "🔈Broadcaster event: %s status: %s" (:this-event state) (:status state))
           (doseq [uid   (:any @connected-uids)
                   :when (= game-id (first uid))]
             (reset! snapshot state)

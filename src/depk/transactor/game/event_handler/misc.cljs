@@ -27,7 +27,7 @@
 
 (defn invalid-game-status!
   [state event]
-  (throw (ex-info "Invalid game status"
+  (throw (ex-info (gstr/format "Invalid game status: %s" (:status state))
                   {:state state,
                    :event event})))
 
@@ -132,47 +132,52 @@
     (log/infof "🧹Remove eliminated players: %s" eliminated-pids)
     (update state :player-map (fn [m] (apply dissoc m eliminated-pids)))))
 
-(defn remove-winner-player
+(defn reset-sng-state
   [{:keys [winner-id base-sb base-bb], :as state}]
   (if winner-id
-    (assoc state
-           :player-map {}
-           :start-time nil
-           :sb         base-sb
-           :bb         base-bb)
+    (do (log/infof "🧹Clean up SNG state")
+        (assoc state
+               :player-map {}
+               :start-time nil
+               :sb         base-sb
+               :bb         base-bb))
     state))
 
-(defn remove-dropout-players
-  "Remove all players who not send alive events."
-  [{:keys [player-map game-account-state], :as state}]
-  (if (#{:open nil} (:status game-account-state))
+(defn remove-non-alive-players
+  "Remove all players who doesn't have live online status."
+  [{:keys [player-map game-type], :as state}]
+  (if (= :cash game-type)
     (let [dropout-pids (->> player-map
                             vals
-                            (filter #(not= :normal (:online-status %)))
+                            (remove #(= :normal (:online-status %)))
                             (map :player-id))]
-      (log/infof "🧹Remove dropout players: %s" dropout-pids)
+      (log/infof "🧹Remove non-alive players: %s" dropout-pids)
       (update state :player-map (fn [m] (apply dissoc m dropout-pids))))
     state))
 
-(defn submit-dropout-players
-  "Remove all players who not send alive events."
-  [{:keys [player-map game-account-state], :as state}]
-  (log/infof "🧹Submit left players, game-status: %s" (:status game-account-state))
-  (if (and (= :open (:status game-account-state))
+(defn submit-non-alive-players
+  "Submit a request to remove non alive on-chain players."
+  [{:keys [player-map game-account-state game-type], :as state}]
+  (if (and (= :cash game-type)
            (some #{:dropout :leave} (map :online-status (vals player-map))))
-    (let [request {:type :system/settle-failed,
-                   :data {:player-status-map
-                          (->> (for [[id p] player-map]
-                                 [id
-                                  (if (= :normal (:online-status p))
-                                    :normal
-                                    :leave)
-                                  (:online-status p :leave)])
-                               (into {})),
-                          :expected-player-map
-                          player-map}}]
-      ;; send settlement for leaving players
-      (update state :api-requests conj request))
+    (do
+      (log/infof "🧹Submit remove players, game-status: %s, players: %s"
+                 (:status game-account-state)
+                 (->> (vals player-map)
+                      (remove (comp #{:normal} :online-status))
+                      (map :player-id)))
+      (let [request {:type :system/settle-failed,
+                     :data {:player-status-map
+                            (->> (for [[id p] player-map]
+                                   [id
+                                    (if (= :normal (:online-status p))
+                                      :normal
+                                      :leave)])
+                                 (into {})),
+                            :expected-player-map
+                            player-map}}]
+        ;; send settlement for leaving players
+        (update state :api-requests conj request)))
     state))
 
 (defn valid-card?
@@ -272,9 +277,7 @@
   [player-map]
   (->> (for [[pid p] player-map]
          [pid
-          (assoc p
-                 :status        :player-status/wait
-                 :online-status :dropout)])
+          (assoc p :status :player-status/wait)])
        (into {})))
 
 (defn increase-blinds
@@ -297,12 +300,9 @@
     state))
 
 (defn reset-game-state
-  "Reset game state based on `event-type`."
+  "Reset game state. All player status will be set to wait/dropout."
   [state]
   (-> state
-      (remove-eliminated-players)
-      (remove-winner-player)
-      (increase-blinds)
       (update :player-map reset-player-map-status)
       (merge
        {:status             :game-status/init,
@@ -335,7 +335,7 @@
            [pid (nth idxs (get pid-to-idx pid))])
          (into {}))))
 
-(defn- dispatch-reset
+(defn dispatch-reset
   "Dispatch reset event."
   [state]
   (assoc state
@@ -860,7 +860,6 @@
         (update-prize-map)
         (update-chips-change-map)
         (submit-game-result)
-        (remove-dropout-players)
         (dispatch-reset)
         ;; TODO, new status/type ?
         (assoc :status       :game-status/settle
@@ -899,7 +898,6 @@
          (apply-prize-map)
          (update-chips-change-map)
          (submit-game-result)
-         (remove-dropout-players)
          (dispatch-reset)
          (assoc :status       :game-status/showdown
                 :winning-type winning-type)))))
@@ -919,7 +917,6 @@
         ;; NOTE: this pot is not accurate
         (update :pots conj (m/make-pot (set (keys total-bet-map)) bet-sum #{player-id}))
         (submit-game-result)
-        (remove-dropout-players)
         (dispatch-reset)
         (assoc :status       :game-status/settle
                :winning-type :last-player
@@ -1039,6 +1036,14 @@
       :runner            (prepare-runner state)
       (invalid-next-state-case! state))))
 
+
+
+(defn merge-joined-players
+  [o n]
+  (mapv #(or %1 %2) (or o (repeat 9 nil)) n))
+
+(def empty-players (vec (repeat c/max-player-num nil)))
+
 (defn add-joined-player
   "Add joined players found in game-account-state.
 
@@ -1054,15 +1059,9 @@
           (assoc :joined-players nil))
       state)))
 
-(defn merge-joined-players
-  [o n]
-  (mapv #(or %1 %2) (or o (repeat 9 nil)) n))
-
-(def empty-players (vec (repeat c/max-player-num nil)))
-
 (defn merge-sync-state
   "Merge game account state."
-  [state game-account-state]
+  [{:keys [player-map], :as state} game-account-state]
   (let [old-state      (:game-account-state state)
         old-players    (or (:players old-state) empty-players)
         new-players    (:players game-account-state)
