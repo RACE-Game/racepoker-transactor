@@ -21,7 +21,7 @@
     :system/shuffle-timeout
     :system/encrypt-timeout
     :system/player-action-timeout
-    :client/alive
+    :client/ready
     :system/alive
     :system/dropout
     :client/leave
@@ -90,21 +90,11 @@
        (let [new-state-id (uuid/v4)
              new-state    (event-handler/handle-event (assoc state :state-id new-state-id) event)]
          (if (map? new-state)
-           (do
-             ;; (log/infof "Handle event success: %s" (:type event))
-             ;; (js/console.debug "state: " new-state)
-             (handle-result event {:result :ok, :state new-state}))
+           (handle-result event {:result :ok, :state new-state})
            (let [v (<! new-state)]
              (if (map? v)
-               (do
-                 ;; (log/infof "Handle event success %s" (:type event))
-                 ;; (js/console.debug "state: " v)
-                 (handle-result event {:result :ok, :state v}))
-               (do
-                 ;; (log/infof "🧱Error in event handler: %s, event: %s"
-                 ;;            (ex-message v)
-                 ;;            (:type event))
-                 {:result :err, :state state, :error v}))))))
+               (handle-result event {:result :ok, :state v})
+               {:result :err, :state state, :error v})))))
      (catch ExceptionInfo e
        (when (:player-id event)
          (log/infof "🧱Error in event handler: %s, event: %s"
@@ -112,9 +102,7 @@
                     (:type event)))
        {:result :err, :state state, :error e})
      (catch js/Error e
-       ;; (log/errorf "🧱Error in event handler: %s, event: %s"
-       ;;             (ex-message e)
-       ;;             (:type event))
+       (log/errorf "Error in event handler, event: %s" (prn-str event))
        (js/console.error e)
        {:result :err, :state state, :error e}))))
 
@@ -168,7 +156,7 @@
   [game-id init-state input output]
   (log/infof "🏁Start event loop for game[%s]" game-id)
   ;; Put initial event
-  (go (a/>! input (make-event :system/start-game init-state)))
+  (go (a/>! input (make-event :system/reset init-state)))
   (go-loop [state   init-state
             records []]
     (let [event (<! input)]

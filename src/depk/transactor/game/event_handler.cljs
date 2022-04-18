@@ -73,7 +73,10 @@
   (when-not (= :game-status/init status)
     (misc/invalid-game-status! state event))
 
-  (log/infof "🎰Start game, number of players: %s" (count player-map))
+  (log/infof "🎰Start game[%s / %s], number of players: %s"
+             (name game-type)
+             size
+             (count player-map))
   (doseq [[id p] player-map]
     (log/infof "🎰-%s %s" id (:online-status p)))
 
@@ -244,22 +247,30 @@
   (let [new-state (update state :share-key-map merge share-keys)]
     (cond
       (seq (misc/list-missing-key-idents new-state))
-      (-> new-state
-          (misc/dispatch-key-share-timeout))
+      (do
+        (log/infof "🔑Wait more keys")
+        (-> new-state
+            (misc/dispatch-key-share-timeout)))
 
       (= :settle after-key-share)
-      (misc/settle new-state :showdown)
+      (do
+        (log/infof "🔑Settle showdown")
+        (misc/settle new-state :showdown))
 
       (= :init-street after-key-share)
-      (-> new-state
-          (assoc :status  :game-status/play
-                 :bet-map nil)
-          (misc/next-state))
+      (do
+        (log/infof "🔑Next street")
+        (-> new-state
+            (assoc :status  :game-status/play
+                   :bet-map nil)
+            (misc/next-state)))
 
       (= :runner after-key-share)
-      (-> new-state
-          (assoc :street :street/showdown)
-          (misc/settle :runner))
+      (do
+        (log/infof "🔑Settle runner")
+        (-> new-state
+            (assoc :street :street/showdown)
+            (misc/settle :runner)))
 
       :else
       (throw (ex-info "Invalid after-key-share" {:after-key-share after-key-share})))))
@@ -278,21 +289,11 @@
     (misc/invalid-game-status! state event))
 
   (let [missing-key-idents (misc/list-missing-key-idents state)]
-    (if (seq missing-key-idents)
-      (do
-        (log/debugf "🔒️Missing key idents: %s" missing-key-idents)
-        (let [timeout-player-ids (map first missing-key-idents)]
-          (if (= :street/preflop street)
-            ;; preflop street, game should not start
-            (-> state
-                (misc/mark-dropout-players timeout-player-ids)
-                (misc/terminate timeout-player-ids))
-            ;; other streets, continue game when possible
-            ;; TODO
-            (-> state
-                (misc/mark-dropout-players timeout-player-ids)
-                (misc/next-state)))))
-      state)))
+    (log/debugf "🔒️Missing key idents: %s" missing-key-idents)
+    (let [timeout-player-ids (map first missing-key-idents)]
+      (-> state
+          (misc/mark-dropout-players timeout-player-ids)
+          (misc/next-state)))))
 
 ;; system/shuffle-timeout
 ;; Receiving this event when shuffling is timeout
@@ -340,6 +341,23 @@
       (assoc-in [:player-map action-player-id :status] :player-status/fold)
       (misc/next-state)))
 
+;; client/ready
+;; A event received when a client is ready to start
+(defmethod handle-event :client/ready
+  [{:keys [status player-map game-type size], :as state}
+   {player-id :player-id,
+    :as       event}]
+
+  (when-not (get player-map player-id)
+    (misc/invalid-player-id! state event))
+
+  (log/infof "✅Player ready: %s" player-id)
+
+  (let [player-map (assoc-in player-map [player-id :online-status] :normal)]
+    (-> state
+        (assoc :player-map player-map)
+        (misc/reserve-dispatch))))
+
 ;; system/dropout
 ;; A event received when a client dropout its connection
 ;; All client whiout this event will be kicked when game start
@@ -358,7 +376,7 @@
         (assoc :player-map player-map)
         (misc/reserve-dispatch))))
 
-;; system/dropout
+;; system/alive
 ;; A event received when a client established
 (defmethod handle-event :system/alive
   [{:keys [status player-map game-type size], :as state}
@@ -428,8 +446,7 @@
       (do
         (log/infof "⏪️player leave: %s. Game continue." player-id)
         (cond-> (-> new-state
-                    (update :released-keys-map assoc player-id released-keys)
-                    (misc/reserve-dispatch))
+                    (update :released-keys-map assoc player-id released-keys))
 
           (= player-id action-player-id)
           (misc/next-state)

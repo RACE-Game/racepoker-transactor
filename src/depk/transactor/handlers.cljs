@@ -53,12 +53,12 @@
      (a/<! (game/leave @game-manager game-id player-id released-keys))
      (?reply-fn {:result :ok}))))
 
-(defmethod event-msg-handler :client/alive
+(defmethod event-msg-handler :client/ready
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
   ;; (log/infof "Keep alive: %s" uid)
   (a/go
    (let [[game-id player-id] uid]
-     (a/<! (game/alive @game-manager game-id player-id))
+     (a/<! (game/ready @game-manager game-id player-id))
      (?reply-fn {:result :ok}))))
 
 (defmethod event-msg-handler :client/shuffle-cards

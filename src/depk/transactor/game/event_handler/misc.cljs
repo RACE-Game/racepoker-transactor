@@ -277,7 +277,9 @@
   [player-map]
   (->> (for [[pid p] player-map]
          [pid
-          (assoc p :status :player-status/wait)])
+          (assoc p
+                 :status        :player-status/wait
+                 :online-status :dropout)])
        (into {})))
 
 (defn increase-blinds
@@ -526,12 +528,17 @@
   "Update prize-map in state.
 
   Depends on pots."
-  [{:keys [pots btn], :as state}]
-  (log/infof "🏆Update prize map: %s" pots)
-  (let [prize-map          (->> pots
+  [{:keys [pots btn mint-info], :as state}]
+  (log/info "🏆Update prize map, pots:")
+  (doseq [p pots]
+    (log/infof "🏆-%s" (prn-str p)))
+
+  (let [{:keys [decimals]} mint-info
+        prize-map          (->> pots
                                 (mapcat (fn [{:keys [amount winner-ids]}]
-                                          (let [cnt      (js/BigInt (count winner-ids))
-                                                reminder (mod amount cnt)
+                                          (let [base     (js/BigInt (js/Math.pow 10 decimals))
+                                                cnt      (js/BigInt (count winner-ids))
+                                                reminder (mod amount (* cnt base))
                                                 prize    (/ (- amount reminder) cnt)]
                                             (cons
                                              {:reminder reminder}
@@ -568,6 +575,19 @@
                                           total-bet-map)
                               (merge-with (fnil + (js/BigInt 0) (js/BigInt 0))
                                           prize-map))]
+
+    (log/info "💰Players' total bet")
+    (doseq [[p b] total-bet-map]
+      (log/infof "💰-%s \t%s" p b))
+
+    (log/info "💰Players' prize map")
+    (doseq [[p a] prize-map]
+      (log/infof "💰-%s \t%s" p a))
+
+    (log/info "💰Players' chips change")
+    (doseq [[p c] chips-change-map]
+      (log/infof "💰-%s \t%s \t%s" p (get-in player-map [p :chips]) c))
+
     (assoc state :chips-change-map chips-change-map)))
 
 (defn take-bet-from-player
@@ -799,12 +819,13 @@
 
 (defn- submit-game-result-cash
   [{:keys [chips-change-map player-map], :as state}]
-  (let [request {:type :system/settle-finished,
+  (let [player-status-map (->> (for [[id p] player-map]
+                                 [id (get p :online-status :normal)])
+                               (into {}))
+        request {:type :system/settle-finished,
                  :data {:chips-change-map    chips-change-map,
                         :expected-player-map player-map,
-                        :player-status-map   (->> (for [[id p] player-map]
-                                                    [id (:online-status p :normal)])
-                                                  (into {}))}}]
+                        :player-status-map   player-status-map}}]
     (update state :api-requests conj request)))
 
 (defn- submit-game-result-sng
@@ -845,21 +866,19 @@
                                               (= :normal (:online-status p)))))
                                (map :player-id)
                                (filter (complement non-compliant-player-ids))
-                               (into #{}))
-        player-map        (->> player-map
-                               (map (fn [[pid p]]
-                                      [pid (update p :chips + (get bet-map pid (js/BigInt 0)))]))
-                               (into {}))]
+                               (into #{}))]
+
     (log/infof "🩹Terminate game, winner ids: %s, revert bet-map: %s"
                winner-player-ids
                bet-map)
     (-> state
         (assoc :bet-map nil)
-        (assoc :player-map player-map)
         (assign-winner-to-pots [winner-player-ids])
         (update-prize-map)
+        (apply-prize-map)
         (update-chips-change-map)
         (submit-game-result)
+        (remove-non-alive-players)
         (dispatch-reset)
         ;; TODO, new status/type ?
         (assoc :status       :game-status/settle
@@ -1035,8 +1054,6 @@
       :showdown          (prepare-showdown state)
       :runner            (prepare-runner state)
       (invalid-next-state-case! state))))
-
-
 
 (defn merge-joined-players
   [o n]
