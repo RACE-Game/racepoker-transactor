@@ -394,21 +394,25 @@
 ;; 2. Game is not running
 ;; Send a claim transaction for player
 (defmethod handle-event :client/leave
-  [{:keys [status player-map action-player-id game-type game-account-state start-time], :as state}
+  [{:keys [status action-player-id game-type start-time state-id], :as state}
    {{:keys [released-keys]} :data,
     player-id :player-id,
     :as       event}]
-  (let [new-state      (update-in state
-                                  [:player-map player-id]
-                                  assoc
-                                  :online-status :leave
-                                  :status        :player-status/fold)
+  (let [new-state      (-> state
+                           (update-in [:player-map player-id]
+                                      assoc
+                                      :online-status :leave
+                                      :status        :player-status/fold)
+                           (update :player-actions
+                                   conj
+                                   {:action :fold, :player-id player-id, :state-id state-id}))
 
-        remain-players (->> (:player-map new-state)
-                            vals
-                            (filter (comp #{:player-status/allin :player-status/acted
-                                            :player-status/wait :player-status/in-action}
-                                          :status)))]
+        remain-players
+        (->> (:player-map new-state)
+             vals
+             (filter (comp #{:player-status/allin :player-status/acted
+                             :player-status/wait :player-status/in-action}
+                           :status)))]
 
     (cond
       (and (#{:bonus :sng} game-type)
@@ -440,7 +444,10 @@
                     (misc/reserve-dispatch))
 
           (= player-id action-player-id)
-          (misc/next-state))))))
+          (misc/next-state)
+
+          (not (= player-id action-player-id))
+          (misc/reserve-dispatch))))))
 
 (defmethod handle-event :player/fold
   [{:keys [status action-player-id state-id], :as state}
