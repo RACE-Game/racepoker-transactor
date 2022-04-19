@@ -145,8 +145,10 @@
 
 (defn remove-non-alive-players
   "Remove all players who doesn't have live online status."
-  [{:keys [player-map game-type], :as state}]
-  (if (= :cash game-type)
+  [{:keys [player-map game-type start-time], :as state}]
+  (if (or (= :cash game-type)
+          (and (#{:bonus :sng} game-type)
+               (nil? start-time)))
     (let [dropout-pids (->> player-map
                             vals
                             (remove #(= :normal (:online-status %)))
@@ -157,8 +159,10 @@
 
 (defn submit-non-alive-players
   "Submit a request to remove non alive on-chain players."
-  [{:keys [player-map game-account-state game-type], :as state}]
-  (if (and (= :cash game-type)
+  [{:keys [player-map game-account-state game-type start-time], :as state}]
+  (if (and (or (= :cash game-type)
+               (and (#{:bonus :sng} game-type)
+                    (nil? start-time)))
            (some #{:dropout :leave} (map :online-status (vals player-map))))
     (do
       (log/infof "🧹Submit remove players, game-status: %s, players: %s"

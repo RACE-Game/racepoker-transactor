@@ -216,9 +216,14 @@
              init-state
              {:sb                 sb,
               :bb                 bb,
-              :base-sb            sb
-              :base-bb            bb
+              :base-sb            sb,
+              :base-bb            bb,
               :game-account-state game-account-state,
+              ;; If game already started, set a start-time
+              ;; Mark this game is in progress
+              ;; We can't kick players from a started SNG game
+              :start-time         (when (= :in-progress (:status game-account-state))
+                                    (.getTime (js/Date.))),
               :state-id           state-id,
               :status             :game-status/init,
               :game-no            (:game-no game-account-state),
