@@ -870,7 +870,13 @@
                                               (= :normal (:online-status p)))))
                                (map :player-id)
                                (filter (complement non-compliant-player-ids))
-                               (into #{}))]
+                               (into #{}))
+
+        ;; If no one shared its keys.
+        ;; Then everyone is the winner.
+        winner-player-ids (if (seq winner-player-ids)
+                            winner-player-ids
+                            (set (keys player-map)))]
 
     (log/infof "🩹Terminate game, winner ids: %s, revert bet-map: %s"
                winner-player-ids
