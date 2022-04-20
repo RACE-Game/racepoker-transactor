@@ -364,14 +364,14 @@
 
 (defn can-quick-start?
   [{:keys [player-map game-type size]}]
-  (let [all-alive? (and (every? #(= :normal (:online-status %)) (vals player-map))
-                        (>= (count player-map) 2))]
+  (let [all-ready? (every? #(= :normal (:online-status %)) (vals player-map))]
     (or (and (= :cash game-type)
-             all-alive?)
+             (and all-ready?
+                  (>= (count player-map) 2)))
 
         (and (#{:bonus :sng} game-type)
-             (= (count player-map) size)
-             all-alive?))))
+             (and all-ready?
+                  (= (count player-map) size))))))
 
 (defn dispatch-start-game
   [state & [start-delay]]
