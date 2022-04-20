@@ -21,7 +21,7 @@
 
 (defn state-already-merged!
   [state event]
-  (throw (ex-info "State already merged."
+  (throw (ex-info (gstr/format "State already merged: %s" (:game-id state))
                   {:state state,
                    :event event})))
 

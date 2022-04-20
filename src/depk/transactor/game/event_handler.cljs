@@ -31,8 +31,7 @@
   (log/infof "✨New game account state with game-no: %s" game-no)
   (-> state
       (misc/merge-sync-state game-account-state)
-      (misc/reserve-dispatch)
-      (misc/dispatch-start-game)))
+      (misc/reserve-dispatch)))
 
 ;; system/force-sync-state
 ;; receiving this event when something goes wrong.

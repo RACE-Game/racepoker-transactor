@@ -3,6 +3,7 @@
     "@peculiar/webcrypto": "^1.2.3",
     "@solana/spl-token": "^0.2.0",
     "@solana/web3.js": "^1.31.0",
+    "@solflare-wallet/sdk": "^1.0.12",
     "aes-js": "^3.1.2",
     "bn.js": "^5.2.0",
     "body-parser": "^1.19.2",
