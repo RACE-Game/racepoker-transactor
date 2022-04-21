@@ -65,3 +65,14 @@
   ;; (let [{:keys [store-api]} manager]
   ;;   (api/fetch-game-histories store-api game-id))
 )
+
+(defn list-game-ids-by-player-id
+  [manager player-id]
+  (when-let [handle-map @(:game-handle-map manager)]
+    (->> handle-map
+         (keep (fn [[game-id h]]
+                 (let [player-ids (some-> (handle/get-snapshot h)
+                                          :player-map
+                                          keys)]
+                   (when (seq (filter #(= % player-id) player-ids))
+                     game-id)))))))

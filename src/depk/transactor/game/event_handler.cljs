@@ -343,21 +343,23 @@
 ;; client/ready
 ;; A event received when a client is ready to start
 (defmethod handle-event :client/ready
-  [{:keys [status player-map game-type size], :as state}
+  [{:keys [status player-map winner-id size], :as state}
    {player-id :player-id,
     :as       event}]
 
   (when-not (get player-map player-id)
     (misc/invalid-player-id! state event))
 
+  (when-not (#{:game-status/init} status)
+    (misc/invalid-game-status! state event))
+
+  (when winner-id (misc/sng-finished! state event))
+
   (log/infof "✅Player ready: %s" player-id)
 
   (-> state
-      (update-in [:player-map player-id]
-                 merge
-                 {:online-status :normal})
-      (assoc :player-map player-map)
-      (misc/reserve-dispatch)))
+      (assoc-in [:player-map player-id :online-status] :normal)
+      (misc/dispatch-start-game)))
 
 ;; system/dropout
 ;; A event received when a client dropout its connection
@@ -379,6 +381,7 @@
 
 ;; system/alive
 ;; A event received when a client established
+;; This command only work during the game.
 (defmethod handle-event :system/alive
   [{:keys [status player-map game-type size], :as state}
    {player-id :player-id,
@@ -386,6 +389,9 @@
 
   (when-not (get player-map player-id)
     (misc/invalid-player-id! state event))
+
+  (when (#{:game-status/init} status)
+    (misc/invalid-game-status! state event))
 
   (log/infof "❤️Player alive: %s" player-id)
 

@@ -111,6 +111,10 @@
                   {:state state,
                    :event event})))
 
+(defn sng-finished!
+  [state event]
+  (throw (ex-info "SNG finished!" {:state state :event event})))
+
 (defn invalid-next-state-case!
   [state]
   (throw (ex-info "Invalid next state case"
@@ -1084,7 +1088,7 @@
                  (merge (m/players->player-map joined-players)
                         player-map))
           (assoc :joined-players nil)
-          (reset-player-map-status))
+          (update :player-map reset-player-map-status))
       state)))
 
 (defn merge-sync-state

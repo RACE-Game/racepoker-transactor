@@ -164,10 +164,14 @@
       (if (event-list (:type event))
         (let [old-state state
 
+              _ (log/infof "🤡Event %s -> %s"
+                           (:type event)
+                           (name (:status state)))
+
               {:keys [result state api-requests dispatch-event error]}
               (<! (handle-event state event))]
 
-          (log/infof "🤡Event loop process %s %s player-id: %s %s"
+          (log/infof "%sEvent %s player-id: %s %s"
                      (case result
                        :ok      "🟩"
                        :err     "🟥"

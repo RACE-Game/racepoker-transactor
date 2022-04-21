@@ -36,6 +36,7 @@
             :websocket  ws})))
    (.get "/api" (:ajax-get-or-ws-handshake @websocket))
    (.post "/api" (:ajax-post @websocket))
+   (.get "/joined" (fn [req res] (h/joined-games-list req res)))
    (.get "/status"
          (fn [_req res]
            (let [{:keys [connected-uids]} @websocket

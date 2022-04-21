@@ -7,6 +7,7 @@
    [depk.transactor.game :as game]
    [solana-clj.publickey :as pubkey]
    [depk.transactor.state.game-manager :refer [game-manager]]
+   [cognitect.transit   :as t]
    ["buffer"            :as buffer]
    ["tweetnacl"         :as nacl]
    ["uuid"              :as uuid]))
@@ -161,3 +162,15 @@
         (catch js/Error e
           (log/errorf "💥Error in event message handler: %s" (ex-message e))))
       (recur (a/<! ch-chsk)))))
+
+;; HTTP handlers
+
+(defn joined-games-list
+  [^js req ^js res]
+  (let [player-id (aget (.-query req) "player-id")
+        w         (t/writer :json)]
+    (.send res
+           (t/write w
+                    (game/list-game-ids-by-player-id
+                     @game-manager
+                     player-id)))))
