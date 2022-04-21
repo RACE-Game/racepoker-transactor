@@ -169,8 +169,10 @@
   [^js req ^js res]
   (let [player-id (aget (.-query req) "player-id")
         w         (t/writer :json)]
-    (.send res
-           (t/write w
-                    (game/list-game-ids-by-player-id
+    (doto res
+     (.contentType "application/transit+json")
+     (.send
+      (t/write w
+               (vec (game/list-game-ids-by-player-id
                      @game-manager
-                     player-id)))))
+                     player-id)))))))
