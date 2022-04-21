@@ -352,10 +352,12 @@
 
   (log/infof "✅Player ready: %s" player-id)
 
-  (let [player-map (assoc-in player-map [player-id :online-status] :normal)]
-    (-> state
-        (assoc :player-map player-map)
-        (misc/reserve-dispatch))))
+  (-> state
+      (update-in [:player-map player-id]
+                 merge
+                 {:online-status :normal})
+      (assoc :player-map player-map)
+      (misc/reserve-dispatch)))
 
 ;; system/dropout
 ;; A event received when a client dropout its connection

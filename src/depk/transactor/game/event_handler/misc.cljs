@@ -1083,7 +1083,8 @@
           (assoc :player-map
                  (merge (m/players->player-map joined-players)
                         player-map))
-          (assoc :joined-players nil))
+          (assoc :joined-players nil)
+          (reset-player-map-status))
       state)))
 
 (defn merge-sync-state
