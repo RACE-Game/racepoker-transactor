@@ -4,6 +4,19 @@
                                    :refer [buffer-from]]
    [clojure.string :as str]))
 
+(def pubrsa-len 162)
+(def max-joined-num 3)
+
+(defmethod bl/size :str64
+  [_]
+  64)
+
+(defmethod bl/unpack :str64
+  [_ ^js buf]
+  (str/replace (.toString buf)
+               (js/String.fromCharCode 0)
+               ""))
+
 (defmethod bl/unpack :str16
   [_ buf]
   (str/replace (.toString buf)
@@ -22,6 +35,8 @@
 (def close-player-profile-ix-id 5)
 (def close-game-ix-id 6)
 (def open-game-ix-id 7)
+(def set-winner 8)
+(def attach-bonus 9)
 
 (def ^:const max-players-num 9)
 
@@ -70,3 +85,20 @@
   (bl/unpack game-state-layout (bl/buffer-from data)))
 
 (def game-state-data-len (bl/size game-state-layout))
+
+(defrecord PlayerProfileState [is-initialized rsa-pub avatar-pubkey nick joined_games])
+
+(def player-profile-state-layout
+  (bl/struct ->PlayerProfileState
+             [:bool
+              (bl/raw-buffer pubrsa-len)
+              :pubkey
+              :str64
+              (bl/array max-joined-num (bl/option :pubkey))]))
+
+(def player-profile-state-data-len
+  (bl/size player-profile-state-layout))
+
+(defn parse-profile-state-data
+  [data]
+  (bl/unpack player-profile-state-layout (bl/buffer-from data)))
