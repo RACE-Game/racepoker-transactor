@@ -616,30 +616,37 @@
 (defn blind-bets
   "Make blind bets for SB and BB, ask next player to action."
   [{:keys [sb bb btn player-map], :as state}]
-  (let [players          (list-players-in-order state btn)
+  (let [players               (list-players-in-order state btn)
         [sb-player bb-player] (if (= 2 (count players))
                                 ;; two player, BTN is SB
                                 (reverse players)
                                 players)
 
-        [bb-bet new-bb-player] (take-bet-from-player bb-player bb)
-        [sb-bet new-sb-player] (take-bet-from-player sb-player sb)
+        [bb-bet bb-player bb-allin?] (take-bet-from-player bb-player bb)
+        [sb-bet sb-player sb-allin?] (take-bet-from-player sb-player sb)
 
-        sb-player-id     (:player-id new-sb-player)
-        bb-player-id     (:player-id new-bb-player)
+        new-sb-player         (if sb-allin?
+                                (assoc sb-player :status :player-status/allin)
+                                sb-player)
+        new-bb-player         (if bb-allin?
+                                (assoc bb-player :status :player-status/allin)
+                                bb-player)
 
-        bet-map          {sb-player-id sb-bet,
-                          bb-player-id bb-bet}
+        sb-player-id          (:player-id new-sb-player)
+        bb-player-id          (:player-id new-bb-player)
 
-        action-player-id (if (= 2 (count players))
-                           sb-player-id
-                           (:player-id (nth players 2)))
+        bet-map               {sb-player-id sb-bet,
+                               bb-player-id bb-bet}
 
-        new-player-map   (assoc player-map
+        action-player-id      (if (= 2 (count players))
                                 sb-player-id
-                                new-sb-player
-                                bb-player-id
-                                new-bb-player)]
+                                (:player-id (nth players 2)))
+
+        new-player-map        (assoc player-map
+                                     sb-player-id
+                                     new-sb-player
+                                     bb-player-id
+                                     new-bb-player)]
     (-> state
         (assoc
          :bet-map       bet-map
