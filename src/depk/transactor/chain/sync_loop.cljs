@@ -12,13 +12,12 @@
   "Fetch game state through chain API, emit :system/sync-state event to game handle."
   [chain-api game-id output init-game-account-state]
   (log/infof "🏁Start state sync loop for game[%s]" game-id)
-  (a/go-loop [last-game-no (:game-no init-game-account-state)]
+  (a/go-loop [last-game-no nil]
     (a/<! (a/timeout 5000))
     (let [game-account-state (try
                                (a/<! (p/-fetch-game-account chain-api game-id))
                                (catch js/Error _))]
       (when-let [game-no (:game-no game-account-state)]
-        (log/infof "Sync game state, game-no: %s" game-no)
         ;; Detect rollback - current game-no is less than previous game-no
         (cond
           ;; Rollback

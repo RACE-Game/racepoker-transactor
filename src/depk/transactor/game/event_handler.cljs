@@ -40,7 +40,7 @@
 ;; receiving this event when something goes wrong.
 (defmethod handle-event :system/recover-state
   [{:keys [mint-info game-id game-no]}
-   {:keys [game-account-state], :as event}]
+   {{:keys [game-account-state]} :data, :as event}]
 
   (log/infof "🏥Recover game account state, game-no: %s -> %s, players: %s"
              game-no
