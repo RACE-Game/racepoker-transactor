@@ -113,7 +113,7 @@
 
 (defn sng-finished!
   [state event]
-  (throw (ex-info "SNG finished!" {:state state :event event})))
+  (throw (ex-info "SNG finished!" {:state state, :event event})))
 
 (defn invalid-next-state-case!
   [state]
@@ -937,10 +937,12 @@
 
 (defn single-player-win
   "Single player win the game."
-  [{:keys [total-bet-map], :as state} player-id]
+  [{:keys [total-bet-map bet-map], :as state} player-id]
   ;; We have to use bet-sum to calculate the total prize
   ;; because pots are not complete here.
-  (let [bet-sum (reduce + (js/BigInt 0) (vals total-bet-map))]
+  (let [bet-sum        (reduce + (js/BigInt 0) (vals total-bet-map))
+        owners-current (set (keys bet-map))
+        bet-current    (reduce + (js/BigInt 0) (vals bet-map))]
     (-> state
         (assign-winner-to-pots [#{player-id}])
         (assoc :prize-map {player-id bet-sum})
@@ -948,7 +950,7 @@
         (update-chips-change-map)
         ;; Append a pot for current bet
         ;; NOTE: this pot is not accurate
-        (update :pots conj (m/make-pot (set (keys total-bet-map)) bet-sum #{player-id}))
+        (update :pots conj (m/make-pot owners-current bet-current #{player-id}))
         (submit-game-result)
         (dispatch-reset)
         (assoc :status       :game-status/settle
