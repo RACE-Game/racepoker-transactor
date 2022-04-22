@@ -24,7 +24,7 @@
             ;; (log/infof "Send state to uid: %s" uid)
             (chsk-send! uid [:game/state state])))
 
-        :system/force-sync-state
+        :system/recover-state
         (do
           (log/infof "🔈Broadcaster state reset")
           (doseq [uid   (:any @connected-uids)

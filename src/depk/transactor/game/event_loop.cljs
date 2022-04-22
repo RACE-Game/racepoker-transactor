@@ -11,7 +11,7 @@
 
 (def event-list
   #{:system/sync-state
-    :system/force-sync-state
+    :system/recover-state
     :system/reset
     :system/start-game
     :client/shuffle-cards
@@ -156,7 +156,7 @@
   [game-id init-state input output]
   (log/infof "🏁Start event loop for game[%s]" game-id)
   ;; Put initial event
-  (go (a/>! input (make-event :system/reset init-state)))
+  ;; (go (a/>! input (make-event :system/reset init-state)))
   (go-loop [state   init-state
             records []]
     (let [event (<! input)]

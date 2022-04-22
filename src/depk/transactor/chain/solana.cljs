@@ -302,7 +302,7 @@
                                     :data
                                     (parse-state-data))]
      (a/>! output
-           {:type :system/force-sync-state,
+           {:type :system/recover-state,
             :data {:game-account-state game-account-state}}))))
 
 (comment

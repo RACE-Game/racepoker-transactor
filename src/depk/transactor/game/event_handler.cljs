@@ -28,20 +28,27 @@
   (when (<= (:game-no game-account-state) game-no)
     (misc/state-already-merged! state event))
 
-  (log/infof "✨New game account state with game-no: %s" game-no)
+  (log/infof "✨New game account state, game-no: %s -> %s"
+             game-no
+             (:game-no game-account-state))
+
   (-> state
       (misc/merge-sync-state game-account-state)
       (misc/reserve-dispatch)))
 
 ;; system/force-sync-state
 ;; receiving this event when something goes wrong.
-(defmethod handle-event :system/force-sync-state
-  [state {:keys [game-account-state], :as event}]
-  (log/infof "🏥Force sync state, players: %s" (:players game-account-state))
-  (-> state
-      (misc/reset-game-state)
-      (assoc :player-map {} :game-account-state nil)
-      (misc/merge-sync-state game-account-state)))
+(defmethod handle-event :system/recover-state
+  [{:keys [mint-info game-id game-no]}
+   {:keys [game-account-state], :as event}]
+
+  (log/infof "🏥Recover game account state, game-no: %s -> %s, players: %s"
+             game-no
+             (:game-no game-account-state)
+             (:players game-account-state))
+
+  (-> (m/make-game-state game-account-state mint-info {:game-id game-id})
+      (misc/dispatch-reset)))
 
 ;; system/reset
 ;; receiving this event for reset states
@@ -54,6 +61,7 @@
       (misc/submit-non-alive-players)
       (misc/remove-non-alive-players)
       (misc/add-joined-player)
+      (misc/reset-player-map-status)
       (misc/increase-blinds)            ; For SNG only
       (misc/reset-game-state)
       (misc/dispatch-start-game)))

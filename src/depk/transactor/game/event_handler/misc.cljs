@@ -282,13 +282,14 @@
     (assoc state k id)))
 
 (defn reset-player-map-status
-  [player-map]
-  (->> (for [[pid p] player-map]
-         [pid
-          (assoc p
-                 :status        :player-status/wait
-                 :online-status :dropout)])
-       (into {})))
+  [{:keys [player-map], :as state}]
+  (let [new-player-map (->> (for [[pid p] player-map]
+                              [pid
+                               (assoc p
+                                      :status        :player-status/wait
+                                      :online-status :dropout)])
+                            (into {}))]
+    (assoc state :player-map new-player-map)))
 
 (defn increase-blinds
   [{:keys [base-sb base-bb game-type start-time], :as state}]
@@ -313,7 +314,6 @@
   "Reset game state. All player status will be set to wait/dropout."
   [state]
   (-> state
-      (update :player-map reset-player-map-status)
       (merge
        {:status             :game-status/init,
         :released-keys-map  nil,
@@ -1089,8 +1089,7 @@
           (assoc :player-map
                  (merge (m/players->player-map joined-players)
                         player-map))
-          (assoc :joined-players nil)
-          (update :player-map reset-player-map-status))
+          (assoc :joined-players nil))
       state)))
 
 (defn merge-sync-state
