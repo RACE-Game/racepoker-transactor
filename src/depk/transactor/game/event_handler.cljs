@@ -88,33 +88,10 @@
     (log/infof "🎰-%s %s" id (:online-status p)))
 
   (cond
-    ;; SNG type without full table
-    ;; Kick the non-ready players
-    (and (#{:bonus :sng :tournament} game-type)
-         (< (count player-map) size)
-         (nil? start-time))
-    (do
-      (log/infof "🚧No enough players for SNG/Bonus game.")
-      (-> state
-          (misc/dispatch-reset)))
 
-    ;; In cash game, if any client is not ready, kick it
-    (and (= :cash game-type)
-         (not (every? #(= :normal (:online-status %)) (vals player-map))))
-    (do
-      (log/infof "🛑Not all players are ready")
-      (-> state
-          (misc/dispatch-reset)))
-
-    ;; At least one player is ready.
-    ;; Otherwise the SNG game can not start.
-    (and (#{:sng :bonus} game-type)
-         (every? #(not= :normal (:online-status %)) (vals player-map))
-         (= :in-progress (:status game-account-state)))
-    (do
-      (log/infof "🛑All players are not ready (SNG)")
-      (-> state
-          (misc/dispatch-reset)))
+    ;; ------------------------------------------------
+    ;; Common fail case
+    ;; ------------------------------------------------
 
     ;; If the number of players is not enough for starting
     ;; Require further alive event from the only client
@@ -130,6 +107,43 @@
     (zero? (count player-map))
     (do
       (log/infof "🛑No players to start")
+      (-> state
+          (misc/dispatch-reset)))
+
+    ;; ------------------------------------------------
+    ;; SNG fail case
+    ;; ------------------------------------------------
+
+    ;; SNG type without full table
+    ;; Kick the non-ready players
+    (and (#{:bonus :sng :tournament} game-type)
+         (nil? start-time)              ; Nil start-time means the first start
+         (or (not (every? #(= :normal (:online-status %)) (vals player-map)))
+             (< (count player-map) size)))
+    (do
+      (log/infof "🚧No enough ready players for SNG/Bonus game.")
+      (-> state
+          (misc/dispatch-reset)))
+
+    ;; At least one player is ready.
+    ;; Otherwise the SNG game can not start.
+    (and (#{:sng :bonus} game-type)
+         (every? #(not= :normal (:online-status %)) (vals player-map))
+         (= :in-progress (:status game-account-state)))
+    (do
+      (log/infof "🛑All players are not ready (SNG)")
+      (-> state
+          (misc/dispatch-reset)))
+
+    ;; ------------------------------------------------
+    ;; Cash fail case
+    ;; ------------------------------------------------
+
+    ;; In cash game, if any client is not ready, kick it
+    (and (= :cash game-type)
+         (not (every? #(= :normal (:online-status %)) (vals player-map))))
+    (do
+      (log/infof "🛑Not all players are ready")
       (-> state
           (misc/dispatch-reset)))
 
@@ -268,8 +282,7 @@
       (do
         (log/infof "🔑Next street")
         (-> new-state
-            (assoc :status  :game-status/play
-                   :bet-map nil)
+            (assoc :status  :game-status/play)
             (misc/next-state)))
 
       (= :runner after-key-share)

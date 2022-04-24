@@ -373,10 +373,10 @@
          (= rs :ok)
          nil
 
-         (< cnt 4)
+         (< cnt 10)
          (do
            (log/infof "Retry, count: %s" cnt)
-           (a/<! (a/timeout 10000))
+           (a/<! (a/timeout 5000))
            (recur (inc cnt)))
 
          :else

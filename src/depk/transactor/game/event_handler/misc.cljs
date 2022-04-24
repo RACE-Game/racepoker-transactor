@@ -326,6 +326,7 @@
         :min-raise          nil,
         :street-bet         nil,
         :bet-map            nil,
+        :collect-bet-map    nil,
         :total-bet-map      {},
         :pots               [],
         :showdown-map       nil,
@@ -681,7 +682,7 @@
     (assoc state :pots new-pots)))
 
 (defn collect-bet-to-pots
-  "Update pots, reset bets.
+  "Update pots.
 
   When not all players have the same bet, multiple pots will be created."
   [{:keys [player-map bet-map], :as state}]
@@ -718,7 +719,9 @@
                      rest-steps))))
         into-vec (fnil into [])]
     (-> state
-        (update :pots into-vec pots))))
+        (update :pots into-vec pots)
+        (assoc :collect-bet-map bet-map)
+        (assoc :bet-map nil))))
 
 (defn prepare-showdown
   "Player showdown hole cards."
@@ -893,7 +896,7 @@
                winner-player-ids
                bet-map)
     (-> state
-        (assoc :bet-map nil)
+        (collect-bet-to-pots)
         (assign-winner-to-pots [winner-player-ids])
         (update-prize-map)
         (apply-prize-map)
@@ -931,8 +934,7 @@
 
      (-> state
          (collect-bet-to-pots)
-         (assoc :showdown-map showdown
-                :bet-map      nil)
+         (assoc :showdown-map showdown)
          (assign-winner-to-pots winner-id-sets)
          (update-prize-map)
          (apply-prize-map)

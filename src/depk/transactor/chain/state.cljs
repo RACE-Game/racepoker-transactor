@@ -86,12 +86,13 @@
 
 (def game-state-data-len (bl/size game-state-layout))
 
-(defrecord PlayerProfileState [is-initialized rsa-pub avatar-pubkey nick])
+(defrecord PlayerProfileState [is-initialized rsa-pub avatar-pubkey ident-pubkey nick])
 
 (def player-profile-state-layout
   (bl/struct ->PlayerProfileState
              [:bool
               (bl/raw-buffer pubrsa-len)
+              :pubkey
               :pubkey
               :str64]))
 

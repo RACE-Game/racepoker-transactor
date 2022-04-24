@@ -127,6 +127,7 @@
    street-bet
    bet-map
    total-bet-map
+   collect-bet-map
    action-player-id
 
    ;; ----------------------------------------------
@@ -242,6 +243,6 @@
                 :street-bet :bet-map :action-player-id
                 :showdown-map :prize-map :state-id :prepare-cards
                 :shuffle-player-id :encrypt-player-id
-                :btn :sb :bb :require-key-idents :share-key-map
+                :btn :sb :bb :require-key-idents :share-key-map :collect-bet-map
                 :card-ciphers :player-actions :winning-type :dispatch-id
                 :game-id :this-event :winner-id :size :op-player-ids]))

@@ -3,13 +3,9 @@
    [depk.transactor.log :as log]
    [clojure.string      :as str]
    [cljs.core.async     :as a]
-   [depk.transactor.util :refer [<!? def-async-handler]]
    [depk.transactor.game :as game]
-   [solana-clj.publickey :as pubkey]
    [depk.transactor.state.game-manager :refer [game-manager]]
    [cognitect.transit   :as t]
-   ["buffer"            :as buffer]
-   ["tweetnacl"         :as nacl]
    ["uuid"              :as uuid]))
 
 ;; Websocket Event Handler
@@ -57,8 +53,10 @@
 (defmethod event-msg-handler :client/ready
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
   ;; (log/infof "Keep alive: %s" uid)
+
   (a/go
    (let [[game-id player-id] uid]
+
      (a/<! (game/ready @game-manager game-id player-id))
      (?reply-fn {:result :ok}))))
 
@@ -148,9 +146,14 @@
   [{:as ev-msg, :keys [connected-uids event id uid ?data ring-req ?reply-fn send-fn]}]
   ;; (log/infof "Player send sticker message: %s" uid)
   (a/go
-   (let [[game-id player-id] uid]
-     (when ?reply-fn
-       (?reply-fn {:result :ok})))))
+   (let [[game-id player-id] uid
+         msg {:game-id    (:game-id ?data),
+              :sender     player-id,
+              :sticker-id (:sticker-id ?data),
+              :message/id (uuid/v4)}]
+     (doseq [u (:any @connected-uids)]
+       (when (= game-id (first u))
+         (send-fn u [:message/sticker msg]))))))
 
 (defn attach-event-handler
   "Attach game event handler to websocket channel."
