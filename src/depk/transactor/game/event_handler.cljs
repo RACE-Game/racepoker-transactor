@@ -282,7 +282,8 @@
       (do
         (log/infof "🔑Next street")
         (-> new-state
-            (assoc :status  :game-status/play)
+            (assoc :status :game-status/play
+                   :collect-bet-map nil)
             (misc/next-state)))
 
       (= :runner after-key-share)
