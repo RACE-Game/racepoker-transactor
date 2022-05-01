@@ -7,7 +7,7 @@
    [depk.transactor.log :as log]))
 
 (defn user-id-fn
-  [{:keys [params]}]
+  [{:keys [params] :as req}]
   (log/infof "💫Receive WS connection with params: " (prn-str params))
   (let [{:keys [pubkey sig game-id]} params
         k   (pubkey/to-buffer (pubkey/make-public-key pubkey))
@@ -19,4 +19,5 @@
     (if (nacl/sign.detached.verify msg (buffer/Buffer.from sig "hex") k)
       (do (log/infof "✅Signature check succeed.")
           [game-id pubkey])
-      (log/infof "⭕Signature check failed."))))
+      (do (log/infof "⭕Signature check failed.")
+          (throw (ex-info "Reject connection" {:reason "Signature check failed"}))))))
