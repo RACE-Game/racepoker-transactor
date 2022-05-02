@@ -179,3 +179,9 @@
                (vec (game/list-game-ids-by-player-id
                      @game-manager
                      player-id)))))))
+
+(defn status
+  "Return current running status.
+
+  Including how many games are running."
+  [^js req ^js res])

@@ -30,7 +30,6 @@
    position
    ;; player status: wait in-action acted fold allin
    status
-
    ;; online status: normal dropout leave
    online-status])
 

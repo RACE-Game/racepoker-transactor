@@ -166,11 +166,11 @@
   [{:keys [player-map game-account-state game-type start-time], :as state}]
   (if (and (or (= :cash game-type)
                (and (#{:bonus :sng} game-type)
-                    (nil? start-time)))
+                    (nil? start-time)
+                    (= :open (:status game-account-state))))
            (some #{:dropout :leave} (map :online-status (vals player-map))))
     (do
-      (log/infof "🧹Submit remove players, game-status: %s, players: %s"
-                 (:status game-account-state)
+      (log/infof "🧹Submit remove players, players: %s"
                  (->> (vals player-map)
                       (remove (comp #{:normal} :online-status))
                       (map :player-id)))

@@ -26,6 +26,8 @@
 
 ;;; Helpers
 
+(def default-commitment "confirmed")
+
 (def settle-type-no-update 0)
 (def settle-type-chip-add 1)
 (def settle-type-chip-sub 2)
@@ -118,7 +120,7 @@
          conn               (conn/make-connection (get @config :solana-rpc-endpoint))
          game-account-pubkey (pubkey/make-public-key game-id)
          game-account-state (some-> (<!?
-                                     (conn/get-account-info conn game-account-pubkey "confirmed"))
+                                     (conn/get-account-info conn game-account-pubkey default-commitment))
                                     :data
                                     (parse-state-data))
 
@@ -182,10 +184,10 @@
 
          sig                (<!? (conn/send-transaction conn tx [fee-payer]))
 
-         ret                (<!? (conn/confirm-transaction conn sig "confirmed"))
+         ret                (<!? (conn/confirm-transaction conn sig default-commitment))
 
          new-state          (some-> (<!?
-                                     (conn/get-account-info conn game-account-pubkey "confirmed"))
+                                     (conn/get-account-info conn game-account-pubkey default-commitment))
                                     :data
                                     (parse-state-data))
 
@@ -388,7 +390,7 @@
     (let [conn (conn/make-connection (get @config :solana-rpc-endpoint))
           game-account-pubkey (pubkey/make-public-key game-id)
           game-account-state (some-> (<!?
-                                      (conn/get-account-info conn game-account-pubkey "confirmed"))
+                                      (conn/get-account-info conn game-account-pubkey default-commitment))
                                      :data
                                      (parse-state-data))]
       game-account-state)))
