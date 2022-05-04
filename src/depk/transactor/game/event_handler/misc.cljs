@@ -262,7 +262,8 @@
   Dropout players will not be counted."
   [state]
   (let [{:keys [btn]} state
-        player-ids    (map :player-id (list-players-in-order state btn player-online?))]
+        player-ids    (->> (map :player-id (list-players-in-order state btn player-online?))
+                           (take 2))]
     (log/infof "🫱Op player ids: %s" player-ids)
     (assoc state :op-player-ids player-ids)))
 
