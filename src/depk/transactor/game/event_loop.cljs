@@ -149,8 +149,9 @@
   [game-id state output]
   (put! output
         {:type :system/broadcast-state,
-         :data {:game-id game-id,
-                :state   (game-state->resp state)}}))
+         :data {:game-id            game-id,
+                :state              (game-state->resp state),
+                :game-account-state (:game-account-state state)}}))
 
 (defn run-event-loop
   [game-id init-state input output]

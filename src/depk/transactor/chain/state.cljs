@@ -40,12 +40,12 @@
 
 (def ^:const max-players-num 9)
 
-(defrecord Player [pubkey chips rebuy])
+(defrecord Player [pubkey ident chips rebuy])
 
-(def player-layout (bl/struct ->Player [:pubkey :u64 :u8]))
+(def player-layout (bl/struct ->Player [:pubkey :pubkey :u64 :u8]))
 
 (defrecord GameState [is-initialized game-no players stake-account-pubkey mint-pubkey
-                      level size game-type transactor-pubkey owner-pubkey rake status
+                      ante sb bb buyin size game-type transactor-pubkey owner-pubkey rake status
                       bonus-pubkey name])
 
 (def game-state-layout
@@ -60,8 +60,14 @@
               :pubkey
               ;; mint_pubkey
               :pubkey
-              ;; level
-              (bl/enum :nl100 :nl200 :nl500 :nl1000 :bonus :nl5 :nl10 :nl20 :nl30 :nl50)
+              ;; ante
+              :u64
+              ;; sb
+              :u64
+              ;; bb
+              :u64
+              ;; buyin
+              :u64
               ;; size
               :u8
               ;; game_type

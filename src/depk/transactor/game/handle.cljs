@@ -59,6 +59,10 @@
   [game-handle]
   (broadcast/get-snapshot (:broadcaster game-handle)))
 
+(defn get-game-account-snapshot
+  [game-handle]
+  (broadcast/get-game-account-snapshot (:broadcaster game-handle)))
+
 (defn shutdown-game-handle
   [game-handle]
   (event/shutdown (:event-bus game-handle)))

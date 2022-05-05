@@ -41,14 +41,9 @@
      (let [game-account-state (<!? (chain/fetch-game-account @global-chain-api game-id))
 
            ;; Use a fixed one for SNG/Bonus game.
-           mint-info          (case (:game-type game-account-state)
-                                :cash
-                                (<!? (chain/fetch-mint-info @global-chain-api
-                                                            (str (:mint-pubkey
-                                                                  game-account-state))))
-
-                                (:sng :bonus :tournament)
-                                {:decimals 0})
+           mint-info          (<!? (chain/fetch-mint-info @global-chain-api
+                                                          (str (:mint-pubkey
+                                                                game-account-state))))
            init-state         (m/make-game-state game-account-state mint-info {:game-id game-id})
            {:keys [game-handle-map]} manager]
        (swap! game-handle-map assign-new-game-handle game-id init-state (:ws-conn manager))))))

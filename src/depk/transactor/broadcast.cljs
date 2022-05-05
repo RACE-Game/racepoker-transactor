@@ -9,18 +9,19 @@
   [broadcaster opts]
   (log/infof "🏁Start broadcaster for game[%s]" (:game-id opts))
   (let [game-id (:game-id opts)
-        {:keys [ws-conn input snapshot]} broadcaster
+        {:keys [ws-conn input snapshot game-account-snapshot]} broadcaster
         {:keys [chsk-send! connected-uids]} ws-conn]
     (a/go-loop [{:keys [type data]} (a/<! input)]
 
       (condp = type
         :system/broadcast-state
-        (let [{:keys [state game-id]} data]
+        (let [{:keys [state game-id game-account-state]} data]
           ;; Do not dispatch reset event.
           ;; (log/infof "🔈Broadcaster event: %s status: %s" (:this-event state) (:status state))
           (doseq [uid   (:any @connected-uids)
                   :when (= game-id (first uid))]
             (reset! snapshot state)
+            (reset! game-account-snapshot game-account-state)
             ;; (log/infof "Send state to uid: %s" uid)
             (chsk-send! uid [:game/state state])))
 
@@ -34,13 +35,16 @@
         :noop)
       (recur (a/<! input)))))
 
-(defrecord Broadcaster [ws-conn snapshot input])
+(defrecord Broadcaster [ws-conn snapshot game-account-snapshot input])
 
 (extend-type Broadcaster
  p/IBroadcaster
 
  (p/-get-snapshot [this]
    @(:snapshot this))
+
+ (p/-get-game-account-snapshot [this]
+   @(:game-account-snapshot this))
 
  ep/IAttachable
  (ep/-input [this]
@@ -56,9 +60,14 @@
 (defn make-broadcaster
   [ws-conn]
   (let [snapshot (atom nil)
+        game-account-snapshot (atom nil)
         input    (a/chan 10)]
-    (->Broadcaster ws-conn snapshot input)))
+    (->Broadcaster ws-conn snapshot game-account-snapshot input)))
 
 (defn get-snapshot
   [broadcaster]
   (p/-get-snapshot broadcaster))
+
+(defn get-game-account-snapshot
+  [broadcaster]
+  (p/-get-game-account-snapshot broadcaster))

@@ -72,6 +72,8 @@
    game-no
    sb
    bb
+   ante
+   buyin
    btn
    size
    ;; game status: init prepare shuffle encrypt key-share play showdown settle
@@ -214,10 +216,12 @@
            (map->GameState
             (merge
              init-state
-             {:sb                 sb,
-              :bb                 bb,
-              :base-sb            sb,
-              :base-bb            bb,
+             {:sb                 (:sb game-account-state),
+              :bb                 (:bb game-account-state),
+              :ante               (:ante game-account-state),
+              :base-sb            (:sb game-account-state),
+              :base-bb            (:bb game-account-state),
+              :base-ante          (:ante game-account-state),
               :game-account-state game-account-state,
               ;; If game already started, set a start-time
               ;; Mark this game is in progress
@@ -242,6 +246,6 @@
                 :street-bet :bet-map :action-player-id
                 :showdown-map :prize-map :state-id :prepare-cards
                 :shuffle-player-id :encrypt-player-id
-                :btn :sb :bb :require-key-idents :share-key-map :collect-bet-map
+                :base-sb :btn :sb :bb :require-key-idents :share-key-map :collect-bet-map
                 :card-ciphers :player-actions :winning-type :dispatch-id
                 :game-id :this-event :winner-id :size :op-player-ids]))
