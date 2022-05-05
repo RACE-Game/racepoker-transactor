@@ -248,4 +248,4 @@
                 :shuffle-player-id :encrypt-player-id
                 :base-sb :btn :sb :bb :require-key-idents :share-key-map :collect-bet-map
                 :card-ciphers :player-actions :winning-type :dispatch-id
-                :game-id :this-event :winner-id :size :op-player-ids]))
+                :game-id :this-event :winner-id :size :op-player-ids :start-time]))

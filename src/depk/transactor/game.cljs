@@ -47,7 +47,10 @@
 
 (defn ready
   [game-manager game-id player-id uuid sig]
-  {:pre [(string? game-id)]}
+  {:pre [(string? player-id)
+         (string? game-id)
+         (string? uuid)
+         (string? sig)]}
   (go-try
    (if-let [game-handle (manager/find-game game-manager game-id)]
      (let [game-account-snapshot (handle/get-game-account-snapshot game-handle)

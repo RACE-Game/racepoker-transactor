@@ -355,6 +355,9 @@
     player-id :player-id,
     :as       event}]
 
+  (when-not player-id
+    (misc/invalid-player-id! state event))
+
   (when-not (= :game-status/play status)
     (misc/invalid-game-status! state event))
 
@@ -368,6 +371,9 @@
   [{:keys [status player-map winner-id size], :as state}
    {player-id :player-id,
     :as       event}]
+
+  (when-not player-id
+    (misc/invalid-player-id! state event))
 
   (when-not (get player-map player-id)
     (misc/invalid-player-id! state event))
@@ -391,6 +397,9 @@
    {player-id :player-id,
     :as       event}]
 
+  (when-not player-id
+    (misc/invalid-player-id! state event))
+
   (when-not (get player-map player-id)
     (misc/invalid-player-id! state event))
 
@@ -408,6 +417,9 @@
   [{:keys [status player-map game-type size], :as state}
    {player-id :player-id,
     :as       event}]
+
+  (when-not player-id
+    (misc/invalid-player-id! state event))
 
   (when-not (get player-map player-id)
     (misc/invalid-player-id! state event))
@@ -434,6 +446,10 @@
    {{:keys [released-keys]} :data,
     player-id :player-id,
     :as       event}]
+
+  (when-not player-id
+    (misc/invalid-player-id! state event))
+
   (let [new-state      (-> state
                            (update-in [:player-map player-id]
                                       assoc
@@ -490,6 +506,9 @@
     player-id :player-id,
     :as       event}]
 
+  (when-not player-id
+    (misc/invalid-player-id! state event))
+
   (when-not (= :game-status/play status)
     (misc/invalid-game-status! state event))
 
@@ -504,6 +523,9 @@
 (defmethod handle-event :player/call
   [{:keys [bet-map player-map status action-player-id street-bet state-id], :as state}
    {player-id :player-id, :as event}]
+
+  (when-not player-id
+    (misc/invalid-player-id! state event))
 
   (when-not (= :game-status/play status)
     (misc/invalid-game-status! state event))
@@ -530,6 +552,9 @@
   [{:keys [bet-map status action-player-id street-bet state-id], :as state}
    {player-id :player-id, :as event}]
 
+  (when-not player-id
+    (misc/invalid-player-id! state event))
+
   (when-not (= :game-status/play status)
     (misc/invalid-game-status! state event))
 
@@ -549,6 +574,9 @@
    {{:keys [amount]} :data,
     player-id        :player-id,
     :as              event}]
+
+  (when-not player-id
+    (misc/invalid-player-id! state event))
 
   (when-not (= :game-status/play status)
     (misc/invalid-game-status! state event))
@@ -594,6 +622,9 @@
    {{:keys [amount]} :data,
     player-id        :player-id,
     :as              event}]
+
+  (when-not player-id
+    (misc/invalid-player-id! state event))
 
   (let [curr-bet (get bet-map player-id (js/BigInt 0))]
 
