@@ -17,10 +17,12 @@
   (let [[ev-id ev-data] event]
     (case ev-id
       :chsk/uidport-close
-      (game/dropout @game-manager (first ev-data) (last ev-data))
+      (let [[game-id player-id] ev-data]
+        (game/dropout @game-manager game-id player-id))
 
       :chsk/uidport-open
-      (game/alive @game-manager (first ev-data) (last ev-data))
+      (let [[game-id player-id] ev-data]
+        (game/alive @game-manager  game-id player-id))
 
       :noop)))
 

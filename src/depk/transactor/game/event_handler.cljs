@@ -352,11 +352,7 @@
 (defmethod handle-event :system/player-action-timeout
   [{:keys [status action-player-id], :as state}
    {{:keys [share-keys]} :data,
-    player-id :player-id,
     :as       event}]
-
-  (when-not player-id
-    (misc/invalid-player-id! state event))
 
   (when-not (= :game-status/play status)
     (misc/invalid-game-status! state event))
