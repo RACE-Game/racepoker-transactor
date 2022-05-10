@@ -40,19 +40,21 @@
 
 (def ^:const max-players-num 9)
 
-(defrecord Player [pubkey ident chips rebuy])
+(defrecord Player [pubkey chips buyin-serial rebuy])
 
-(def player-layout (bl/struct ->Player [:pubkey :pubkey :u64 :u8]))
+(def player-layout (bl/struct ->Player [:pubkey :u64 :u32 :u8]))
 
-(defrecord GameState [is-initialized game-no players stake-account-pubkey mint-pubkey
-                      ante sb bb buyin size game-type transactor-pubkey owner-pubkey rake status
-                      bonus-pubkey name])
+(defrecord GameState [is-initialized buyin-serial settle-serial players stake-account-pubkey
+                      mint-pubkey ante sb bb buyin size game-type transactor-pubkey owner-pubkey
+                      transactor-rake owner-rake status bonus-pubkey name])
 
 (def game-state-layout
   (bl/struct ->GameState
              [;; is_initialized
               :bool
-              ;; game_no
+              ;; buyin_serial
+              :u32
+              ;; settle_serial
               :u32
               ;; players
               (bl/array max-players-num (bl/option player-layout))
@@ -76,7 +78,9 @@
               :pubkey
               ;; owner_pubkey
               :pubkey
-              ;; rake
+              ;; transactor-rake
+              :u16
+              ;; owner-rake
               :u16
               ;; status
               (bl/enum :open :wait-claim :locked :in-progress :closed)
@@ -92,13 +96,11 @@
 
 (def game-state-data-len (bl/size game-state-layout))
 
-(defrecord PlayerProfileState [is-initialized rsa-pub avatar-pubkey ident-pubkey nick])
+(defrecord PlayerProfileState [is-initialized avatar-pubkey nick])
 
 (def player-profile-state-layout
   (bl/struct ->PlayerProfileState
              [:bool
-              (bl/raw-buffer pubrsa-len)
-              :pubkey
               :pubkey
               :str64]))
 

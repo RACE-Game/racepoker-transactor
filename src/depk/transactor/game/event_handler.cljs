@@ -23,14 +23,16 @@
 ;; system/sync-state
 ;; receiving this event when game account reflect there's an update from onchain state
 (defmethod handle-event :system/sync-state
-  [{:keys [status game-no], :as state}
+  [{:keys [status], :as state}
    {{:keys [game-account-state]} :data, :as event}]
-  (when (<= (:game-no game-account-state) game-no)
-    (misc/state-already-merged! state event))
 
-  (log/infof "✨New game account state, game-no: %s -> %s"
-             game-no
-             (:game-no game-account-state))
+  (log/infof "✨New game account state, buyin-serial: %s -> %s"
+             (get-in state [:game-account-state :buyin-serial])
+             (:buyin-serial game-account-state))
+
+  (when (<= (:buyin-serial game-account-state)
+            (get-in state [:game-account-state :buyin-serial]))
+    (misc/state-already-merged! state event))
 
   (-> state
       (misc/merge-sync-state game-account-state)
@@ -38,17 +40,17 @@
 
 ;; system/force-sync-state
 ;; receiving this event when something goes wrong.
-(defmethod handle-event :system/recover-state
-  [{:keys [mint-info game-id game-no]}
-   {{:keys [game-account-state]} :data, :as event}]
+;; (defmethod handle-event :system/recover-state
+;;   [{:keys [mint-info game-id game-no]}
+;;    {{:keys [game-account-state]} :data, :as event}]
 
-  (log/infof "🏥Recover game account state, game-no: %s -> %s, players: %s"
-             game-no
-             (:game-no game-account-state)
-             (:players game-account-state))
+;;   (log/infof "🏥Recover game account state, game-no: %s -> %s, players: %s"
+;;              game-no
+;;              (:game-no game-account-state)
+;;              (:players game-account-state))
 
-  (-> (m/make-game-state game-account-state mint-info {:game-id game-id})
-      (misc/dispatch-reset)))
+;;   (-> (m/make-game-state game-account-state mint-info {:game-id game-id})
+;;       (misc/dispatch-reset)))
 
 ;; system/reset
 ;; receiving this event for reset states
@@ -162,6 +164,7 @@
        (-> state
            (assoc :start-time start-time)
            (assoc :btn next-btn)
+           (update :game-no inc)
            (misc/set-operation-player-ids)
            (misc/with-next-op-player-id-as :shuffle-player-id)
            (assoc :prepare-cards [{:data      data,
@@ -352,7 +355,7 @@
 (defmethod handle-event :system/player-action-timeout
   [{:keys [status action-player-id], :as state}
    {{:keys [share-keys]} :data,
-    :as       event}]
+    :as event}]
 
   (when-not (= :game-status/play status)
     (misc/invalid-game-status! state event))
@@ -364,9 +367,21 @@
 ;; client/ready
 ;; A event received when a client is ready to start
 (defmethod handle-event :client/ready
-  [{:keys [status player-map winner-id size], :as state}
+  [{:keys [status player-map winner-id rsa-pub-map sig-map], :as state}
    {player-id :player-id,
+    {:keys [rsa-pub sig]} :data,
     :as       event}]
+
+  (when-not rsa-pub
+    (misc/invalid-rsa-pub! state event))
+
+  (when-not sig
+    (misc/invalid-sig! state event))
+
+  (when (and (get rsa-pub-map player-id)
+             (or (not= (get rsa-pub-map player-id) rsa-pub)
+                 (not= (get sig-map player-id) sig)))
+    (misc/cant-update-rsa-pub! state event))
 
   (when-not player-id
     (misc/invalid-player-id! state event))
@@ -383,6 +398,8 @@
 
   (-> state
       (assoc-in [:player-map player-id :online-status] :normal)
+      (assoc-in [:rsa-pub-map player-id] rsa-pub)
+      (assoc-in [:sig-map player-id] sig)
       (misc/dispatch-start-game)))
 
 ;; system/dropout
@@ -410,7 +427,7 @@
 ;; A event received when a client established
 ;; This command only work during the game.
 (defmethod handle-event :system/alive
-  [{:keys [status player-map game-type size], :as state}
+  [{:keys [status player-map], :as state}
    {player-id :player-id,
     :as       event}]
 

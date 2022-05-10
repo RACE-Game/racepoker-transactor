@@ -4,38 +4,31 @@
    [depk.transactor.event.protocol :as ep]
    [depk.transactor.chain.solana   :as solana]))
 
-(defn settle-finished-game
+(defn settle
   "Settle a finished game.
 
   game-id: pubkey, the pubkey of game account.
-  player-state-map: map, player-id to its state, which contains chips and status."
-  [chain-api game-id chips-change-map player-status-map expected-player-map]
-  (p/-settle-finished-game chain-api
-                           game-id
-                           chips-change-map
-                           player-status-map
-                           expected-player-map))
+  settle-map: a map of settles.
 
-(defn settle-failed-game
-  "Settle a failed game.
-
-  game-id: pubkey, the pubkey of game account.
-  player-state-map: map, player-id to its state, which contains chips and status."
-  [chain-api game-id player-status-map expected-player-map]
-  (p/-settle-failed-game chain-api game-id player-status-map expected-player-map))
+  settle is a map of:
+  - settle-type: leave, empty, no-update
+  - amount: the withdraw amount
+  "
+  [chain-api game-id settle-serial settle-map]
+  (p/-settle chain-api game-id settle-serial settle-map))
 
 (defn set-winner
   "Set a winner for SNG game.
 
   game-id: pubkey, the pubkey of game account.
   winner-id: pubkey, the winner id."
-  [chain-api game-id winner-id]
-  (p/-set-winner chain-api game-id winner-id))
+  [chain-api game-id settle-serial winner-id]
+  (p/-set-winner chain-api game-id settle-serial winner-id))
 
 (defn fetch-game-account
   "Fetch account of a game."
-  [chain-api game-id]
-  (p/-fetch-game-account chain-api game-id))
+  [chain-api game-id opts]
+  (p/-fetch-game-account chain-api game-id opts))
 
 (defn fetch-mint-info
   "Fetch mint information of a game."

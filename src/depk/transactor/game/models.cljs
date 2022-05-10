@@ -2,7 +2,8 @@
   "Models for game state machine."
   (:require
    ["uuid" :as uuid]
-   [depk.transactor.constant :as c]))
+   [depk.transactor.constant :as c]
+   [depk.transactor.log :as log]))
 
 (defn missing-state-id!
   []
@@ -81,6 +82,11 @@
    ;; street: preflop flop turn river
    street
    player-map
+
+   ;; ----------------------------------------------
+   ;; encryption
+   rsa-pub-map
+   sig-map
 
    ;; ----------------------------------------------
    ;; SNG
@@ -211,7 +217,8 @@
                     :game-account-state game-account-state})))))
   ([game-account-state mint-info init-state]
    (let [state-id (uuid/v4)
-         [sb bb]  (get-blind-bet game-account-state mint-info)]
+         player-map (players->player-map (:players game-account-state))]
+     (log/infof "player-map: %s" player-map)
      (into {}
            (map->GameState
             (merge
@@ -230,11 +237,11 @@
                                     (.getTime (js/Date.))),
               :state-id           state-id,
               :status             :game-status/init,
-              :game-no            (:game-no game-account-state),
+              :game-no            0,
               :game-type          (:game-type game-account-state),
               :size               (:size game-account-state),
               :mint-info          mint-info,
-              :player-map         (players->player-map (:players game-account-state))}))))))
+              :player-map         player-map}))))))
 
 (defn game-state->resp
   "Parse game state to response.
@@ -242,10 +249,12 @@
   This help reducing the response's body size."
   [state]
   (select-keys state
-               [:game-no :status :street :player-map :pots :min-raise
+               [:buyin-serial :settle-serial
+                :status :street :player-map :pots :min-raise
                 :street-bet :bet-map :action-player-id
                 :showdown-map :prize-map :state-id :prepare-cards
                 :shuffle-player-id :encrypt-player-id
                 :base-sb :btn :sb :bb :require-key-idents :share-key-map :collect-bet-map
                 :card-ciphers :player-actions :winning-type :dispatch-id
-                :game-id :this-event :winner-id :size :op-player-ids :start-time]))
+                :game-id :this-event :winner-id :size :op-player-ids :start-time
+                :rsa-pub-map :sig-map]))

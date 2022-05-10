@@ -38,7 +38,9 @@
   [manager game-id]
   (go-try
    (when-not (find-game-unchecked manager game-id)
-     (let [game-account-state (<!? (chain/fetch-game-account @global-chain-api game-id))
+     (let [game-account-state (<!? (chain/fetch-game-account @global-chain-api
+                                                             game-id
+                                                             {:commitment "finalized"}))
 
            ;; Use a fixed one for SNG/Bonus game.
            mint-info          (<!? (chain/fetch-mint-info @global-chain-api

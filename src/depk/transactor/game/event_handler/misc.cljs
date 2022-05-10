@@ -61,6 +61,24 @@
                   {:state state,
                    :event event})))
 
+(defn cant-update-rsa-pub!
+  [state event]
+  (throw (ex-info "Can't update RSA public key"
+                  {:state state,
+                   :event event})))
+
+(defn invalid-rsa-pub!
+  [state event]
+  (throw (ex-info "Invalid RSA public key"
+                  {:state state,
+                   :event event})))
+
+(defn invalid-sig!
+  [state event]
+  (throw (ex-info "Invalid signature"
+                  {:state state,
+                   :event event})))
+
 (defn community-cards-decryption-failed!
   [err-data]
   (throw (ex-info "Community cards decryption failed" err-data)))
@@ -132,9 +150,14 @@
   (let [eliminated-pids (->> player-map
                              vals
                              (filter #(= (js/BigInt 0) (:chips %)))
-                             (map :player-id))]
+                             (map :player-id))
+        remove-by-pids  (fn [m]
+                          (apply dissoc m eliminated-pids))]
     (log/infof "🧹Remove eliminated players: %s" eliminated-pids)
-    (update state :player-map (fn [m] (apply dissoc m eliminated-pids)))))
+    (-> state
+        (update :player-map remove-by-pids)
+        (update :pub-rsa-map remove-by-pids)
+        (update :sig-map remove-by-pids))))
 
 (defn reset-sng-state
   [{:keys [winner-id base-sb base-bb], :as state}]
@@ -153,37 +176,68 @@
   (if (or (= :cash game-type)
           (and (#{:bonus :sng} game-type)
                (nil? start-time)))
-    (let [dropout-pids (->> player-map
-                            vals
-                            (remove #(= :normal (:online-status %)))
-                            (map :player-id))]
+    (let [dropout-pids   (->> player-map
+                              vals
+                              (remove #(= :normal (:online-status %)))
+                              (map :player-id))
+          remove-by-pids (fn [m]
+                           (apply dissoc m dropout-pids))]
       (log/infof "🧹Remove non-alive players: %s" dropout-pids)
-      (update state :player-map (fn [m] (apply dissoc m dropout-pids))))
+      (-> state
+          (update :player-map remove-by-pids)
+          (update :rsa-pub-map remove-by-pids)
+          (update :sig-map remove-by-pids)))
     state))
+
+(defn- build-settle-map
+  "Build settle-map.
+
+  settle-map is a map from player id to settle-item.
+
+  settle-item is a map of following keys:
+    * settle-type, how chips will change. can be :no-update, :chips-add, :chips-sub
+    * settle-status, how player status change. can be :no-update, :empty-seat, :leave
+    * amount, the amount change
+  "
+  [chips-change-map player-map]
+  (->> (for [[pid {:keys [online-status chips]}] player-map]
+         (let [settle-status (if (= online-status :normal) :no-update :leave)
+               chips-change  (get chips-change-map pid (js/BigInt 0))
+               settle-type   (cond
+                               (> chips-change (js/BigInt 0))
+                               :chips-add
+
+                               (< chips-change (js/BigInt 0))
+                               :chips-sub
+
+                               :else
+                               :no-update)
+               amount        (if (< chips-change (js/BigInt 0)) (- chips-change) chips-change)]
+           [pid
+            {:settle-type   settle-type,
+             :settle-status settle-status,
+             :amount        amount}]))
+       (into {})))
 
 (defn submit-non-alive-players
   "Submit a request to remove non alive on-chain players."
-  [{:keys [player-map game-account-state game-type start-time], :as state}]
+  [{:keys [player-map game-account-state game-type start-time chips-change-map], :as state}]
   (if (and (or (= :cash game-type)
                (and (#{:bonus :sng} game-type)
-                    (nil? start-time)
-                    (= :open (:status game-account-state))))
+                    (nil? start-time)))
            (some #{:dropout :leave} (map :online-status (vals player-map))))
     (do
       (log/infof "🧹Submit remove players, players: %s"
                  (->> (vals player-map)
                       (remove (comp #{:normal} :online-status))
                       (map :player-id)))
-      (let [request {:type :system/settle-failed,
-                     :data {:player-status-map
-                            (->> (for [[id p] player-map]
-                                   [id
-                                    (if (= :normal (:online-status p))
-                                      :normal
-                                      :leave)])
-                                 (into {})),
-                            :expected-player-map
-                            player-map}}]
+
+      (let [settle-map (build-settle-map chips-change-map player-map)
+            request
+            {:type :system/settle,
+             :data {:settle-map    settle-map,
+                    :settle-serial (:settle-serial game-account-state)}}]
+
         ;; send settlement for leaving players
         (update state :api-requests conj request)))
     state))
@@ -263,7 +317,7 @@
   [state]
   (let [{:keys [btn]} state
         player-ids    (->> (map :player-id (list-players-in-order state btn player-online?))
-                           (take 2))]
+                           (take 3))]
     (log/infof "🫱Op player ids: %s" player-ids)
     (assoc state :op-player-ids player-ids)))
 
@@ -460,7 +514,6 @@
                                        (when-let [k (get-in released-keys-map [pid idx])]
                                          [idt k])))
                                     (into {}))]
-    ;; (log/infof "released-keys-map: %s" released-keys-map)
     (log/infof "🔐Take released keys: %s" released-share-key-map)
     (-> state
         (update :share-key-map merge released-share-key-map))))
@@ -749,10 +802,6 @@
       (update-require-key-idents)
       (take-released-keys)))
 
-(defn- decrypt-card
-  "Decrypt card with public share key."
-  [idx share-key-map])
-
 (defn- update-vals
   [f m]
   (->> (for [[k v] m]
@@ -837,14 +886,13 @@
           (update-vals #(mapv last %))))))
 
 (defn- submit-game-result-cash
-  [{:keys [chips-change-map player-map], :as state}]
-  (let [player-status-map (->> (for [[id p] player-map]
-                                 [id (get p :online-status :normal)])
-                               (into {}))
-        request {:type :system/settle-finished,
-                 :data {:chips-change-map    chips-change-map,
-                        :expected-player-map player-map,
-                        :player-status-map   player-status-map}}]
+  [{:keys [chips-change-map player-map game-account-state], :as state}]
+  (let [settle-map (build-settle-map chips-change-map player-map)
+
+        request
+        {:type :system/settle,
+         :data {:settle-map    settle-map,
+                :settle-serial (:settle-serial game-account-state)}}]
     (update state :api-requests conj request)))
 
 (defn- submit-game-result-sng
@@ -1088,9 +1136,7 @@
 (def empty-players (vec (repeat c/max-player-num nil)))
 
 (defn add-joined-player
-  "Add joined players found in game-account-state.
-
-  Only apply when game-no is equal or greater."
+  "Add joined players found in game-account-state."
   [state]
   (let [{:keys [player-map joined-players]} state]
     (log/infof "🚌Maintain players. Joined-players: %s" joined-players)
@@ -1103,23 +1149,18 @@
       state)))
 
 (defn merge-sync-state
-  "Merge game account state."
-  [{:keys [player-map], :as state} game-account-state]
-  (let [old-state      (:game-account-state state)
-        old-players    (or (:players old-state) empty-players)
-        new-players    (:players game-account-state)
-        joined-players (map (fn [idx]
-                              (let [o (nth old-players idx)
-                                    n (nth new-players idx)]
-                                (cond
-                                  o        nil
-                                  (nil? n) nil
-                                  :else    n)))
-                            (range 9))]
+  "Merge game account state, add new players."
+  [state game-account-state]
+  (let [{:keys [buyin-serial players]} game-account-state
+        joined-players (->> players
+                            (mapv (fn [p]
+                                    (when (= buyin-serial (:buyin-serial p))
+                                      p))))]
+
     (log/infof "😀Joined players: %s" (map :pubkey joined-players))
+
     (-> state
-        (assoc :game-account-state game-account-state
-               :game-no (:game-no game-account-state))
+        (assoc :game-account-state game-account-state)
         (update :joined-players merge-joined-players joined-players))))
 
 (defn reserve-dispatch

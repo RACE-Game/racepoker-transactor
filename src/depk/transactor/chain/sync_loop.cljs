@@ -1,40 +1,106 @@
 (ns depk.transactor.chain.sync-loop
   "Sychronization for blockchain states."
   (:require
-   [cljs.core.async     :as a]
-   [depk.transactor.log :as log]
+   [cljs.core.async          :as a]
+   [depk.transactor.log      :as log]
    [depk.transactor.chain.protocol :as p]
-   [clojure.set         :as set]
+   [depk.transactor.util     :as u]
+   [clojure.set              :as set]
    [depk.transactor.constant :as c]))
 
+(def settle-batch-size
+  "A batch size for settlement."
+  5)
+
+(defn merge-settle-item
+  [s1 s2]
+  (let [settle-status (cond
+                        (or (= :leave (:settle-status s1))
+                            (= :leave (:settle-status s2)))
+                        :leave
+
+                        (or (= :no-update (:settle-status s1))
+                            (= :no-update (:settle-status s2)))
+                        :no-update
+
+                        :else
+                        :empty-seat)
+
+        amount        (+ (* (if (= :chips-sub (:settle-type s1)) (js/BigInt -1) (js/BigInt 1))
+                            (:amount s1))
+                         (* (if (= :chips-sub (:settle-type s2)) (js/BigInt -1) (js/BigInt 1))
+                            (:amount s2)))
+
+        settle-type   (cond
+                        (> amount (js/BigInt 0))
+                        :chips-add
+
+                        (< amount (js/BigInt 0))
+                        :chips-sub
+
+                        :else
+                        :no-update)]
+    {:settle-status settle-status,
+     :settle-type   settle-type,
+     :amount        (u/abs amount)}))
+
+(defn merge-settle-map
+  [m1 m2]
+  (merge-with merge-settle-item m1 m2))
 
 (defn start-sync-loop
   "Fetch game state through chain API, emit :system/sync-state event to game handle."
-  [chain-api game-id output init-game-account-state]
+  [chain-api game-id input output init-game-account-state]
   (log/infof "🏁Start state sync loop for game[%s]" game-id)
-  (a/go-loop [last-game-no nil]
-    (a/<! (a/timeout 5000))
-    (let [game-account-state (try
-                               (a/<! (p/-fetch-game-account chain-api game-id))
-                               (catch js/Error _))]
-      (when-let [game-no (:game-no game-account-state)]
-        ;; Detect rollback - current game-no is less than previous game-no
-        (cond
-          ;; Rollback
-          (or (nil? last-game-no) (< game-no last-game-no))
-          (a/>! output
-                {:type    :system/recover-state,
-                 :game-id game-id,
-                 :data    {:game-account-state game-account-state}})
+  (a/go-loop [last-state     nil
+              acc-settle-map nil
+              acc-count      0]
+    (let [{:keys [buyin-serial settle-serial]} last-state
+          to         (a/timeout 2000)
+          [val port] (a/alts! [to input])]
+      (condp = port
+        ;; No input, fetch new state
+        to
+        (let [state (a/<! (p/-fetch-game-account chain-api game-id {:commitment "finalized"}))]
+          (log/infof "🥡Fetching new state, buyin: %s settle: %s"
+                     (:buyin-serial last-state)
+                     (:settle-serial last-state))
+          (when (not= buyin-serial (:buyin-serial state))
+            (log/infof "🥡New state, buyin: %s settle: %s"
+                       (:buyin-serial state)
+                       (:settle-serial state))
+            (a/>! output
+                  {:type    :system/sync-state,
+                   :game-id game-id,
+                   :data    {:game-account-state state}}))
+          (recur state acc-settle-map acc-count))
 
-          ;; Normal
-          (> game-no last-game-no)
-          (a/>! output
-                {:type    :system/sync-state,
-                 :game-id game-id,
-                 :data    {:game-account-state game-account-state}})
+        ;; Has input, send transaction
+        input
+        (let [{:keys [type data]} val]
+          (condp = type
+            :system/settle
+            (let [{:keys [settle-map settle-serial]} data
+                  any-leave?     (some #(= :leave (:settle-status %)) (vals settle-map))
+                  acc-count      (inc acc-count)
+                  new-settle-map (merge-settle-map acc-settle-map settle-map)]
+              (log/infof "🔨Current settle map: %s" acc-settle-map)
+              (log/infof "🔨New settle map: %s" new-settle-map)
+              (if (or any-leave? (= settle-batch-size acc-count))
+                (do (a/<! (p/-settle chain-api
+                                     game-id
+                                     (:settle-serial data)
+                                     new-settle-map))
+                    (recur last-state nil 0))
+                (recur last-state new-settle-map acc-count)))
 
-          :else
-          :noop))
+            :system/set-winner
+            (do
+              (a/<! (p/-set-winner chain-api
+                                   game-id
+                                   (:settle-serial data)
+                                   (:winner-id data)))
+              (recur last-state acc-settle-map acc-count))
 
-      (recur (or (:game-no game-account-state) last-game-no)))))
+            ;; Ignore other events
+            (recur last-state acc-settle-map acc-count)))))))

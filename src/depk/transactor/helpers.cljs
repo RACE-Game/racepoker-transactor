@@ -27,19 +27,19 @@
        x))
    m))
 
-(defn his
-  [game-id]
-  (js/console.log
-   (->> (game/fetch-histories @game-manager game-id)
-        (sort-by :game-no >)
-        first
-        :records
-        (map (fn [[evt st]]
-               [(str (name (:type evt)) "->" (name (:status st)))
-                (-> st
-                    (dissoc :game-id :game-no)
-                    (assoc :event evt)
-                    (format-vals))])))))
+;; (defn his
+;;   [game-id]
+;;   (js/console.log
+;;    (->> (game/fetch-histories @game-manager game-id)
+;;         (sort-by :game-no >)
+;;         first
+;;         :records
+;;         (map (fn [[evt st]]
+;;                [(str (name (:type evt)) "->" (name (:status st)))
+;;                 (-> st
+;;                     (dissoc :game-id :game-no)
+;;                     (assoc :event evt)
+;;                     (format-vals))])))))
 
 (defn st
   [game-id]

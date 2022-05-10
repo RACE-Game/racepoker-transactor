@@ -11,7 +11,6 @@
 
 (def event-list
   #{:system/sync-state
-    :system/recover-state
     :system/reset
     :system/start-game
     :client/shuffle-cards
@@ -133,17 +132,17 @@
   "Collect and (maybe) dispatch game history to output channel,
   return the new records."
   [old-state new-state event records output]
-
-  (if (= (:game-no old-state) (:game-no new-state))
-    (conj records [event new-state])
-    (do
-      (when (:game-no old-state)
-        (put! output
-              {:type :system/save-game-history,
-               :data {:game-id (:game-id old-state),
-                      :game-no (:game-no old-state),
-                      :records records}}))
-      [])))
+  ;; (if (= (:game-no old-state) (:game-no new-state))
+  ;;   (conj records [event new-state])
+  ;;   (do
+  ;;     (when (:game-no old-state)
+  ;;       (put! output
+  ;;             {:type :system/save-game-history,
+  ;;              :data {:game-id (:game-id old-state),
+  ;;                     :game-no (:game-no old-state),
+  ;;                     :records records}}))
+  ;;     []))
+  )
 
 (defn dispatch-broadcast-state
   [game-id state output]
@@ -157,7 +156,7 @@
   [game-id init-state input output]
   (log/infof "🏁Start event loop for game[%s]" game-id)
   ;; Put initial event
-  ;; (go (a/>! input (make-event :system/reset init-state)))
+  (go (a/>! input (make-event :system/reset init-state)))
   (go-loop [state   init-state
             records []]
     (let [event (<! input)]

@@ -8,8 +8,6 @@
    [depk.transactor.game.manager :as manager]
    [depk.transactor.log :as log]
    [depk.transactor.event.protocol :as ep]
-   [solana-clj.publickey :as pubkey]
-   ["tweetnacl" :as nacl]
    ["buffer" :as buffer]))
 
 (defn error-game-not-exist!
@@ -34,7 +32,8 @@
 (defn leave
   [game-manager game-id player-id released-keys]
   {:pre [(string? game-id)
-         (vector? released-keys)]}
+         (or (nil? released-keys)
+             (vector? released-keys))]}
   (go-try
    ;; (log/infof "player[%s] leave game [%s]" player-id game-id)
    (if-let [game-handle (manager/find-game game-manager game-id)]
@@ -46,30 +45,19 @@
      (throw (ex-info "game not exist" {:game-id game-id})))))
 
 (defn ready
-  [game-manager game-id player-id uuid sig]
+  [game-manager game-id player-id rsa-pub sig]
   {:pre [(string? player-id)
          (string? game-id)
-         (string? uuid)
+         (string? rsa-pub)
          (string? sig)]}
   (go-try
    (if-let [game-handle (manager/find-game game-manager game-id)]
-     (let [game-account-snapshot (handle/get-game-account-snapshot game-handle)
-           player   (first (filter #(= player-id (str (:pubkey %)))
-                                   (:players game-account-snapshot)))
-           ident-pk (:ident player)
-           k        (pubkey/to-buffer ident-pk)]
-
-       (if (nacl/sign.detached.verify
-            (buffer/Buffer.from uuid)
-            (buffer/Buffer.from sig "hex")
-            k)
-         (handle/send-event game-handle
-                            (m/make-event :client/ready
-                                          (handle/get-snapshot game-handle)
-                                          {}
-                                          player-id))
-         (do (log/infof "⭕Signature check failed.")
-             (throw (ex-info "Reject ready" {:reason "Signature check failed"})))))
+     (handle/send-event game-handle
+                        (m/make-event :client/ready
+                                      (handle/get-snapshot game-handle)
+                                      {:rsa-pub rsa-pub,
+                                       :sig     sig}
+                                      player-id))
      (throw (ex-info "game not exist" {:game-id game-id})))))
 
 ;; Alive, reconnect
