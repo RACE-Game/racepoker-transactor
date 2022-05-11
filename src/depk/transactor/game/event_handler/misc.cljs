@@ -389,7 +389,7 @@
         :player-actions     [],
         :winning-type       nil,
         :winner-id          nil,
-        :after-key-share    nil
+        :after-key-share    nil,
         :chips-change-map   nil})))
 
 (defn get-player-hole-card-indices
@@ -592,7 +592,7 @@
   "Update prize-map in state.
 
   Depends on pots."
-  [{:keys [pots btn mint-info], :as state}]
+  [{:keys [pots btn mint-info player-map], :as state}]
   (log/info "🏆Update prize map, pots:")
   (doseq [p pots]
     (log/infof "🏆-%s" (prn-str p)))
@@ -611,16 +611,19 @@
                                 (apply merge-with (fnil + (js/BigInt 0) (js/BigInt 0))))
         reminder           (get prize-map :reminder (js/BigInt 0))
         prize-map          (dissoc prize-map :reminder)
-        reminder-player-id (-> (list-players-in-order
-                                state
-                                btn
-                                (fn [{:keys [player-id status]}]
-                                  (and (#{:player-status/acted :player-status/allin
-                                          :player-status/wait}
-                                        status)
-                                       (get prize-map player-id))))
-                               first
-                               :player-id)
+        reminder-player-id (or (-> (list-players-in-order
+                                    state
+                                    btn
+                                    (fn [{:keys [player-id status]}]
+                                      (and (#{:player-status/acted :player-status/allin
+                                              :player-status/wait}
+                                            status)
+                                           (get prize-map player-id))))
+                                   first
+                                   :player-id)
+                               ;; It's possible to have no reminder player id
+                               ;; In this case, we use the first player id
+                               (ffirst player-map))
         _ (log/infof "🍀Reminder player id: %s" reminder-player-id)
         prize-map          (update prize-map reminder-player-id + reminder)]
     (assoc state :prize-map prize-map)))

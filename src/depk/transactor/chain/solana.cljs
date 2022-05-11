@@ -110,15 +110,27 @@
                (log/errorf "🚨game account not found: game[%s]" game-id))
 
            _ (log/infof "📝Settes: %s" settle-map)
-           _ (doseq [i    (range c/max-player-num)
-                     :let [{:keys [pubkey]} (nth (:players game-account-state) i)
-                           {:keys [settle-type settle-status amount]} (get settle-map (str pubkey))]]
+           _ (doseq
+               [i    (range c/max-player-num)
+                :let [{:keys [pubkey]} (nth (:players game-account-state) i)
+                      {:keys [settle-type settle-status amount]} (get settle-map (str pubkey))]]
 
                (log/info "📝-" (str pubkey) settle-type settle-status amount))
 
            dealer-program-id (pubkey/make-public-key (get @config :dealer-program-address))
 
-           {:keys [players stake-account-pubkey mint-pubkey]} game-account-state
+           {:keys [players stake-account-pubkey mint-pubkey transactor-pubkey owner-pubkey]}
+           game-account-state
+
+           transactor-ata-pubkey (<!?
+                                  (spl-token/get-associated-token-address
+                                   mint-pubkey
+                                   transactor-pubkey))
+
+           owner-ata-pubkey (<!?
+                             (spl-token/get-associated-token-address
+                              mint-pubkey
+                              owner-pubkey))
 
            ix-body (build-settle-ix-body players settle-map)
 
@@ -151,6 +163,12 @@
              {:pubkey     pda,
               :isSigner   false,
               :isWritable false}
+             {:pubkey     transactor-ata-pubkey,
+              :isSigner   false,
+              :isWritable true}
+             {:pubkey     owner-ata-pubkey,
+              :isSigner   false,
+              :isWritable true}
              {:pubkey     spl-token/token-program-id,
               :isSigner   false,
               :isWritable false}]
@@ -201,7 +219,8 @@
 
          dealer-program-id (pubkey/make-public-key (get @config :dealer-program-address))
 
-         {:keys [players stake-account-pubkey mint-pubkey]} game-account-state
+         {:keys [players stake-account-pubkey mint-pubkey transactor-pubkey owner-pubkey]}
+         game-account-state
 
          _ (log/infof "📝On chain players: %s" players)
 
@@ -216,6 +235,16 @@
                      (spl-token/get-associated-token-address
                       mint-pubkey
                       winner-pubkey))
+
+         transactor-ata-pubkey (<!?
+                                (spl-token/get-associated-token-address
+                                 mint-pubkey
+                                 transactor-pubkey))
+
+         owner-ata-pubkey (<!?
+                           (spl-token/get-associated-token-address
+                            mint-pubkey
+                            owner-pubkey))
 
          ix-keys [{:pubkey     (keypair/public-key fee-payer),
                    :isSigner   true,
@@ -233,6 +262,12 @@
                    :isSigner   false,
                    :isWritable false}
                   {:pubkey     ata-pubkey,
+                   :isSigner   false,
+                   :isWritable true}
+                  {:pubkey     transactor-ata-pubkey,
+                   :isSigner   false,
+                   :isWritable true}
+                  {:pubkey     owner-ata-pubkey,
                    :isSigner   false,
                    :isWritable true}
                   {:pubkey     spl-token/token-program-id,
