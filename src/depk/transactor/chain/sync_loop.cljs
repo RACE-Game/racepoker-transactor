@@ -84,6 +84,7 @@
                   any-leave?     (some #(= :leave (:settle-status %)) (vals settle-map))
                   acc-count      (inc acc-count)
                   new-settle-map (merge-settle-map acc-settle-map settle-map)]
+              (log/infof "🔨Received settle event: #%s" settle-serial)
               (log/infof "🔨Current settle map: %s" acc-settle-map)
               (log/infof "🔨New settle map: %s" new-settle-map)
               (if (or any-leave? (= settle-batch-size acc-count))
@@ -91,6 +92,7 @@
                                      game-id
                                      (:settle-serial data)
                                      new-settle-map))
+                    (log/infof "🔨Clear settle accumulator")
                     (recur last-state nil 0))
                 (recur last-state new-settle-map acc-count)))
 

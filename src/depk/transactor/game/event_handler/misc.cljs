@@ -237,7 +237,7 @@
             {:type :system/settle,
              :data {:settle-map    settle-map,
                     :settle-serial (:settle-serial game-account-state)}}]
-
+        (log/infof "✈️Submit game result for players' leaving")
         ;; send settlement for leaving players
         (update state :api-requests conj request)))
     state))
@@ -389,7 +389,8 @@
         :player-actions     [],
         :winning-type       nil,
         :winner-id          nil,
-        :after-key-share    nil})))
+        :after-key-share    nil
+        :chips-change-map   nil})))
 
 (defn get-player-hole-card-indices
   [{:keys [btn player-map], :as state}]
@@ -893,6 +894,7 @@
         {:type :system/settle,
          :data {:settle-map    settle-map,
                 :settle-serial (:settle-serial game-account-state)}}]
+    (log/infof "✈️Submit game result for CASH game")
     (update state :api-requests conj request)))
 
 (defn- submit-game-result-sng
@@ -906,6 +908,7 @@
                            :player-id)
             request   {:type :system/set-winner,
                        :data {:winner-id winner-id}}]
+        (log/infof "✈️Submit game result for SNG game")
         (-> state
             (update :api-requests conj request)
             (assoc :winner-id winner-id)))
@@ -1010,6 +1013,7 @@
         ;; NOTE: this pot is not accurate
         (update :pots conj (m/make-pot owners-current bet-current #{player-id}))
         (submit-game-result)
+        (remove-non-alive-players)
         (dispatch-reset)
         (assoc :status       :game-status/settle
                :winning-type :last-player
@@ -1151,11 +1155,12 @@
 (defn merge-sync-state
   "Merge game account state, add new players."
   [state game-account-state]
-  (let [{:keys [buyin-serial players]} game-account-state
-        joined-players (->> players
-                            (mapv (fn [p]
-                                    (when (= buyin-serial (:buyin-serial p))
-                                      p))))]
+  (let [old-buyin-serial  (get-in state [:game-account-state :buyin-serial] 0)
+        {:keys [players]} game-account-state
+        joined-players    (->> players
+                               (mapv (fn [p]
+                                       (when (< old-buyin-serial (:buyin-serial p))
+                                         p))))]
 
     (log/infof "😀Joined players: %s" (map :pubkey joined-players))
 

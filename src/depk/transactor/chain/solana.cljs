@@ -307,6 +307,7 @@
          (let [game-account-state (a/<! (p/-fetch-game-account this
                                                                game-id
                                                                {:commitment "finalized"}))]
+           (log/infof "☢️Retry Settle transaction")
            (a/<! (a/timeout 5000))
            ;; Unchanged serial means failed transaction
            (when (= settle-serial (:settle-serial game-account-state))
@@ -327,6 +328,7 @@
                                                                game-id
                                                                {:commitment "finalized"}))]
            ;; Unchanged serial means failed transaction
+           (log/infof "☢️Retry SetWinner transaction")
            (a/<! (a/timeout 5000))
            (when (= settle-serial (:settle-serial game-account-state))
              (recur)))))))
