@@ -149,6 +149,14 @@
 
            ata-keys (<!? (find-player-ata-keys players mint-pubkey settle-map))
 
+           _ (log/infof "Fee Payer: %s" (keypair/public-key fee-payer))
+           _ (log/infof "Game Account: %s" game-account-pubkey)
+           _ (log/infof "Stake Account: %s" stake-account-pubkey)
+           _ (log/infof "Stake PDA: %s" pda)
+           _ (log/infof "Transactor Rake Taker: %s" transactor-ata-pubkey)
+           _ (log/infof "Owner Rake Taker: %s" owner-ata-pubkey)
+           _ (log/infof "Token Program: %s" spl-token/token-program-id)
+
            ix-keys
            (into
             [{:pubkey     (keypair/public-key fee-payer),

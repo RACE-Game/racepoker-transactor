@@ -201,7 +201,10 @@
   "
   [chips-change-map player-map]
   (->> (for [[pid {:keys [online-status chips]}] player-map]
-         (let [settle-status (if (= online-status :normal) :no-update :leave)
+         (let [settle-status (if (and (= online-status :normal)
+                                      (not= chips (js/BigInt 0)))
+                               :no-update
+                               :leave)
                chips-change  (get chips-change-map pid (js/BigInt 0))
                settle-type   (cond
                                (> chips-change (js/BigInt 0))
