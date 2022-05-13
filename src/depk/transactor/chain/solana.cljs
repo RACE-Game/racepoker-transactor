@@ -17,7 +17,7 @@
    [depk.transactor.state.config :refer [config]]
    [depk.transactor.log :as log]
    [depk.transactor.state.config :refer [env]]
-   [depk.transactor.chain.state :refer [parse-state-data]]
+   [depk.transactor.chain.state :refer [parse-state-data set-winner-ix-id settle-ix-id]]
    [depk.transactor.util :as u]
    [depk.transactor.chain.sync-loop :as sync-loop]
    ["fs" :as fs]
@@ -137,7 +137,7 @@
            ;; _ (println "ix-body" ix-body)
 
            ix-data (apply ib/make-instruction-data
-                          (concat [c/instruction-head-settle
+                          (concat [[settle-ix-id 1]
                                    ;; settle-serial
                                    [(:settle-serial game-account-state) 4]
                                    ;; rake
@@ -232,7 +232,7 @@
 
          _ (log/infof "📝On chain players: %s" players)
 
-         ix-data (ib/make-instruction-data c/instruction-head-set-winner)
+         ix-data (ib/make-instruction-data [set-winner-ix-id 1])
 
          [pda] (<!? (pubkey/find-program-address #js [(buffer-from "stake")]
                                                  dealer-program-id))

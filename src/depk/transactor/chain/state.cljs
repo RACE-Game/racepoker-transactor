@@ -27,16 +27,15 @@
   [type]
   16)
 
+(def init-player-profile-ix-id 0)
+(def close-player-profile-ix-id 1)
+
 (def init-game-ix-id 0)
 (def buyin-ix-id 1)
-(def claim-ix-id 2)
-(def settle-ix-id 3)
-(def init-player-profile-ix-id 4)
-(def close-player-profile-ix-id 5)
-(def close-game-ix-id 6)
-(def open-game-ix-id 7)
-(def set-winner 8)
-(def cancel-game-ix-id 9)
+(def settle-ix-id 2)
+(def set-winner-ix-id 3)
+(def cancel-game-ix-id 4)
+(def rebuy-ix-id 5)
 
 (def ^:const max-players-num 9)
 

@@ -14,9 +14,6 @@
 
 (def increase-blinds-interval (* 3 60 1000))
 
-(def instruction-head-settle [3 1])
-(def instruction-head-set-winner [8 1])
-
 (def level-info-map
   {:nl100  {:sb (js/BigInt 1), :bb (js/BigInt 2)},
    :nl200  {:sb (js/BigInt 1), :bb (js/BigInt 2)},
