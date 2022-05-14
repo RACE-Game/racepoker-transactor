@@ -36,7 +36,7 @@
 
   (-> state
       (misc/merge-sync-state game-account-state)
-      (misc/reserve-dispatch)))
+      (misc/reserve-timeout)))
 
 ;; system/force-sync-state
 ;; receiving this event when something goes wrong.
@@ -421,7 +421,7 @@
   (let [player-map (assoc-in player-map [player-id :online-status] :dropout)]
     (-> state
         (assoc :player-map player-map)
-        (misc/reserve-dispatch))))
+        (misc/reserve-timeout))))
 
 ;; system/alive
 ;; A event received when a client established
@@ -445,7 +445,7 @@
   (let [player-map (assoc-in player-map [player-id :online-status] :normal)]
     (-> state
         (assoc :player-map player-map)
-        (misc/reserve-dispatch))))
+        (misc/reserve-timeout))))
 
 ;; client/leave
 ;; A event received when a player leave game
@@ -510,7 +510,7 @@
           (misc/next-state)
 
           (not (= player-id action-player-id))
-          (misc/reserve-dispatch))))))
+          (misc/reserve-timeout))))))
 
 (defmethod handle-event :player/fold
   [{:keys [status action-player-id state-id], :as state}

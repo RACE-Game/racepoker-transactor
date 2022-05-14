@@ -2,7 +2,8 @@
 
 (defprotocol IAttachable
   (-input [this])
-  (-output [this]))
+  (-output [this])
+  (-interest-event-types [this]))
 
 (defprotocol IEventBus
   (-shutdown [this])

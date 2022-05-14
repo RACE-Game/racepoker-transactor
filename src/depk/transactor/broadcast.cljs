@@ -5,6 +5,14 @@
    [depk.transactor.event.protocol :as ep]
    [depk.transactor.log :as log]))
 
+(defn shrink-state
+  [state]
+  (let [status (:status state)]
+    (case status
+      ;; :game-status/play (dissoc state :prepare-cards)
+
+      state)))
+
 (defn start-broadcast-loop
   [broadcaster opts]
   (log/infof "🏁Start broadcaster for game[%s]" (:game-id opts))
@@ -23,7 +31,7 @@
             (reset! snapshot state)
             (reset! game-account-snapshot game-account-state)
             ;; (log/infof "Send state to uid: %s" uid)
-            (chsk-send! uid [:game/state state])))
+            (chsk-send! uid [:game/state (shrink-state state)])))
 
         :system/recover-state
         (do
@@ -52,6 +60,10 @@
 
  (ep/-output [this]
    nil)
+
+ (ep/-interest-event-types [this]
+   [:system/broadcast-state
+    :system/recover-state])
 
  ep/IComponent
  (ep/-start [this opts]

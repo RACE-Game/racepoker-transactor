@@ -30,44 +30,34 @@
     :player/raise
     :player/bet})
 
-(defn expired-event!
-  [state event]
-  (throw (ex-info "Expired event"
-                  {:event    event,
-                   :state-id (:state-id state)})))
-
-(defn expired-event?
-  [state event]
-  (not (or
-        (nil? (:dispatch-id event))
-        (= (:state-id state) (:dispatch-id event))
-        (= (:dispatch-id state) (:dispatch-id event)))))
-
 (defn handle-result
   "Handle the result of event handler.
 
   Flush :dispatch-event, :api-requests
   Set :dispatch-id and :this-event."
   [event {:keys [state], :as res}]
-  (let [{:keys [dispatch-event reserve-dispatch-id api-requests state-id overwrite-this-event]}
+  (let [{:keys [dispatch-event reserve-timeout api-requests overwrite-this-event]}
         state
         state (cond-> (dissoc state
                               :dispatch-event
                               :api-requests
-                              :reserve-dispatch-id
+                              :reserve-timeout
                               :overwrite-this-event)
 
-                (not reserve-dispatch-id)
-                (assoc :dispatch-id state-id)
+                (not reserve-timeout)
+                (assoc :timeout-event nil)
+
+                dispatch-event
+                (assoc :timeout-event [(+ (.getTime (js/Date.)) (first dispatch-event))
+                                       (second dispatch-event)])
 
                 true
                 (assoc :this-event
                        (or overwrite-this-event
                            (:type event))))]
     (assoc res
-           :state          state
-           :dispatch-event dispatch-event
-           :api-requests   api-requests)))
+           :state        state
+           :api-requests api-requests)))
 
 (defn handle-event
   "Apply event to state, return a channel that contains the result map.
@@ -76,24 +66,20 @@
     * result, :ok | :err
     * state, the new state if succeed, the original state otherwise
     * (optional) api-requests, requests to send to chain api and store api.
-    * (optional) dispatch-event, [ms event], a event to dispatch with ms as delay
     * (optional) error, an Exception
 
   An event with an invalid state-id is considered to be expired."
   [state event]
   (go
    (try
-     (if (expired-event? state event)
-       {:result :expired, :state state}
-       ;; Process event
-       (let [new-state-id (uuid/v4)
-             new-state    (event-handler/handle-event (assoc state :state-id new-state-id) event)]
-         (if (map? new-state)
-           (handle-result event {:result :ok, :state new-state})
-           (let [v (<! new-state)]
-             (if (map? v)
-               (handle-result event {:result :ok, :state v})
-               {:result :err, :state state, :error v})))))
+     (let [new-state-id (uuid/v4)
+           new-state    (event-handler/handle-event (assoc state :state-id new-state-id) event)]
+       (if (map? new-state)
+         (handle-result event {:result :ok, :state new-state})
+         (let [v (<! new-state)]
+           (if (map? v)
+             (handle-result event {:result :ok, :state v})
+             {:result :err, :state state, :error v}))))
      (catch ExceptionInfo e
        (when (:player-id event)
          (log/infof "🧱Error in event handler: %s, event: %s"
@@ -104,21 +90,6 @@
        (log/errorf "Error in event handler, event: %s" (prn-str event))
        (js/console.error e)
        {:result :err, :state state, :error e}))))
-
-(defn dispatch-delay-event
-  "Dispatch dispatch-events to input channel.
-
-  dispatch-events is a map from timeout millis to event."
-  [event dispatch-event output]
-  (when dispatch-event
-    (let [[ms evt] dispatch-event]
-      (log/infof "⌛Event [%s] dispatch event[%s] after %sms"
-                 (str (:type event))
-                 (str (:type evt))
-                 (str ms))
-      (go-try
-       (<!? (timeout ms))
-       (put! output evt)))))
 
 (defn dispatch-api-request
   "Dispatch api-requests to output channel."
@@ -142,7 +113,7 @@
   ;;                     :game-no (:game-no old-state),
   ;;                     :records records}}))
   ;;     []))
-  )
+)
 
 (defn dispatch-broadcast-state
   [game-id state output]
@@ -152,6 +123,20 @@
                 :state              (game-state->resp state),
                 :game-account-state (:game-account-state state)}}))
 
+(defn take-event
+  [input state]
+  (go
+   (let [{:keys [timeout-event]} state
+         [to to-evt] timeout-event
+         ms (- (or to 0) (.getTime (js/Date.)))]
+     (if (pos? ms)
+       (let [to-ch      (a/timeout ms)
+             [val port] (a/alts! [to-ch input])]
+         (if (= port to-ch)
+           to-evt
+           val))
+       (a/<! input)))))
+
 (defn run-event-loop
   [game-id init-state input output]
   (log/infof "🏁Start event loop for game[%s]" game-id)
@@ -159,7 +144,7 @@
   (go (a/>! input (make-event :system/reset init-state)))
   (go-loop [state   init-state
             records []]
-    (let [event (<! input)]
+    (let [event (<! (take-event input state))]
 
       (if (event-list (:type event))
         (let [old-state state
@@ -187,7 +172,6 @@
               ;; (.info js/console "before:" old-state)
               ;; (.info js/console "after:" state)
 
-              (dispatch-delay-event event dispatch-event output)
               (dispatch-api-request event api-requests output)
               (dispatch-broadcast-state game-id state output)
               (recur state records))
@@ -204,6 +188,10 @@
 
  (ep/-output [this]
    (:output this))
+
+ (ep/-interest-event-types
+   [_this]
+   (vec event-list))
 
  ep/IComponent
  (ep/-start [this opts]

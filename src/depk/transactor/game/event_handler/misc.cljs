@@ -1174,6 +1174,6 @@
         (assoc :game-account-state game-account-state)
         (update :joined-players merge-joined-players joined-players))))
 
-(defn reserve-dispatch
+(defn reserve-timeout
   [state]
-  (assoc state :reserve-dispatch-id true))
+  (assoc state :reserve-timeout true))

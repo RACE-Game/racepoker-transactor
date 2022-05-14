@@ -10,9 +10,12 @@
   Will create the connection with bus for both consuming and producing."
   [attachable ebus]
   (let [input (p/-input attachable)
-        output (p/-output attachable)]
+        output (p/-output attachable)
+        event-types (p/-interest-event-types attachable)]
     (when input
-      (a/tap (:output-mult ebus) input))
+      (let [p (:output-pub ebus)]
+        (doseq [et event-types]
+          (a/sub p et input))))
     (when output
       (a/pipe output (:input ebus)))))
 

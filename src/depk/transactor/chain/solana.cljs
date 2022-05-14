@@ -405,6 +405,11 @@
    [this]
    (:output this))
 
+ (ep/-interest-event-types
+   [_this]
+   [:system/settle
+    :system/set-winner])
+
  ep/IComponent
  (ep/-start [this opts]
    (let [{:keys [input output]}       this

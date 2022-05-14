@@ -24,5 +24,8 @@
  (ep/-output [_this]
    nil)
 
+ (ep/-interest-event-types [_this]
+   [])
+
  ep/IComponent
  (ep/-start [_this _opts]))

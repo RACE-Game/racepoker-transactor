@@ -8,6 +8,10 @@
    [clojure.set              :as set]
    [depk.transactor.constant :as c]))
 
+(def sync-loop-event-types
+  [:system/settle
+   :system/set-winner])
+
 (def settle-batch-size
   "A batch size for settlement."
   5)

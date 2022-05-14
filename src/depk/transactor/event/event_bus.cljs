@@ -7,7 +7,7 @@
    [depk.transactor.event.protocol :as p]
    [depk.transactor.log :as log]))
 
-(defrecord MemEventBus [input output output-mult])
+(defrecord MemEventBus [input output output-pub])
 
 (extend-type MemEventBus
  p/IComponent
@@ -39,7 +39,7 @@
 
 (defn make-mem-event-bus
   []
-  (let [input       (a/chan 10)
-        output      (a/chan 10)
-        output-mult (a/mult output)]
-    (->MemEventBus input output output-mult)))
+  (let [input      (a/chan 10)
+        output     (a/chan 10)
+        output-pub (a/pub output :type)]
+    (->MemEventBus input output output-pub)))

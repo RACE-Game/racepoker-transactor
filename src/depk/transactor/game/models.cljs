@@ -153,7 +153,7 @@
    ;; after each event, the value will be updated, unless reserve-dispatch-id is true
    dispatch-id
    ;; preserve current dispatch, means "don't update dispatch-id"
-   reserve-dispatch-id
+   reserve-timeout
 
    ;; uuid, updated whenever state changes
    state-id
