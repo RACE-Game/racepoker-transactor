@@ -73,3 +73,12 @@
                                           keys)]
                    (when (seq (filter #(= % player-id) player-ids))
                      game-id)))))))
+
+(defn list-running-games
+  [manager]
+  (when-let [handle-map @(:game-handle-map manager)]
+    (->> handle-map
+         (keep (fn [[game-id h]]
+                 (let [{:keys [player-map]} (handle/get-snapshot h)]
+                   [game-id {:player-ids (keys player-map)}])))
+         (into {}))))

@@ -170,21 +170,15 @@
 
 ;; HTTP handlers
 
-(defn joined-games-list
-  [^js req ^js res]
-  (let [player-id (aget (.-query req) "player-id")
-        w         (t/writer :json)]
-    (doto res
-     (.contentType "application/transit+json")
-     (.send
-      (t/write w
-               (vec (game/list-game-ids-by-player-id
-                     @game-manager
-                     player-id)))))))
-
-(defn status
+(defn stats
   "Return current running status.
 
   Including how many games are running."
   [^js req ^js res]
-  (.send res (gstr/format "Transactor version: %s" c/version)))
+  (let [w (t/writer :json)]
+    (doto res
+     (.contentType "application/transit+json")
+     (.send
+      (t/write w
+               {:version c/version,
+                :games   (game/list-running-games @game-manager)})))))

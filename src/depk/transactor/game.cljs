@@ -228,6 +228,6 @@
 (defn fetch-histories
   [_game-manager _game-id])
 
-(defn list-game-ids-by-player-id
-  [game-manager player-id]
-  (manager/list-game-ids-by-player-id game-manager player-id))
+(defn list-running-games
+  [game-manager]
+  (manager/list-running-games game-manager))

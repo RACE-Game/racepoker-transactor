@@ -36,8 +36,7 @@
             :websocket  ws})))
    (.get "/api" (:ajax-get-or-ws-handshake @websocket))
    (.post "/api" (:ajax-post @websocket))
-   (.get "/joined" (fn [req res] (h/joined-games-list req res)))
-   (.get "/status" (fn [req res] (h/status req res)))
+   (.get "/stats" (fn [req res] (h/stats req res)))
    (.use (fn [req _res next]
            (log/warnf "Unhandled request: %s" (.-originalUrl ^js req))
            (next)))))
