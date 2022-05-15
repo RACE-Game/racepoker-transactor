@@ -628,7 +628,12 @@
                                ;; In this case, we use the first player id
                                (ffirst player-map))
         _ (log/infof "🍀Reminder player id: %s" reminder-player-id)
-        prize-map          (update prize-map reminder-player-id + reminder)]
+        prize-map          (update prize-map
+                                   reminder-player-id
+                                   (fnil +
+                                         (js/BigInt 0)
+                                         (js/BigInt 0))
+                                   reminder)]
     (assoc state :prize-map prize-map)))
 
 (defn update-chips-change-map
