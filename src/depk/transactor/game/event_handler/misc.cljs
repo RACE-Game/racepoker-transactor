@@ -239,6 +239,7 @@
             request
             {:type :system/settle,
              :data {:settle-map    settle-map,
+                    :rake          (js/BigInt 0),
                     :settle-serial (:settle-serial game-account-state)}}]
         (log/infof "✈️Submit game result for players' leaving")
         ;; send settlement for leaving players
@@ -591,10 +592,35 @@
         into-set (fnil into #{})]
     (update state :require-key-idents into-set require-key-idents)))
 
-(defn update-prize-map
-  "Update prize-map in state.
+(defn update-prize-map-cash
+  [{:keys [pots btn mint-info rake street], :as state}]
+  (log/info "🏆Update prize map, pots:")
+  (doseq [p pots]
+    (log/infof "🏆-%s" (prn-str p)))
+  (let [{:keys [decimals]} mint-info
+        prize-map          (->> pots
+                                (mapcat (fn [{:keys [amount winner-ids]}]
+                                          (let [base     (js/BigInt (js/Math.pow 10 decimals))
+                                                cnt      (js/BigInt (count winner-ids))
+                                                reminder (mod amount (* cnt base))
+                                                prize    (/ (- amount reminder) cnt)
+                                                ;; No rake taken from the round ended at preflop
+                                                rake-1   (if (= street :preflop)
+                                                           (js/BigInt 0)
+                                                           (/ (* rake prize) (js/BigInt 1000)))
+                                                prize    (- prize rake-1)]
+                                            (cons
+                                             {:rake-fee (+ (* cnt rake-1) reminder)}
+                                             (for [id winner-ids]
+                                               {id prize})))))
+                                (apply merge-with (fnil + (js/BigInt 0) (js/BigInt 0))))
+        rake-fee           (get prize-map :rake-fee (js/BigInt 0))
+        prize-map          (dissoc prize-map :rake-fee)]
+    (-> state
+        (assoc :prize-map prize-map)
+        (update :rake-fee (fnil + (js/BigInt 0)) rake-fee))))
 
-  Depends on pots."
+(defn update-prize-map-sng
   [{:keys [pots btn mint-info player-map], :as state}]
   (log/info "🏆Update prize map, pots:")
   (doseq [p pots]
@@ -635,6 +661,15 @@
                                          (js/BigInt 0))
                                    reminder)]
     (assoc state :prize-map prize-map)))
+
+(defn update-prize-map
+  "Update prize-map in state.
+
+  In Cash game, rake will be taken from pots."
+  [{:keys [game-type], :as state}]
+  (case game-type
+    :cash (update-prize-map-cash state)
+    (update-prize-map-sng state)))
 
 (defn update-chips-change-map
   "Update chips-change-map in state.
@@ -898,15 +933,18 @@
           (update-vals #(mapv last %))))))
 
 (defn- submit-game-result-cash
-  [{:keys [chips-change-map player-map game-account-state], :as state}]
+  [{:keys [chips-change-map player-map game-account-state rake-fee], :as state}]
   (let [settle-map (build-settle-map chips-change-map player-map)
 
         request
         {:type :system/settle,
          :data {:settle-map    settle-map,
+                :rake          rake-fee,
                 :settle-serial (:settle-serial game-account-state)}}]
     (log/infof "✈️Submit game result for CASH game")
-    (update state :api-requests conj request)))
+    (-> state
+        (update :api-requests conj request)
+        (assoc :rake-fee nil))))
 
 (defn- submit-game-result-sng
   [{:keys [player-map], :as state}]
@@ -1009,15 +1047,20 @@
 
 (defn single-player-win
   "Single player win the game."
-  [{:keys [total-bet-map bet-map], :as state} player-id]
+  [{:keys [total-bet-map bet-map rake game-type], :as state} player-id]
   ;; We have to use bet-sum to calculate the total prize
   ;; because pots are not complete here.
   (let [bet-sum        (reduce + (js/BigInt 0) (vals total-bet-map))
         owners-current (set (keys bet-map))
-        bet-current    (reduce + (js/BigInt 0) (vals bet-map))]
+        bet-current    (reduce + (js/BigInt 0) (vals bet-map))
+        ;; FIXME better implementation
+        cash-game?     (= game-type :cash)
+        rake-fee       (when cash-game? (/ (* rake bet-sum) (js/BigInt 1000)))
+        prize          (if cash-game? (- bet-sum rake-fee) bet-sum)]
     (-> state
         (assign-winner-to-pots [#{player-id}])
-        (assoc :prize-map {player-id bet-sum})
+        (assoc :prize-map {player-id prize}
+               :rake-fee  rake-fee)
         (apply-prize-map)
         (update-chips-change-map)
         ;; Append a pot for current bet

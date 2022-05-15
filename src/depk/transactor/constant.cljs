@@ -1,5 +1,7 @@
 (ns depk.transactor.constant)
 
+(def version "ALPHA 0.1.17.1")
+
 (def max-player-num 9)
 
 (def continue-start-game-delay 100)

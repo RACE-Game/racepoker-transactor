@@ -34,7 +34,7 @@
   "Handle the result of event handler.
 
   Flush :dispatch-event, :api-requests
-  Set :dispatch-id and :this-event."
+  Also set :this-event."
   [event {:keys [state], :as res}]
   (let [{:keys [dispatch-event reserve-timeout api-requests overwrite-this-event]}
         state

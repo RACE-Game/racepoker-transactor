@@ -1,12 +1,14 @@
 (ns depk.transactor.handlers
   (:require
    [depk.transactor.log :as log]
-   [clojure.string      :as str]
-   [cljs.core.async     :as a]
+   [clojure.string :as str]
+   [cljs.core.async :as a]
    [depk.transactor.game :as game]
    [depk.transactor.state.game-manager :refer [game-manager]]
-   [cognitect.transit   :as t]
-   ["uuid"              :as uuid]))
+   [cognitect.transit :as t]
+   [depk.transactor.constant :as c]
+   ["uuid" :as uuid]
+   [goog.string :as gstr]))
 
 ;; Websocket Event Handler
 
@@ -22,7 +24,7 @@
 
       :chsk/uidport-open
       (let [[game-id player-id] ev-data]
-        (game/alive @game-manager  game-id player-id))
+        (game/alive @game-manager game-id player-id))
 
       :noop)))
 
@@ -56,7 +58,7 @@
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
   ;; (log/infof "Keep alive: %s" uid)
   (a/go
-    (let [[game-id player-id rsa-pub sig] uid]
+   (let [[game-id player-id rsa-pub sig] uid]
      (a/<! (game/ready @game-manager game-id player-id rsa-pub sig))
      (?reply-fn {:result :ok}))))
 
@@ -184,4 +186,5 @@
   "Return current running status.
 
   Including how many games are running."
-  [^js req ^js res])
+  [^js req ^js res]
+  (.send res (gstr/format "Transactor version: %s" c/version)))

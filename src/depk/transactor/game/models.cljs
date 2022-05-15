@@ -76,6 +76,7 @@
    ante
    buyin
    btn
+   rake
    size
    ;; game status: init prepare shuffle encrypt key-share play showdown settle
    status
@@ -144,14 +145,12 @@
    prize-map
    ;; player id to chips change
    chips-change-map
+   ;; the accumulator of current rake
+   rake-fee
 
    ;; dispatch event [ms, event]
    ;; an events dispatched with a delay
    dispatch-event
-   ;; an ID for dispatched event, the event will be handled only when the IDs are same.
-   ;; this property is managed by event loop
-   ;; after each event, the value will be updated, unless reserve-dispatch-id is true
-   dispatch-id
    ;; preserve current dispatch, means "don't update dispatch-id"
    reserve-timeout
 
@@ -216,7 +215,7 @@
                     :status             :game-status/init,
                     :game-account-state game-account-state})))))
   ([game-account-state mint-info init-state]
-   (let [state-id (uuid/v4)
+   (let [state-id   (uuid/v4)
          player-map (players->player-map (:players game-account-state))]
      (log/infof "player-map: %s" player-map)
      (into {}
@@ -229,6 +228,8 @@
               :base-sb            (:sb game-account-state),
               :base-bb            (:bb game-account-state),
               :base-ante          (:ante game-account-state),
+              :rake               (+ (js/BigInt (:transactor-rake game-account-state))
+                                     (js/BigInt (:owner-rake game-account-state))),
               :game-account-state game-account-state,
               ;; If game already started, set a start-time
               ;; Mark this game is in progress

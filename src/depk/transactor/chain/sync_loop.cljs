@@ -58,8 +58,9 @@
   (log/infof "🏁Start state sync loop for game[%s]" game-id)
   (a/go-loop [last-state     nil
               acc-settle-map nil
+              acc-rake       (js/BigInt 0)
               acc-count      0]
-    (let [{:keys [buyin-serial settle-serial]} last-state
+    (let [{:keys [buyin-serial]} last-state
           to         (a/timeout 2000)
           [val port] (a/alts! [to input])]
       (condp = port
@@ -77,28 +78,29 @@
                   {:type    :system/sync-state,
                    :game-id game-id,
                    :data    {:game-account-state state}}))
-          (recur state acc-settle-map acc-count))
+          (recur state acc-settle-map acc-rake acc-count))
 
         ;; Has input, send transaction
         input
         (let [{:keys [type data]} val]
           (condp = type
             :system/settle
-            (let [{:keys [settle-map settle-serial]} data
+            (let [{:keys [settle-map settle-serial rake]} data
                   any-leave?     (some #(= :leave (:settle-status %)) (vals settle-map))
                   acc-count      (inc acc-count)
                   new-settle-map (merge-settle-map acc-settle-map settle-map)]
               (log/infof "🔨Received settle event: #%s" settle-serial)
               (log/infof "🔨Current settle map: %s" acc-settle-map)
               (log/infof "🔨New settle map: %s" new-settle-map)
-              (if (or any-leave? (= settle-batch-size acc-count))
+              (if (or any-leave? (<= settle-batch-size acc-count))
                 (do (a/<! (p/-settle chain-api
                                      game-id
                                      (:settle-serial data)
+                                     rake
                                      new-settle-map))
                     (log/infof "🔨Clear settle accumulator")
-                    (recur last-state nil 0))
-                (recur last-state new-settle-map acc-count)))
+                    (recur last-state nil (js/BigInt 0) 0))
+                (recur last-state new-settle-map (+ acc-rake rake) acc-count)))
 
             :system/set-winner
             (do
@@ -106,7 +108,4 @@
                                    game-id
                                    (:settle-serial data)
                                    (:winner-id data)))
-              (recur last-state acc-settle-map acc-count))
-
-            ;; Ignore other events
-            (recur last-state acc-settle-map acc-count)))))))
+              (recur last-state acc-settle-map acc-rake acc-count))))))))
