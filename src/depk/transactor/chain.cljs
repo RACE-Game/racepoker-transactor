@@ -14,8 +14,8 @@
   - settle-type: leave, empty, no-update
   - amount: the withdraw amount
   "
-  [chain-api game-id settle-serial settle-map]
-  (p/-settle chain-api game-id settle-serial settle-map))
+  [chain-api game-id settle-serial rake settle-map]
+  (p/-settle chain-api game-id settle-serial rake settle-map))
 
 (defn set-winner
   "Set a winner for SNG game.
