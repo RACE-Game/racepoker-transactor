@@ -11,6 +11,12 @@
    [goog.string :as gstr]
    [depk.transactor.log :as log]))
 
+(defn- update-vals*
+  [f m]
+  (->> (for [[k v] m]
+         [k (f v)])
+       (into {})))
+
 ;; errors
 
 (defn player-already-alive!
@@ -641,7 +647,7 @@
            (not= street :street/preflop))
     (let [total-1   (->> (vals prize-map)
                          (reduce + (js/BigInt 0)))
-          prize-map (update-vals (fn [v]
+          prize-map (update-vals* (fn [v]
                                    (if (> v (js/BigInt 0))
                                      (/ (* v (- (js/BigInt 1000) rake)) (js/BigInt 1000))
                                      v))
@@ -835,12 +841,6 @@
       (update-require-key-idents)
       (take-released-keys)))
 
-(defn- update-vals
-  [f m]
-  (->> (for [[k v] m]
-         [k (f v)])
-       (into {})))
-
 (defn- decrypt-community-cards
   [{:keys [op-player-ids player-map share-key-map card-ciphers], :as state}]
   (go-try
@@ -916,7 +916,7 @@
 
      (->> (mapv vector ids cards)
           (group-by first)
-          (update-vals #(mapv last %))))))
+          (update-vals* #(mapv last %))))))
 
 (defn- submit-game-result-cash
   [{:keys [chips-change-map player-map game-account-state rake-fee], :as state}]

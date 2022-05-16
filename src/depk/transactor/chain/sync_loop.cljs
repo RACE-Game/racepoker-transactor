@@ -14,7 +14,7 @@
 
 (def settle-batch-size
   "A batch size for settlement."
-  1)
+  5)
 
 (defn merge-settle-item
   [s1 s2]

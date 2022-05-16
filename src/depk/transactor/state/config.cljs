@@ -1,6 +1,6 @@
 (ns depk.transactor.state.config
   (:require
-   [macchiato.env   :as config]
+   [depk.transactor.util.config :as conf]
    [mount.core      :as mount]
    [depk.transactor.log :as log]
    [clojure.string  :as str]))
@@ -15,7 +15,7 @@
 (defn build-config
   "build configuration map based on current env."
   []
-  (let [conf (config/env)
+  (let [conf (conf/env)
         e    (str (name @env) "-")]
     (log/infof "🌐Current environment: %s" @env)
     (->> (for [[k v] conf]

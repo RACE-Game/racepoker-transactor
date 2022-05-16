@@ -16,7 +16,6 @@
    [depk.transactor.constant :as c]
    [depk.transactor.state.config :refer [config]]
    [depk.transactor.log :as log]
-   [depk.transactor.state.config :refer [env]]
    [depk.transactor.chain.state :refer [parse-state-data set-winner-ix-id settle-ix-id]]
    [depk.transactor.util :as u]
    [depk.transactor.chain.sync-loop :as sync-loop]

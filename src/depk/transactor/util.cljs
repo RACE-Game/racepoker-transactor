@@ -1,4 +1,5 @@
 (ns depk.transactor.util
+  (:refer-clojure :exclude [abs])
   (:require-macros depk.transactor.util)
   (:require
    [cljs.core.async   :refer [<! >! go-loop chan close!]]
