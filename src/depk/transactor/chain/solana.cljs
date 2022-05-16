@@ -116,6 +116,7 @@
                       {:keys [settle-type settle-status amount]} (get settle-map (str pubkey))]]
 
                (log/info "📝-" (str pubkey) settle-type settle-status amount))
+           _ (log/infof "📝Rake: %s" rake)
 
            dealer-program-id (pubkey/make-public-key (get @config :dealer-program-address))
 

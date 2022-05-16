@@ -14,7 +14,7 @@
 
 (def settle-batch-size
   "A batch size for settlement."
-  5)
+  1)
 
 (defn merge-settle-item
   [s1 s2]
@@ -88,19 +88,21 @@
             (let [{:keys [settle-map settle-serial rake]} data
                   any-leave?     (some #(= :leave (:settle-status %)) (vals settle-map))
                   acc-count      (inc acc-count)
-                  new-settle-map (merge-settle-map acc-settle-map settle-map)]
+                  new-settle-map (merge-settle-map acc-settle-map settle-map)
+                  acc-rake       (+ acc-rake rake)]
               (log/infof "🔨Received settle event: #%s" settle-serial)
               (log/infof "🔨Current settle map: %s" acc-settle-map)
               (log/infof "🔨New settle map: %s" new-settle-map)
+              (log/infof "🔨New rake: %s" acc-rake)
               (if (or any-leave? (<= settle-batch-size acc-count))
                 (do (a/<! (p/-settle chain-api
                                      game-id
                                      (:settle-serial data)
-                                     rake
+                                     acc-rake
                                      new-settle-map))
                     (log/infof "🔨Clear settle accumulator")
                     (recur last-state nil (js/BigInt 0) 0))
-                (recur last-state new-settle-map (+ acc-rake rake) acc-count)))
+                (recur last-state new-settle-map acc-rake acc-count)))
 
             :system/set-winner
             (do
