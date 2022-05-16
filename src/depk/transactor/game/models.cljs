@@ -134,7 +134,6 @@
    min-raise
    street-bet
    bet-map
-   total-bet-map
    collect-bet-map
    action-player-id
 

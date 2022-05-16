@@ -381,6 +381,10 @@
   (when (and (get rsa-pub-map player-id)
              (or (not= (get rsa-pub-map player-id) rsa-pub)
                  (not= (get sig-map player-id) sig)))
+    (println rsa-pub-map)
+    (println rsa-pub)
+    (println sig-map)
+    (println sig)
     (misc/cant-update-rsa-pub! state event))
 
   (when-not player-id

@@ -162,7 +162,7 @@
     (log/infof "🧹Remove eliminated players: %s" eliminated-pids)
     (-> state
         (update :player-map remove-by-pids)
-        (update :pub-rsa-map remove-by-pids)
+        (update :rsa-pub-map remove-by-pids)
         (update :sig-map remove-by-pids))))
 
 (defn reset-sng-state
@@ -392,7 +392,6 @@
         :street-bet         nil,
         :bet-map            nil,
         :collect-bet-map    nil,
-        :total-bet-map      {},
         :pots               [],
         :showdown-map       nil,
         :prize-map          nil,
@@ -648,10 +647,10 @@
     (let [total-1   (->> (vals prize-map)
                          (reduce + (js/BigInt 0)))
           prize-map (update-vals* (fn [v]
-                                   (if (> v (js/BigInt 0))
-                                     (/ (* v (- (js/BigInt 1000) rake)) (js/BigInt 1000))
-                                     v))
-                                 prize-map)
+                                    (if (> v (js/BigInt 0))
+                                      (/ (* v (- (js/BigInt 1000) rake)) (js/BigInt 1000))
+                                      v))
+                                  prize-map)
           total-2   (->> (vals prize-map)
                          (reduce + (js/BigInt 0)))
           rake-fee  (- total-1 total-2)]
@@ -667,20 +666,23 @@
   "Update chips-change-map in state.
 
   Depends on player-map and pots."
-  [{:keys [total-bet-map prize-map player-map], :as state}]
+  [{:keys [prize-map player-map pots], :as state}]
   (let [init-map         (->> (for [[pid] player-map]
                                 [pid (js/BigInt 0)])
                               (into {}))
+
+        total-bet-map    (->> pots
+                              (mapcat (fn [{:keys [owner-ids amount]}]
+                                        (let [bet (/ amount (js/BigInt (count owner-ids)))]
+                                          (for [id owner-ids]
+                                            {id bet}))))
+                              (apply merge-with (fnil + (js/BigInt 0) (js/BigInt 0))))
 
         chips-change-map (->> (merge-with (fnil - (js/BigInt 0) (js/BigInt 0))
                                           init-map
                                           total-bet-map)
                               (merge-with (fnil + (js/BigInt 0) (js/BigInt 0))
                                           prize-map))]
-
-    (log/info "💰Players' total bet")
-    (doseq [[p b] total-bet-map]
-      (log/infof "💰-%s \t%s" p b))
 
     (log/info "💰Players' prize map")
     (doseq [[p a] prize-map]
@@ -743,11 +745,10 @@
                                      new-bb-player)]
     (-> state
         (assoc
-         :bet-map       bet-map
-         :total-bet-map bet-map
-         :player-map    new-player-map
-         :min-raise     bb
-         :street-bet    bb)
+         :bet-map    bet-map
+         :player-map new-player-map
+         :min-raise  bb
+         :street-bet bb)
         (ask-player-for-action action-player-id))))
 
 (defn apply-prize-map
@@ -777,43 +778,70 @@
 (defn collect-bet-to-pots
   "Update pots.
 
-  When not all players have the same bet, multiple pots will be created."
-  [{:keys [player-map bet-map], :as state}]
-  (let [steps    (->> bet-map
-                      vals
-                      distinct
-                      ;; Here we deal with js/BigInt
-                      ;; sort-by needs a result of -/+/0 in Number
-                      (sort-by identity #(js/parseInt (- %1 %2))))
-        pots
-        (loop [ret     []
-               counted (js/BigInt 0)
-               [step & rest-steps] steps]
-          (if-not step
-            ret
-            (let [owner-ids (->> bet-map
-                                 (filter (fn [[player-id bet]]
-                                           (and (>= bet step)
-                                                (not= :player-status/fold
-                                                      (get-in player-map [player-id :status])))))
-                                 (map key)
-                                 (into #{}))
+  When not all players have the same bet, multiple pots will be created.
+  The value of :pots is a vec. The first is the main pot, and the followings are side pots."
+  [{:keys [player-map bet-map pots], :as state}]
 
-                  total     (->> bet-map
-                                 (map (fn [[_ bet]]
-                                        (min bet step)))
-                                 (reduce + (js/BigInt 0)))
-                  amount    (- total counted)
-                  pot       (m/make-pot owner-ids amount)]
-              (recur (if (= (count owner-ids) (count (:owner-ids (peek ret))))
-                       (conj (pop ret) (update pot :amount + (:amount (peek ret))))
-                       (conj ret pot))
-                     total
-                     rest-steps))))
-        into-vec (fnil into [])]
+  (let [steps          (->> bet-map
+                            vals
+                            distinct
+                            ;; Here we deal with js/BigInt
+                            ;; sort-by needs a result of -/+/0 in Number
+                            (sort-by identity #(js/parseInt (- %1 %2))))
+
+        ;; some example for owner-ids:
+        ;;   [[a] [a b] [a b c d]]
+        ;;   [[a b] [a b c] [a b c d]]
+        owner-ids-list (->> steps
+                            (map (fn [step]
+                                   (->> bet-map
+                                        (filter #(<= step (second %)))
+                                        (map key)
+                                        (set)))))
+
+        new-pots       (loop [pots []
+                              acc  (js/BigInt 0)
+                              [owner-ids & next-owner-ids-list] owner-ids-list]
+                         (if-not owner-ids
+                           (reverse pots)
+                           (let [amount-1 (- (apply min (vals (select-keys bet-map owner-ids))) acc)
+                                 amount   (* amount-1 (js/BigInt (count owner-ids)))]
+                             (recur (conj pots (m/make-pot owner-ids amount))
+                                    (+ acc amount-1)
+                                    next-owner-ids-list))))
+
+        ;; pots with only one owner is meaningless
+        ;; the amount will be returned to chips
+        [ret-player-id ret-bet new-pots] (let [main-pot (first new-pots)]
+                                           (if (= 1 (count (:owner-ids main-pot)))
+                                             [(first (:owner-ids main-pot))
+                                              (:amount main-pot)
+                                              (next new-pots)]
+                                             [nil nil new-pots]))
+
+        ;; Apply return bet to that player
+        player-map     (if ret-player-id
+                         (update-in player-map [ret-player-id :chips] + ret-bet)
+                         player-map)
+
+        ;; Merge pots by same owner-ids
+        rep-pots       (->> (into (or pots []) new-pots)
+                            (partition-by #(count (:owner-ids %)))
+                            (map (fn [pots]
+                                   (m/make-pot (:owner-ids (first pots))
+                                               (transduce (map :amount) + (js/BigInt 0) pots)))))]
+
+    ;; Log pots
+    (log/info "💵Current pots:")
+    (doseq [pot rep-pots]
+      (log/infof "💵%s - %s" (:amount pot) (:owner-ids pot)))
+    (when ret-player-id
+      (log/infof "💵Return bet %s to %s" ret-bet ret-player-id))
+
     (-> state
-        (update :pots into-vec pots)
+        (assoc :pots rep-pots)
         (assoc :collect-bet-map bet-map)
+        (assoc :player-map player-map)
         (assoc :bet-map nil))))
 
 (defn prepare-showdown
@@ -1021,7 +1049,7 @@
                                 (mapv #(set (mapv first (second %)))))]
 
      (-> state
-         (collect-bet-to-pots)
+         ;; (collect-bet-to-pots)
          (assoc :showdown-map showdown)
          (assign-winner-to-pots winner-id-sets)
          (update-prize-map)
@@ -1035,27 +1063,22 @@
 
 (defn single-player-win
   "Single player win the game."
-  [{:keys [total-bet-map bet-map rake game-type], :as state} player-id]
+  [state player-id]
   ;; We have to use bet-sum to calculate the total prize
   ;; because pots are not complete here.
-  (let [bet-sum        (reduce + (js/BigInt 0) (vals total-bet-map))
-        owners-current (set (keys bet-map))
-        bet-current    (reduce + (js/BigInt 0) (vals bet-map))]
-    (-> state
-        (assign-winner-to-pots [#{player-id}])
-        (assoc :prize-map {player-id bet-sum})
-        (take-rake)
-        (apply-prize-map)
-        (update-chips-change-map)
-        ;; Append a pot for current bet
-        ;; NOTE: this pot is not accurate
-        (update :pots conj (m/make-pot owners-current bet-current #{player-id}))
-        (submit-game-result)
-        (remove-non-alive-players)
-        (dispatch-reset)
-        (assoc :status       :game-status/settle
-               :winning-type :last-player
-               :bet-map      nil))))
+  (-> state
+      (collect-bet-to-pots)
+      (assign-winner-to-pots [#{player-id}])
+      (update-prize-map)
+      (take-rake)
+      (apply-prize-map)
+      (update-chips-change-map)
+      (submit-game-result)
+      (remove-non-alive-players)
+      (dispatch-reset)
+      (assoc :status       :game-status/settle
+             :winning-type :last-player
+             :bet-map      nil)))
 
 (defn change-street
   "Goto to street and reset some states."

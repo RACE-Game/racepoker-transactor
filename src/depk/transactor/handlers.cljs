@@ -30,7 +30,7 @@
 
 (defmethod event-msg-handler :game/attach
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
-  (log/infof "🚩Attach game: %s" uid)
+  (log/infof "🚩Attach game: %s" (take 2 uid))
   (let [[game-id player-id] uid]
     (a/go
      (if (a/<! (game/attach-game @game-manager game-id player-id))
@@ -47,7 +47,7 @@
 
 (defmethod event-msg-handler :client/leave
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
-  (log/infof "🚩Leave game: %s" uid)
+  (log/infof "🚩Leave game: %s" (take 2 uid))
   (a/go
    (let [[game-id player-id]     uid
          {:keys [released-keys]} ?data]
@@ -91,7 +91,7 @@
 
 (defmethod event-msg-handler :player/call
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
-  (log/infof "⚽Call: %s" uid)
+  (log/infof "⚽Call: %s" (take 2 uid))
   (a/go
    (let [[game-id player-id] uid]
      (a/<! (game/player-call @game-manager game-id player-id))
@@ -102,13 +102,13 @@
   (a/go
    (let [[game-id player-id] uid
          {:keys [amount]}    ?data]
-     (log/infof "⚽Raise: %s %s" uid amount)
+     (log/infof "⚽Raise: %s %s" (take 2 uid) amount)
      (a/<! (game/player-raise @game-manager game-id player-id amount))
      (?reply-fn {:result :ok}))))
 
 (defmethod event-msg-handler :player/check
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
-  (log/infof "⚽Check: %s" uid)
+  (log/infof "⚽Check: %s" (take 2 uid))
   (a/go
    (let [[game-id player-id] uid]
      (a/<! (game/player-check @game-manager game-id player-id))
@@ -119,13 +119,13 @@
   (a/go
    (let [[game-id player-id] uid
          {:keys [amount]}    ?data]
-     (log/infof "⚽Bet: %s %s" uid amount)
+     (log/infof "⚽Bet: %s %s" (take 2 uid) amount)
      (a/<! (game/player-bet @game-manager game-id player-id amount))
      (?reply-fn {:result :ok}))))
 
 (defmethod event-msg-handler :player/fold
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
-  (log/infof "⚽Fold: %s" uid)
+  (log/infof "⚽Fold: %s" (take 2 uid))
   (a/go
    (let [[game-id player-id]  uid
          {:keys [share-keys]} ?data]
