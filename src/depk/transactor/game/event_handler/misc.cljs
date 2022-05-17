@@ -848,6 +848,7 @@
   "Player showdown hole cards."
   [{:keys [], :as state}]
   (-> state
+      (collect-bet-to-pots)
       (assoc :street          :street/showdown
              :status          :game-status/key-share
              :after-key-share :settle)
@@ -1011,7 +1012,6 @@
                winner-player-ids
                bet-map)
     (-> state
-        (collect-bet-to-pots)
         (assign-winner-to-pots [winner-player-ids])
         (update-prize-map)
         (take-rake)
@@ -1049,7 +1049,6 @@
                                 (mapv #(set (mapv first (second %)))))]
 
      (-> state
-         ;; (collect-bet-to-pots)
          (assoc :showdown-map showdown)
          (assign-winner-to-pots winner-id-sets)
          (update-prize-map)
