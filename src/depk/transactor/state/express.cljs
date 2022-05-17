@@ -5,18 +5,13 @@
    [depk.transactor.state.websocket :refer [websocket]]
    [taoensso.sente]
    [mount.core          :as mount]
-   [cljs.core.async     :as a]
-   ["http"              :as http]
    ["express"           :as express]
    ["express-ws"        :as express-ws]
-   ["ws"                :as ws]
    ["cookie-parser"     :as cookie-parser]
    ["body-parser"       :as body-parser]
    ["express-session"   :as session]
    ["csurf"             :as csurf]
-   ["cors"              :as cors]
-   [clojure.string      :as str]
-   [goog.string         :as gstr]))
+   ["cors"              :as cors]))
 
 (def cors-opts
   #js {:origin #".*"})

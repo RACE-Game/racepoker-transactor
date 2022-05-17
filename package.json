@@ -1,35 +1,20 @@
 {
   "dependencies": {
-    "@peculiar/webcrypto": "^1.2.3",
     "@solana/spl-token": "^0.2.0",
     "@solana/web3.js": "^1.31.0",
     "@solflare-wallet/sdk": "^1.0.12",
-    "aes-js": "^3.1.2",
     "bn.js": "^5.2.0",
     "body-parser": "^1.19.2",
-    "concat-stream": "^2.0.0",
-    "content-type": "^1.0.4",
     "cookie-parser": "^1.4.6",
     "cookies": "^0.8.0",
     "cors": "^2.8.5",
     "crypto": "^1.0.1",
     "csurf": "^1.11.0",
-    "encoding": "^0.1.13",
-    "etag": "^1.8.1",
     "express": "^4.17.3",
     "express-session": "^1.17.2",
     "express-ws": "^5.0.2",
-    "http": "^0.0.1-security",
-    "lru": "^3.1.0",
-    "multiparty": "^4.2.1",
-    "qs": "^6.10.2",
-    "random-bytes": "^1.0.0",
-    "simple-encryptor": "^3.0.0",
     "tweetnacl": "^1.0.3",
-    "url": "^0.11.0",
-    "uuid": "^8.3.2",
-    "ws": "^7.5.7",
-    "xregexp": "^4.3.0"
+    "uuid": "^8.3.2"
   },
   "scripts": {
     "start": "node ./target/main.js",
@@ -39,7 +24,6 @@
   },
   "devDependencies": {
     "@vercel/ncc": "^0.33.0",
-    "rollup": "^2.61.1",
     "shadow-cljs": "^2.19.0"
   }
 }
