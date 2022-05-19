@@ -13,7 +13,7 @@
 (.on js/process "uncaughtException"
      (fn [err]
        (println err)
-       (js/console.error "There was an uncaught error" err)))
+       (js/console.error "There was an uncaught error, " err)))
 
 (defn main
   [& args]

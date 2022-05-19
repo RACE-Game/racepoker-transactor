@@ -24,7 +24,7 @@
 
 ;;; Helpers
 
-(def default-commitment "confirmed")
+(def default-commitment "finalized")
 
 (def settle-status-empty-seat 0)
 (def settle-status-leave 1)
@@ -109,6 +109,7 @@
                (log/errorf "🚨game account not found: game[%s]" game-id))
 
            _ (log/infof "📝Settes: %s" settle-map)
+           _ (log/infof "📝Current serial:" (:settle-serial game-account-state))
            _ (doseq
                [i    (range c/max-player-num)
                 :let [{:keys [pubkey]} (nth (:players game-account-state) i)
@@ -193,12 +194,12 @@
 
            sig (<!? (conn/send-transaction conn tx [fee-payer]))
 
-           ret (<!? (conn/confirm-transaction conn sig "finalized"))
+           ret (when sig (<!? (conn/confirm-transaction conn sig "finalized")))
 
-           no-err? (and ret (nil? (get-in ret [:value :err])))]
+           err (when ret (get-in ret [:value :err]))]
 
        (cond
-         no-err?
+         (and sig ret (nil? err))
          (do (log/info "🎉Transaction succeed")
              :ok)
 
@@ -293,11 +294,11 @@
 
          sig (<!? (conn/send-transaction conn tx [fee-payer]))
 
-         ret (<!? (conn/confirm-transaction conn sig "finalized"))
+         ret (when sig (<!? (conn/confirm-transaction conn sig "finalized")))
 
-         no-err? (and ret (nil? (get-in ret [:value :err])))]
+         err (when ret (get-in ret [:value :err]))]
      (cond
-       no-err?
+       (and sig ret (nil? err))
        (do (log/info "🎉Transaction succeed") :ok)
 
        :else
@@ -333,56 +334,61 @@
         confirming (atom [])]
     (->SolanaApi input output pending confirming)))
 
+(defn run-with-retry-loop
+  [chain-api game-id settle-serial f]
+  (a/go-loop []
+    (let [game-account-state (a/<!
+                              (p/-fetch-game-account chain-api game-id {:commitment "finalized"}))
+          _ (log/infof "🤠Start settle, target: %s, serial: %s"
+                       settle-serial
+                       (:settle-serial game-account-state))
+          rs (a/<! (f))]
+      (cond
+        (= rs :ok)
+        (a/<! (p/-fetch-game-account chain-api game-id {:commitment "finalized"}))
+
+        (= rs :err)
+        (let [_ (a/<! (a/timeout 5000))
+
+              game-account-state
+              (a/<! (p/-fetch-game-account chain-api game-id {:commitment "finalized"}))]
+          ;; Unchanged serial means failed transaction
+          (cond
+            (nil? game-account-state)
+            (do (log/info "😱Failed to fetch game-account-state, retry")
+                (recur))
+
+            (= settle-serial (:settle-serial game-account-state))
+            (do (log/infof "😡Retry Settle transaction, current serial: %s"
+                           (:settle-serial game-account-state))
+                (recur))
+
+            :else
+            (do (log/infof "😃The settle-serial updated. serial: %s -> %s"
+                           settle-serial
+                           (:settle-serial game-account-state))
+                game-account-state)))))))
+
 (extend-type SolanaApi
  p/IChainApi
 
  ;; Send Settle transaction to Solana
- ;; Keep retrying until it's finalized
  (p/-settle
    [this game-id settle-serial rake settle-map]
-   (a/go-loop []
-     (let [rs (a/<! (settle game-id rake settle-map))]
-       (cond
-         (= rs :ok)
-         :ok
-
-         (= rs :err)
-         (let [_ (a/<! (a/timeout 5000))
-               game-account-state (a/<! (p/-fetch-game-account this
-                                                               game-id
-                                                               {:commitment "finalized"}))]
-           (log/infof "💪Retry Settle transaction")
-           ;; Unchanged serial means failed transaction
-           (when (= settle-serial (:settle-serial game-account-state))
-             (recur)))))))
+   (run-with-retry-loop this game-id settle-serial (fn [] (settle game-id rake settle-map))))
 
  ;; Send SetWinner transaction to Solana
- ;; Keep retrying until it's finalized
  (p/-set-winner
    [this game-id settle-serial winner-id]
-   (a/go-loop []
-     (let [rs (a/<! (set-winner game-id winner-id))]
-       (cond
-         (= rs :ok)
-         :ok
-
-         (= rs :err)
-         (let [_ (a/<! (a/timeout 5000))
-               game-account-state (a/<! (p/-fetch-game-account this
-                                                               game-id
-                                                               {:commitment "finalized"}))]
-           ;; Unchanged serial means failed transaction
-           (log/infof "💪Retry SetWinner transaction")
-           (when (= settle-serial (:settle-serial game-account-state))
-             (recur)))))))
+   (run-with-retry-loop this game-id settle-serial (fn [] (set-winner game-id winner-id))))
 
  (p/-fetch-game-account
    [_this game-id {:keys [commitment], :or {commitment "finalized"}}]
-   (go-try
+   (a/go
     (let [conn (conn/make-connection (get @config :solana-rpc-endpoint))
           game-account-pubkey (pubkey/make-public-key game-id)
           game-account-state (some->
-                              (<!?
+                              (a/<!
                                (conn/get-account-info conn game-account-pubkey commitment))
                               :data
                               (parse-state-data))]

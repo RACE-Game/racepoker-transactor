@@ -67,11 +67,13 @@
         ;; No input, fetch new state
         to
         (let [state (a/<! (p/-fetch-game-account chain-api game-id {:commitment "finalized"}))]
-          (log/infof "🥡Fetching new state, buyin: %s settle: %s"
+          (log/infof "🥡game[%s] Fetching new state, buyin: %s settle: %s"
+                     game-id
                      (:buyin-serial last-state)
                      (:settle-serial last-state))
           (when (not= buyin-serial (:buyin-serial state))
-            (log/infof "🥡New state, buyin: %s settle: %s"
+            (log/infof "🥡game[%s] New state, buyin: %s settle: %s"
+                       game-id
                        (:buyin-serial state)
                        (:settle-serial state))
             (a/>! output
@@ -90,24 +92,34 @@
                   acc-count      (inc acc-count)
                   new-settle-map (merge-settle-map acc-settle-map settle-map)
                   acc-rake       (+ acc-rake rake)]
-              (log/infof "🔨Received settle event: #%s" settle-serial)
-              (log/infof "🔨Current settle map: %s" acc-settle-map)
+              (log/infof "🔨game[%s] Received settle event: #%s" game-id settle-serial)
+              (log/infof "🔨Current settle map: %s" game-id acc-settle-map)
               (log/infof "🔨New settle map: %s" new-settle-map)
               (log/infof "🔨New rake: %s" acc-rake)
               (if (or any-leave? (<= settle-batch-size acc-count))
-                (do (a/<! (p/-settle chain-api
-                                     game-id
-                                     (:settle-serial data)
-                                     acc-rake
-                                     new-settle-map))
+                (do (log/infof "🔨Sending Settle transaction, serial: %s"
+                               (:settle-serial data))
+                    (let [state (a/<! (p/-settle chain-api
+                                                 game-id
+                                                 (:settle-serial data)
+                                                 acc-rake
+                                                 new-settle-map))]
+                      (a/>! output
+                            {:type    :system/settle-succeed,
+                             :game-id game-id,
+                             :data    {:game-account-state state}}))
                     (log/infof "🔨Clear settle accumulator")
                     (recur last-state nil (js/BigInt 0) 0))
                 (recur last-state new-settle-map acc-rake acc-count)))
 
             :system/set-winner
             (do
-              (a/<! (p/-set-winner chain-api
-                                   game-id
-                                   (:settle-serial data)
-                                   (:winner-id data)))
+              (let [state (a/<! (p/-set-winner chain-api
+                                               game-id
+                                               (:settle-serial data)
+                                               (:winner-id data)))]
+                (a/>! output
+                      {:type    :system/settle-succeed,
+                       :game-id game-id,
+                       :data    {:game-account-state state}}))
               (recur last-state acc-settle-map acc-rake acc-count))))))))

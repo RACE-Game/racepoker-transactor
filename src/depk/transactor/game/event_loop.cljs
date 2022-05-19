@@ -11,6 +11,7 @@
 
 (def event-list
   #{:system/sync-state
+    :system/settle-succeed
     :system/reset
     :system/start-game
     :client/shuffle-cards

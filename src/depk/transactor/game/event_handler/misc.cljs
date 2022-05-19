@@ -962,7 +962,7 @@
         (assoc :rake-fee nil))))
 
 (defn- submit-game-result-sng
-  [{:keys [player-map], :as state}]
+  [{:keys [player-map game-account-state], :as state}]
   (let [live-players (->> player-map
                           vals
                           (filter #(> (:chips %) (js/BigInt 0))))]
@@ -970,8 +970,10 @@
       (let [winner-id (->> live-players
                            first
                            :player-id)
-            request   {:type :system/set-winner,
-                       :data {:winner-id winner-id}}]
+            request
+            {:type :system/set-winner,
+             :data {:winner-id     winner-id,
+                    :settle-serial (:settle-serial game-account-state)}}]
         (log/infof "✈️Submit game result for SNG game")
         (-> state
             (update :api-requests conj request)
