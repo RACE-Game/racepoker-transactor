@@ -82,3 +82,12 @@
                  (let [{:keys [player-map]} (handle/get-snapshot h)]
                    [game-id {:player-ids (keys player-map)}])))
          (into {}))))
+
+(defn list-players
+  [manager]
+  (when-let [handle-map @(:game-handle-map manager)]
+    (->> handle-map
+         (mapcat (fn [[_ h]]
+                   (let [{:keys [player-map]} (handle/get-snapshot h)]
+                     (keys player-map))))
+         (distinct))))

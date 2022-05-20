@@ -231,3 +231,7 @@
 (defn list-running-games
   [game-manager]
   (manager/list-running-games game-manager))
+
+(defn list-players
+  [game-manager]
+  (manager/list-players game-manager))

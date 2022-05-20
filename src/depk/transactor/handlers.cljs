@@ -181,4 +181,5 @@
      (.send
       (t/write w
                {:version c/version,
-                :games   (game/list-running-games @game-manager)})))))
+                :games   (game/list-running-games @game-manager),
+                :players (game/list-players @game-manager)})))))
