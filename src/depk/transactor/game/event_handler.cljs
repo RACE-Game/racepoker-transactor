@@ -38,17 +38,6 @@
       (misc/merge-sync-state game-account-state)
       (misc/reserve-timeout)))
 
-(defmethod handle-event :system/settle-succeed
-  [state
-   {{:keys [game-account-state]} :data, :as event}]
-
-  (log/infof "✨Settle succeed, settle-serial: %s -> %s"
-             (get-in state [:game-account-state :settle-serial])
-             (:settle-serial game-account-state))
-  (-> state
-      (assoc-in [:game-account-state :settle-serial] (:settle-serial game-account-state))
-      (misc/reserve-timeout)))
-
 ;; system/force-sync-state
 ;; receiving this event when something goes wrong.
 ;; (defmethod handle-event :system/recover-state

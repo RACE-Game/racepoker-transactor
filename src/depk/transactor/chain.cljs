@@ -4,27 +4,6 @@
    [depk.transactor.event.protocol :as ep]
    [depk.transactor.chain.solana   :as solana]))
 
-(defn settle
-  "Settle a finished game.
-
-  game-id: pubkey, the pubkey of game account.
-  settle-map: a map of settles.
-
-  settle is a map of:
-  - settle-type: leave, empty, no-update
-  - amount: the withdraw amount
-  "
-  [chain-api game-id settle-serial rake settle-map]
-  (p/-settle chain-api game-id settle-serial rake settle-map))
-
-(defn set-winner
-  "Set a winner for SNG game.
-
-  game-id: pubkey, the pubkey of game account.
-  winner-id: pubkey, the winner id."
-  [chain-api game-id settle-serial winner-id]
-  (p/-set-winner chain-api game-id settle-serial winner-id))
-
 (defn fetch-game-account
   "Fetch account of a game."
   [chain-api game-id opts]

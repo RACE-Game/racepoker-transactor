@@ -26,9 +26,8 @@
 
 (def default-commitment "finalized")
 
-(def settle-status-empty-seat 0)
+(def settle-status-no-update 0)
 (def settle-status-leave 1)
-(def settle-status-no-update 2)
 
 (def settle-type-chips-add 0)
 (def settle-type-chips-sub 1)
@@ -50,10 +49,9 @@
        (mapcat (fn [{:keys [pubkey]}]
                  (let [{:keys [settle-type settle-status amount]} (get settle-map (str pubkey))]
                    [[(case settle-status
-                       :empty-seat settle-status-empty-seat
+                       :empty-seat settle-status-no-update
                        :leave      settle-status-leave
-                       :no-update  settle-status-no-update
-                       settle-status-empty-seat)
+                       settle-status-no-update)
                      1]
                     [(case settle-type
                        :chips-add settle-type-chips-add
@@ -88,7 +86,7 @@
 ;;; FIXME: what if players GC his ATA
 
 (defn settle
-  [game-id rake settle-map]
+  [game-id game-account-state rake settle-map]
 
   (log/infof "🚀Settle game result on Solana: game[%s]" game-id)
 
@@ -98,18 +96,9 @@
 
            conn (conn/make-connection (get @config :solana-rpc-endpoint))
            game-account-pubkey (pubkey/make-public-key game-id)
-           game-account-state (some-> (<!?
-                                       (conn/get-account-info conn
-                                                              game-account-pubkey
-                                                              default-commitment))
-                                      :data
-                                      (parse-state-data))
-
-           _ (when-not (some? game-account-state)
-               (log/errorf "🚨game account not found: game[%s]" game-id))
 
            _ (log/infof "📝Settes: %s" settle-map)
-           _ (log/infof "📝Current serial:" (:settle-serial game-account-state))
+           _ (log/infof "📝Current serial: %s" (:settle-serial game-account-state))
            _ (doseq
                [i    (range c/max-player-num)
                 :let [{:keys [pubkey]} (nth (:players game-account-state) i)
@@ -120,7 +109,7 @@
 
            dealer-program-id (pubkey/make-public-key (get @config :dealer-program-address))
 
-           {:keys [players stake-account-pubkey mint-pubkey transactor-pubkey owner-pubkey]}
+           {:keys [players stake-account-pubkey mint-pubkey transactor-pubkey owner-pubkey settle-serial]}
            game-account-state
 
            transactor-ata-pubkey (<!?
@@ -200,7 +189,7 @@
 
        (cond
          (and sig ret (nil? err))
-         (do (log/info "🎉Transaction succeed")
+         (do (log/infof "🎉Transaction succeed #%s" settle-serial)
              :ok)
 
          :else
@@ -211,24 +200,17 @@
        :err))))
 
 (defn set-winner
-  [game-id winner-id]
+  [game-id game-account-state winner-id]
   (go-try
    (let [_ (log/infof "📝SNG winner: %s" winner-id)
          fee-payer (load-private-key)
 
          conn (conn/make-connection (get @config :solana-rpc-endpoint))
          game-account-pubkey (pubkey/make-public-key game-id)
-         game-account-state (some-> (<!?
-                                     (conn/get-account-info conn game-account-pubkey "finalized"))
-                                    :data
-                                    (parse-state-data))
-
-         _ (when-not (some? game-account-state)
-             (log/errorf "🚨game account not found: game[%s]" game-id))
 
          dealer-program-id (pubkey/make-public-key (get @config :dealer-program-address))
 
-         {:keys [players stake-account-pubkey mint-pubkey transactor-pubkey owner-pubkey]}
+         {:keys [players stake-account-pubkey mint-pubkey transactor-pubkey owner-pubkey settle-serial]}
          game-account-state
 
          _ (log/infof "📝On chain players: %s" players)
@@ -299,27 +281,10 @@
          err (when ret (get-in ret [:value :err]))]
      (cond
        (and sig ret (nil? err))
-       (do (log/info "🎉Transaction succeed") :ok)
+       (do (log/infof "🎉Transaction succeed #%s" settle-serial) :ok)
 
        :else
        (do (log/error "🚨Transaction failed") :err)))))
-
-(defn force-sync
-  [game-id output]
-  (a/go
-   (let [conn (conn/make-connection (get @config :solana-rpc-endpoint))
-         game-account-pubkey (pubkey/make-public-key game-id)
-         game-account-state (some-> (a/<!
-                                     (conn/get-account-info conn game-account-pubkey "finalized"))
-                                    :data
-                                    (parse-state-data))]
-     (a/>! output
-           {:type :system/recover-state,
-            :data {:game-account-state game-account-state}}))))
-
-(comment
-  (set-winner "6R1A1mddhrJw5CKQfXCsq2gkPvvotr3xoCHCV2tpnF4r"
-              "F6JoJgWrVZEUaRVpA2uQyRQDNdZXyhyiD8KqdfXcjXQN"))
 
 ;;; Implementations
 
@@ -337,12 +302,7 @@
 (defn run-with-retry-loop
   [chain-api game-id settle-serial f]
   (a/go-loop []
-    (let [game-account-state (a/<!
-                              (p/-fetch-game-account chain-api game-id {:commitment "finalized"}))
-          _ (log/infof "🤠Start settle, target: %s, serial: %s"
-                       settle-serial
-                       (:settle-serial game-account-state))
-          rs (a/<! (f))]
+    (let [rs (a/<! (f))]
       (cond
         (= rs :ok)
         (a/<! (p/-fetch-game-account chain-api game-id {:commitment "finalized"}))
@@ -352,13 +312,13 @@
 
               game-account-state
               (a/<! (p/-fetch-game-account chain-api game-id {:commitment "finalized"}))]
-          ;; Unchanged serial means failed transaction
+          ;; Only increased serial means succeed
           (cond
             (nil? game-account-state)
             (do (log/info "😱Failed to fetch game-account-state, retry")
                 (recur))
 
-            (= settle-serial (:settle-serial game-account-state))
+            (>= settle-serial (:settle-serial game-account-state))
             (do (log/infof "😡Retry Settle transaction, current serial: %s"
                            (:settle-serial game-account-state))
                 (recur))
@@ -374,25 +334,33 @@
 
  ;; Send Settle transaction to Solana
  (p/-settle
-   [this game-id settle-serial rake settle-map]
-   (run-with-retry-loop this game-id settle-serial (fn [] (settle game-id rake settle-map))))
+   [this game-id game-account-state settle-serial rake settle-map]
+   (run-with-retry-loop this
+                        game-id
+                        settle-serial
+                        (fn [] (settle game-id game-account-state rake settle-map))))
 
  ;; Send SetWinner transaction to Solana
  (p/-set-winner
-   [this game-id settle-serial winner-id]
-   (run-with-retry-loop this game-id settle-serial (fn [] (set-winner game-id winner-id))))
+   [this game-id game-account-state settle-serial winner-id]
+   (run-with-retry-loop this
+                        game-id
+                        settle-serial
+                        (fn [] (set-winner game-id game-account-state winner-id))))
 
  (p/-fetch-game-account
-   [_this game-id {:keys [commitment], :or {commitment "finalized"}}]
-   (a/go
-    (let [conn (conn/make-connection (get @config :solana-rpc-endpoint))
-          game-account-pubkey (pubkey/make-public-key game-id)
-          game-account-state (some->
-                              (a/<!
-                               (conn/get-account-info conn game-account-pubkey commitment))
-                              :data
-                              (parse-state-data))]
-      game-account-state)))
+   [_this game-id {:keys [commitment settle-serial], :or {commitment "finalized"}}]
+   (a/go-loop []
+     (let [conn (conn/make-connection (get @config :solana-rpc-endpoint))
+           game-account-pubkey (pubkey/make-public-key game-id)
+           game-account-state (some->
+                               (a/<!
+                                (conn/get-account-info conn game-account-pubkey commitment))
+                               :data
+                               (parse-state-data))]
+       (if (and settle-serial (not= settle-serial (:settle-serial game-account-state)))
+         (recur)
+         game-account-state))))
 
  (p/-fetch-mint-info
    [_this mint-address]

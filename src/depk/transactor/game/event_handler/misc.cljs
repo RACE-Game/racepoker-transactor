@@ -684,13 +684,13 @@
                               (merge-with (fnil + (js/BigInt 0) (js/BigInt 0))
                                           prize-map))]
 
-    (log/info "💰Players' prize map")
+    (log/info "💰Players' prize")
     (doseq [[p a] prize-map]
       (log/infof "💰-%s \t%s" p a))
 
     (log/info "💰Players' chips change")
     (doseq [[p c] chips-change-map]
-      (log/infof "💰-%s \t%s \t%s" p (get-in player-map [p :chips]) c))
+      (log/infof "💰-%s \t%s -> \t%s" p c (get-in player-map [p :chips])))
 
     (assoc state :chips-change-map chips-change-map)))
 
