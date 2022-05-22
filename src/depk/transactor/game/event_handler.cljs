@@ -490,10 +490,9 @@
 
       ;; Game is not running, can leave immetdiately
       (#{:game-status/init :game-status/settle :game-status/showdown} status)
-      (do
-        (log/infof "⏪️Player leave: %s" player-id)
-        (-> new-state
-            (misc/dispatch-reset)))
+      (do (log/infof "⏪️Player leave: %s" player-id)
+          (-> new-state
+              (misc/dispatch-reset)))
 
       ;; The last player will win immediately
       (= 1 (count remain-players))

@@ -230,7 +230,7 @@
 
 (defn submit-non-alive-players
   "Submit a request to remove non alive on-chain players."
-  [{:keys [player-map game-account-state game-type start-time chips-change-map], :as state}]
+  [{:keys [player-map game-account-state game-type start-time], :as state}]
   (if (and (or (= :cash game-type)
                (and (#{:bonus :sng} game-type)
                     (nil? start-time)))
@@ -241,7 +241,7 @@
                       (remove (comp #{:normal} :online-status))
                       (map :player-id)))
 
-      (let [settle-map (build-settle-map chips-change-map player-map)
+      (let [settle-map (build-settle-map {} player-map)
             request
             {:type :system/settle,
              :data {:settle-map    settle-map,

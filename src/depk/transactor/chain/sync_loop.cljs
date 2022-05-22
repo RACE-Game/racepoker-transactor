@@ -23,8 +23,7 @@
                             (= :leave (:settle-status s2)))
                         :leave
 
-                        (or (= :no-update (:settle-status s1))
-                            (= :no-update (:settle-status s2)))
+                        :else
                         :no-update)
 
         amount        (+ (* (if (= :chips-sub (:settle-type s1)) (js/BigInt -1) (js/BigInt 1))
@@ -88,6 +87,11 @@
                                     chain-api
                                     game-id
                                     {:settle-serial settle-serial}))]
+
+          (log/infof "⚖️New settle, rake: %s" rake)
+          (doseq [[pid {:keys [settle-status settle-type amount]}] settle-map]
+            (log/infof "⚖️- %s %s %s %s" pid settle-status settle-type amount))
+
           (if (or any-leave? (>= new-count settle-batch-size))
             (let [_ (a/<! (p/-settle chain-api
                                      game-id
@@ -110,3 +114,23 @@
                                      settle-serial
                                      winner-id))]
           (recur (inc settle-serial) acc-rake acc-settle-map acc-count))))))
+
+
+
+(comment
+
+  (-> (merge-settle-map {"1" {:settle-status :no-update,
+                              :settle-type   :chips-add,
+                              :amount        (js/BigInt 400)},
+                         "2" {:settle-status :no-update,
+                              :settle-type   :chips-sub,
+                              :amount        (js/BigInt 400)}}
+                        {"1" {:settle-status :leave,
+                              :settle-type   :chips-add,
+                              :amount        (js/BigInt 400)},
+                         "2" {:settle-status :no-update,
+                              :settle-type   :chips-sub,
+                              :amount        (js/BigInt 400)}})
+      (merge-settle-map {"2" {:settle-status :leave,
+                              :settle-type   :no-update,
+                              :amount        (js/BigInt 400)}})))
