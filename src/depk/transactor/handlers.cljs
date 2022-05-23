@@ -15,12 +15,19 @@
 (defmulti event-msg-handler :id)
 
 (defmethod event-msg-handler :default
-  [{:as ev-msg, :keys [event id ?data ring-req ?reply-fn send-fn]}]
+  [{:as ev-msg, :keys [event id ?data ring-req ?reply-fn send-fn connected-uids]}]
   (let [[ev-id ev-data] event]
     (case ev-id
       :chsk/uidport-close
       (let [[game-id player-id] ev-data]
-        (game/dropout @game-manager game-id player-id))
+        (game/dropout @game-manager game-id player-id)
+
+        ;; 60 seconds, no reconnect, stop event bus.
+        (when (empty? (:any @connected-uids))
+          (a/go
+            (a/<! (a/timeout 60000))
+            (when (empty? (:any @connected-uids))
+              (game/shutdown-game @game-manager game-id)))))
 
       :chsk/uidport-open
       (let [[game-id player-id] ev-data]

@@ -144,8 +144,7 @@
   (go (a/>! input (make-event :system/reset init-state)))
   (go-loop [state   init-state
             records []]
-    (let [event (<! (take-event input state))]
-
+    (if-let [event (<! (take-event input state))]
       (if (event-list (:type event))
         (let [old-state state
 
@@ -176,7 +175,9 @@
               (dispatch-broadcast-state game-id state output)
               (recur state records))
             (recur old-state records)))
-        (recur state records)))))
+        (recur state records))
+      ;; EXIT
+      (log/infof "💤Event loop quit for game[%s]" game-id))))
 
 (defrecord EventLoop [input output])
 

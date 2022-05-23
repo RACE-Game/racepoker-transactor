@@ -21,6 +21,12 @@
    (log/infof "👔player[%s] attach to game [%s]" player-id game-id)
    (manager/try-start-game game-manager game-id)))
 
+(defn shutdown-game
+  [game-manager game-id]
+  {:pre [(string? game-id)]}
+  (go-try
+   (manager/try-stop-game game-manager game-id)))
+
 (defn state
   [game-manager game-id]
   {:pre [(string? game-id)]}

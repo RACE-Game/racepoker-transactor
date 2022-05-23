@@ -1197,7 +1197,7 @@
 
 (defn merge-joined-players
   [o n]
-  (mapv #(or %1 %2) (or o (repeat 9 nil)) n))
+  (mapv #(or %1 %2) (or o (repeat c/max-player-num nil)) n))
 
 (def empty-players (vec (repeat c/max-player-num nil)))
 

@@ -50,6 +50,11 @@
            {:keys [game-handle-map]} manager]
        (swap! game-handle-map assign-new-game-handle game-id init-state (:ws-conn manager))))))
 
+(defn try-stop-game
+  [manager game-id]
+  (let [game-handle (find-game-unchecked manager game-id)]
+    (handle/shutdown-game-handle game-handle)))
+
 (defn make-game-manager
   [ws-conn]
   (log/info "🏁Initialize game manager")

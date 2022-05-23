@@ -19,29 +19,33 @@
   (let [game-id (:game-id opts)
         {:keys [ws-conn input snapshot game-account-snapshot]} broadcaster
         {:keys [chsk-send! connected-uids]} ws-conn]
-    (a/go-loop [{:keys [type data]} (a/<! input)]
-
-      (condp = type
-        :system/broadcast-state
-        (let [{:keys [state game-id game-account-state]} data]
-          ;; Do not dispatch reset event.
-          ;; (log/infof "🔈Broadcaster event: %s status: %s" (:this-event state) (:status state))
-          (doseq [uid   (:any @connected-uids)
-                  :when (= game-id (first uid))]
-            (reset! snapshot state)
-            (reset! game-account-snapshot game-account-state)
-            ;; (log/infof "Send state to uid: %s" uid)
-            (chsk-send! uid [:game/state (shrink-state state)])))
-
-        :system/recover-state
+    (a/go-loop [{:keys [type data], :as event} (a/<! input)]
+      (if-not event
+        ;; EXIT
+        (log/infof "💤Broadcast quit for game[%s]" (:game-id opts))
         (do
-          (log/infof "🔈Broadcaster state reset")
-          (doseq [uid   (:any @connected-uids)
-                  :when (= game-id (first uid))]
-            (chsk-send! uid [:game/state-reset])))
+          (condp = type
+            :system/broadcast-state
+            (let [{:keys [state game-id game-account-state]} data]
+              ;; Do not dispatch reset event.
+              ;; (log/infof "🔈Broadcaster event: %s status: %s" (:this-event state) (:status
+              ;; state))
+              (doseq [uid   (:any @connected-uids)
+                      :when (= game-id (first uid))]
+                (reset! snapshot state)
+                (reset! game-account-snapshot game-account-state)
+                ;; (log/infof "Send state to uid: %s" uid)
+                (chsk-send! uid [:game/state (shrink-state state)])))
 
-        :noop)
-      (recur (a/<! input)))))
+            :system/recover-state
+            (do
+              (log/infof "🔈Broadcaster state reset")
+              (doseq [uid   (:any @connected-uids)
+                      :when (= game-id (first uid))]
+                (chsk-send! uid [:game/state-reset])))
+
+            :noop)
+          (recur (a/<! input)))))))
 
 (defrecord Broadcaster [ws-conn snapshot game-account-snapshot input])
 

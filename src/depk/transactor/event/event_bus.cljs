@@ -15,12 +15,16 @@
    (let [{:keys [input output]} this]
      (a/go-loop [it (a/<! input)]
        ;; (log/infof "-->Event: %s" (:type it))
-       (a/>! output it)
-       (recur (a/<! input))))
+       (if it
+         (do
+           (a/>! output it)
+           (recur (a/<! input)))
+         (a/close! output))))
    this)
 
  p/IEventBus
  (p/-shutdown [this]
+   (log/info "💤Shutdown event bus.")
    (a/close! (:input this)))
 
  (p/-send [this event]
