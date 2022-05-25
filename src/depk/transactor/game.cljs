@@ -30,7 +30,7 @@
 (defn state
   [game-manager game-id]
   {:pre [(string? game-id)]}
-  (when-let [game-handle (manager/find-game game-manager game-id)]
+  (when-let [game-handle (manager/find-game-unchecked game-manager game-id)]
     (m/game-state->resp (handle/get-snapshot game-handle))))
 
 ;; Leaving game

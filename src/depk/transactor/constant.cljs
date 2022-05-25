@@ -15,6 +15,7 @@
 (def sng-next-game-timeout-delay 30000)
 
 (def increase-blinds-interval (* 3 60 1000))
+(def shutdown-game-delay 30000)
 
 (def level-info-map
   {:nl100  {:sb (js/BigInt 1), :bb (js/BigInt 2)},

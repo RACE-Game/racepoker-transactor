@@ -216,7 +216,7 @@
   ([game-account-state mint-info init-state]
    (let [state-id   (uuid/v4)
          player-map (players->player-map (:players game-account-state))]
-     (log/infof "player-map: %s" player-map)
+     ;; (log/infof "player-map: %s" player-map)
      (into {}
            (map->GameState
             (merge
