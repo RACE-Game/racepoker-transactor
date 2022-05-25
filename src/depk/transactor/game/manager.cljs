@@ -53,7 +53,8 @@
 (defn try-stop-game
   [manager game-id]
   (let [game-handle (find-game-unchecked manager game-id)]
-    (handle/shutdown-game-handle game-handle)))
+    (handle/shutdown-game-handle game-handle)
+    (swap! (:game-handle-map manager) dissoc game-id)))
 
 (defn make-game-manager
   [ws-conn]

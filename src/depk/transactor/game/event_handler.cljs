@@ -171,8 +171,7 @@
                                    :op        :init,
                                    :player-id nil}]
                   :status        :game-status/shuffle)
-           (misc/dispatch-shuffle-timeout)
-           (doto prn-str))))))
+           (misc/dispatch-shuffle-timeout))))))
 
 ;; client/shuffle-cards
 ;; receiving this event when player submit shuffled cards
