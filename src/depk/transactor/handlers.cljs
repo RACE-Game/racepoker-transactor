@@ -22,10 +22,10 @@
       (let [[game-id player-id] ev-data]
         (game/dropout @game-manager game-id player-id)
 
-        ;; 60 seconds, no reconnect, stop event bus.
+        ;; 15 mins, no reconnect, stop event bus.
         (when (empty? (:any @connected-uids))
           (a/go
-            (a/<! (a/timeout 60000))
+            (a/<! (a/timeout 900000))
             (when (empty? (:any @connected-uids))
               (game/shutdown-game @game-manager game-id)))))
 
