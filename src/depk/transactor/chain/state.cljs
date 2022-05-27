@@ -5,7 +5,6 @@
    [clojure.string :as str]))
 
 (def pubrsa-len 162)
-(def max-joined-num 3)
 
 (defmethod bl/size :str64
   [_]
@@ -36,12 +35,17 @@
 (def set-winner-ix-id 3)
 (def cancel-game-ix-id 4)
 (def rebuy-ix-id 5)
+(def attach-bonus-ix-id 6)
+(def init-bonus-ix-id 7)
+
+;; Game Account
 
 (def ^:const max-players-num 9)
 
 (defrecord Player [pubkey chips buyin-serial rebuy])
 
 (def player-layout (bl/struct ->Player [:pubkey :u64 :u32 :u8]))
+
 
 (defrecord GameState [is-initialized buyin-serial settle-serial players stake-account-pubkey
                       mint-pubkey ante sb bb buyin size game-type transactor-pubkey owner-pubkey
@@ -95,6 +99,8 @@
 
 (def game-state-data-len (bl/size game-state-layout))
 
+;; Player Profile
+
 (defrecord PlayerProfileState [is-initialized avatar-pubkey nick])
 
 (def player-profile-state-layout
@@ -109,3 +115,23 @@
 (defn parse-profile-state-data
   [data]
   (bl/unpack player-profile-state-layout (bl/buffer-from data)))
+
+;; Bonus Account
+
+(defrecord BonusState [is-initialized owner-pubkey mint-pubkey stake-pubkey quota ex-rate])
+
+(def bonus-state-layout
+  (bl/struct ->BonusState
+             [:bool
+              :pubkey
+              :pubkey
+              :pubkey
+              (bl/array max-players-num :u64)
+              :u64]))
+
+(def bonus-state-data-len
+  (bl/size bonus-state-layout))
+
+(defn parse-bonus-state-data
+  [data]
+  (bl/unpack bonus-state-layout (bl/buffer-from data)))

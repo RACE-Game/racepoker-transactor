@@ -16,7 +16,8 @@
    [depk.transactor.constant :as c]
    [depk.transactor.state.config :refer [config]]
    [depk.transactor.log :as log]
-   [depk.transactor.chain.state :refer [parse-state-data set-winner-ix-id settle-ix-id]]
+   [depk.transactor.chain.state :refer [parse-state-data set-winner-ix-id settle-ix-id
+                                        parse-bonus-state-data]]
    [depk.transactor.util :as u]
    [depk.transactor.chain.sync-loop :as sync-loop]
    ["fs" :as fs]
@@ -45,48 +46,70 @@
 
 (defn- build-settle-ix-body
   [players settle-map]
-  (->> players
-       (mapcat (fn [{:keys [pubkey]}]
-                 (let [{:keys [settle-type settle-status amount]} (get settle-map (str pubkey))]
-                   [[(case settle-status
-                       :empty-seat settle-status-no-update
-                       :leave      settle-status-leave
-                       settle-status-no-update)
-                     1]
-                    [(case settle-type
-                       :chips-add settle-type-chips-add
-                       :chips-sub settle-type-chips-sub
-                       :no-update settle-type-no-update
-                       settle-type-no-update)
-                     1]
-                    [(or amount (js/BigInt 0)) 8]])))
-       (doall)))
+  (->>
+   players
+   (mapcat (fn [{:keys [pubkey]}]
+             (let [{:keys [settle-type settle-status amount rake]} (get settle-map (str pubkey))]
+               [[(case settle-status
+                   :empty-seat settle-status-no-update
+                   :leave      settle-status-leave
+                   settle-status-no-update)
+                 1]
+                [(case settle-type
+                   :chips-add settle-type-chips-add
+                   :chips-sub settle-type-chips-sub
+                   :no-update settle-type-no-update
+                   settle-type-no-update)
+                 1]
+                [(or amount (js/BigInt 0)) 8]
+                [(or rake (js/BigInt 0)) 8]])))
+   (doall)))
 
 (defn- find-player-ata-keys
-  [players mint-pubkey settle-map]
+  [players mint-pubkey bonus-mint-pubkey settle-map]
   (go-try
    (let [ata-keys-ch (->>
                       players
-                      (keep
+                      (mapcat
                        (fn [{:keys [pubkey]}]
-                         (when (and pubkey
-                                    (#{:leave} (get-in settle-map [(str pubkey) :settle-status])))
-                           (a/go
-                            (let [account-pubkey (pubkey/make-public-key pubkey)
-                                  ata-pubkey     (<!?
-                                                  (spl-token/get-associated-token-address
-                                                   mint-pubkey
-                                                   account-pubkey))]
-                              {:pubkey     ata-pubkey,
-                               :isSigner   false,
-                               :isWritable true})))))
+                         (when pubkey
+                           (cond-> []
+
+                             ;; When a player left, add his asset ata
+                             (#{:leave} (get-in settle-map [(str pubkey) :settle-status]))
+                             (conj (a/go
+                                    (let [account-pubkey (pubkey/make-public-key pubkey)
+                                          ata-pubkey     (<!?
+                                                          (spl-token/get-associated-token-address
+                                                           mint-pubkey
+                                                           account-pubkey))]
+                                      (log/infof "Use asset ATA %s from %s" ata-pubkey pubkey)
+                                      {:pubkey     ata-pubkey,
+                                       :isSigner   false,
+                                       :isWritable true})))
+
+
+                             ;; When a player pay rake, add his bonus ata
+                             (and bonus-mint-pubkey
+                                  (> (get-in settle-map [(str pubkey) :rake] (js/BigInt 0))
+                                     (js/BigInt 0)))
+                             (conj (a/go
+                                    (let [account-pubkey (pubkey/make-public-key pubkey)
+                                          ata-pubkey     (<!?
+                                                          (spl-token/get-associated-token-address
+                                                           bonus-mint-pubkey
+                                                           account-pubkey))]
+                                      (log/infof "Use bonus ATA %s from %s" ata-pubkey pubkey)
+                                      {:pubkey     ata-pubkey,
+                                       :isSigner   false,
+                                       :isWritable true})))))))
                       (a/map vector))]
      (<!? ata-keys-ch))))
 
 ;;; FIXME: what if players GC his ATA
 
 (defn settle
-  [game-id game-account-state rake settle-map]
+  [game-id game-account-state settle-map]
 
   (log/infof "🚀Settle game result on Solana: game[%s]" game-id)
 
@@ -99,18 +122,24 @@
 
            _ (log/infof "📝Settes: %s" settle-map)
            _ (log/infof "📝Current serial: %s" (:settle-serial game-account-state))
-           _ (doseq
-               [i    (range c/max-player-num)
-                :let [{:keys [pubkey]} (nth (:players game-account-state) i)
-                      {:keys [settle-type settle-status amount]} (get settle-map (str pubkey))]]
+           _
+           (doseq
+             [i    (range c/max-player-num)
+              :let [{:keys [pubkey]} (nth (:players game-account-state) i)
+                    {:keys [settle-type settle-status amount rake]} (get settle-map (str pubkey))]]
 
-               (log/info "📝-" (str pubkey) settle-type settle-status amount))
-           _ (log/infof "📝Rake: %s" rake)
+             (log/info "📝-" (str pubkey) settle-type settle-status amount rake))
 
            dealer-program-id (pubkey/make-public-key (get @config :dealer-program-address))
 
-           {:keys [players stake-account-pubkey mint-pubkey transactor-pubkey owner-pubkey settle-serial]}
+           {:keys [players stake-account-pubkey mint-pubkey transactor-pubkey owner-pubkey
+                   settle-serial bonus-pubkey]}
            game-account-state
+
+           bonus-state (when bonus-pubkey
+                         (some-> (<!? (conn/get-account-info conn bonus-pubkey "finalized"))
+                                 :data
+                                 (parse-bonus-state-data)))
 
            transactor-ata-pubkey (<!?
                                   (spl-token/get-associated-token-address
@@ -124,20 +153,17 @@
 
            ix-body (build-settle-ix-body players settle-map)
 
-           ;; _ (println "ix-body" ix-body)
-
            ix-data (apply ib/make-instruction-data
                           (concat [[settle-ix-id 1]
                                    ;; settle-serial
-                                   [(:settle-serial game-account-state) 4]
-                                   ;; rake
-                                   [rake 8]]
+                                   [(:settle-serial game-account-state) 4]]
                                   ix-body))
 
            [pda] (<!? (pubkey/find-program-address #js [(buffer-from "stake")]
                                                    dealer-program-id))
 
-           ata-keys (<!? (find-player-ata-keys players mint-pubkey settle-map))
+           ata-keys
+           (<!? (find-player-ata-keys players mint-pubkey (:mint-pubkey bonus-state) settle-map))
 
            _ (log/infof "Fee Payer: %s" (keypair/public-key fee-payer))
            _ (log/infof "Game Account: %s" game-account-pubkey)
@@ -148,29 +174,39 @@
            _ (log/infof "Token Program: %s" spl-token/token-program-id)
 
            ix-keys
-           (into
-            [{:pubkey     (keypair/public-key fee-payer),
-              :isSigner   true,
-              :isWritable false}
-             {:pubkey     game-account-pubkey,
-              :isSigner   false,
-              :isWritable true}
-             {:pubkey     stake-account-pubkey,
-              :isSigner   false,
-              :isWritable true}
-             {:pubkey     pda,
-              :isSigner   false,
-              :isWritable false}
-             {:pubkey     transactor-ata-pubkey,
-              :isSigner   false,
-              :isWritable true}
-             {:pubkey     owner-ata-pubkey,
-              :isSigner   false,
-              :isWritable true}
-             {:pubkey     spl-token/token-program-id,
-              :isSigner   false,
-              :isWritable false}]
-            ata-keys)
+           (cond->
+             [{:pubkey     (keypair/public-key fee-payer),
+               :isSigner   true,
+               :isWritable false}
+              {:pubkey     game-account-pubkey,
+               :isSigner   false,
+               :isWritable true}
+              {:pubkey     stake-account-pubkey,
+               :isSigner   false,
+               :isWritable true}
+              {:pubkey     pda,
+               :isSigner   false,
+               :isWritable false}
+              {:pubkey     transactor-ata-pubkey,
+               :isSigner   false,
+               :isWritable true}
+              {:pubkey     owner-ata-pubkey,
+               :isSigner   false,
+               :isWritable true}
+              {:pubkey     spl-token/token-program-id,
+               :isSigner   false,
+               :isWritable false}]
+
+             bonus-pubkey
+             (into [{:pubkey     bonus-pubkey,
+                     :isSigner   false,
+                     :isWritable false}
+                    {:pubkey     (:stake-pubkey bonus-state),
+                     :isSigner   false,
+                     :isWritable true}])
+
+             true
+             (into ata-keys))
 
            ix
            (transaction/make-transaction-instruction
@@ -181,19 +217,22 @@
            (doto (transaction/make-transaction)
             (transaction/add ix))
 
-           sig (<!? (conn/send-transaction conn tx [fee-payer]))
+           sig
+           (<!? (conn/send-transaction conn tx [fee-payer]))
 
-           ret (when sig (<!? (conn/confirm-transaction conn sig "finalized")))
+           ret
+           (when sig (<!? (conn/confirm-transaction conn sig "finalized")))
 
-           err (when ret (get-in ret [:value :err]))]
+           err
+           (when ret (get-in ret [:value :err]))]
 
        (cond
          (and sig ret (nil? err))
-         (do (log/infof "🎉Transaction succeed #%s" settle-serial)
+         (do (log/infof "🎉Transaction succeed #%s %s" settle-serial sig)
              :ok)
 
          :else
-         (do (log/errorf "🚨Transaction failed")
+         (do (log/errorf "🚨Transaction failed: #%s %s" settle-serial err)
              :err)))
      (catch js/Error e
        (.error js/console e)
@@ -210,7 +249,8 @@
 
          dealer-program-id (pubkey/make-public-key (get @config :dealer-program-address))
 
-         {:keys [players stake-account-pubkey mint-pubkey transactor-pubkey owner-pubkey settle-serial]}
+         {:keys [players stake-account-pubkey mint-pubkey transactor-pubkey owner-pubkey
+                 settle-serial]}
          game-account-state
 
          _ (log/infof "📝On chain players: %s" players)
@@ -281,10 +321,11 @@
          err (when ret (get-in ret [:value :err]))]
      (cond
        (and sig ret (nil? err))
-       (do (log/infof "🎉Transaction succeed #%s" settle-serial) :ok)
+       (do (log/infof "🎉Transaction succeed #%s %s" settle-serial sig)
+           :ok)
 
        :else
-       (do (log/error "🚨Transaction failed") :err)))))
+       (do (log/errorf "🚨Transaction failed: #%s %s" settle-serial err) :err)))))
 
 ;;; Implementations
 
@@ -334,11 +375,11 @@
 
  ;; Send Settle transaction to Solana
  (p/-settle
-   [this game-id game-account-state settle-serial rake settle-map]
+   [this game-id game-account-state settle-serial settle-map]
    (run-with-retry-loop this
                         game-id
                         settle-serial
-                        (fn [] (settle game-id game-account-state rake settle-map))))
+                        (fn [] (settle game-id game-account-state settle-map))))
 
  ;; Send SetWinner transaction to Solana
  (p/-set-winner

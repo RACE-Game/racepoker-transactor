@@ -145,7 +145,7 @@
    ;; player id to chips change
    chips-change-map
    ;; the accumulator of current rake
-   rake-fee
+   rake-map
 
    ;; dispatch event [ms, event]
    ;; an events dispatched with a delay

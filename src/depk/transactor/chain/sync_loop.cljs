@@ -31,6 +31,9 @@
                          (* (if (= :chips-sub (:settle-type s2)) (js/BigInt -1) (js/BigInt 1))
                             (:amount s2)))
 
+        rake          (+ (get s1 :rake (js/BigInt 0))
+                         (get s2 :rake (js/BigInt 0)))
+
         settle-type   (cond
                         (> amount (js/BigInt 0))
                         :chips-add
@@ -42,7 +45,8 @@
                         :no-update)]
     {:settle-status settle-status,
      :settle-type   settle-type,
-     :amount        (u/abs amount)}))
+     :amount        (u/abs amount),
+     :rake          rake}))
 
 (defn merge-settle-map
   [m1 m2]
@@ -76,7 +80,6 @@
 
     ;; Sync player chips, status
     (a/go-loop [settle-serial  (:settle-serial init-state)
-                acc-rake       (js/BigInt 0)
                 acc-settle-map nil
                 acc-count      0]
       (let [{:keys [type data], :as event} (a/<! input)]
@@ -87,7 +90,7 @@
                   any-leave?     (some #(= :leave (:settle-status %)) (vals settle-map))
                   new-count      (inc acc-count)
                   new-settle-map (merge-settle-map acc-settle-map settle-map)
-                  new-rake       (+ acc-rake rake)
+
                   last-state     (a/<! (p/-fetch-game-account
                                         chain-api
                                         game-id
@@ -102,10 +105,9 @@
                                          game-id
                                          last-state
                                          settle-serial
-                                         new-rake
                                          new-settle-map))]
-                  (recur (inc settle-serial) (js/BigInt 0) nil 0))
-                (recur settle-serial new-rake new-settle-map new-count)))
+                  (recur (inc settle-serial) nil 0))
+                (recur settle-serial new-settle-map new-count)))
 
             :system/set-winner
             (let [{:keys [settle-serial winner-id]} data
@@ -118,7 +120,7 @@
                                          last-state
                                          settle-serial
                                          winner-id))]
-              (recur (inc settle-serial) acc-rake acc-settle-map acc-count)))
+              (recur (inc settle-serial) acc-settle-map acc-count)))
           ;; EXIT
           (do
             (log/infof "💤️Sync loop quit for game[%s]" game-id)

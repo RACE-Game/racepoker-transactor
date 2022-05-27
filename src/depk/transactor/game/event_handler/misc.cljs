@@ -205,7 +205,7 @@
     * settle-status, how player status change. can be :no-update, :empty-seat, :leave
     * amount, the amount change
   "
-  [chips-change-map player-map]
+  [chips-change-map rake-map player-map]
   (->> (for [[pid {:keys [online-status chips]}] player-map]
          (let [settle-status (if (and (= online-status :normal)
                                       (not= chips (js/BigInt 0)))
@@ -221,11 +221,13 @@
 
                                :else
                                :no-update)
-               amount        (if (< chips-change (js/BigInt 0)) (- chips-change) chips-change)]
+               amount        (if (< chips-change (js/BigInt 0)) (- chips-change) chips-change)
+               rake          (get rake-map pid (js/BigInt 0))]
            [pid
             {:settle-type   settle-type,
              :settle-status settle-status,
-             :amount        amount}]))
+             :amount        amount,
+             :rake          rake}]))
        (into {})))
 
 (defn submit-non-alive-players
@@ -241,7 +243,7 @@
                       (remove (comp #{:normal} :online-status))
                       (map :player-id)))
 
-      (let [settle-map (build-settle-map {} player-map)
+      (let [settle-map (build-settle-map {} {} player-map)
             request
             {:type :system/settle,
              :data {:settle-map    settle-map,
@@ -400,7 +402,7 @@
         :winner-id          nil,
         :after-key-share    nil,
         :chips-change-map   nil,
-        :rake-fee           nil})))
+        :rake-map           nil})))
 
 (defn get-player-hole-card-indices
   [{:keys [btn player-map], :as state}]
@@ -640,27 +642,22 @@
                                    reminder)]
     (assoc state :prize-map prize-map)))
 
+
 (defn take-rake
   [{:keys [game-type prize-map rake street], :as state}]
   (if (and (= game-type :cash)
            (not= street :street/preflop))
-    (let [total-1   (->> (vals prize-map)
-                         (reduce + (js/BigInt 0)))
-          prize-map (update-vals* (fn [v]
-                                    (if (> v (js/BigInt 0))
-                                      (/ (* v (- (js/BigInt 1000) rake)) (js/BigInt 1000))
-                                      v))
-                                  prize-map)
-          total-2   (->> (vals prize-map)
-                         (reduce + (js/BigInt 0)))
-          rake-fee  (- total-1 total-2)]
-      (log/infof "🧾Total Prize Before Rake: %s" total-1)
-      (log/infof "🧾Total Prize After Rake: %s" total-2)
-      (log/infof "🧾Rake: %s" rake-fee)
+    (let [rake-map      (update-vals* (fn [v]
+                                        (/ (* v rake) (js/BigInt 1000)))
+                                      prize-map)
+          new-prize-map (merge-with - prize-map rake-map)]
+      (log/info "🧾Rake:")
+      (doseq [[pid r] rake-map]
+        (log/infof "🧾 -%s %s" pid r))
       (assoc state
-             :prize-map prize-map
-             :rake-fee  rake-fee))
-    (assoc state :rake-fee (js/BigInt 0))))
+             :prize-map new-prize-map
+             :rake-map  rake-map))
+    state))
 
 (defn update-chips-change-map
   "Update chips-change-map in state.
@@ -948,18 +945,17 @@
           (update-vals* #(mapv last %))))))
 
 (defn- submit-game-result-cash
-  [{:keys [chips-change-map player-map game-account-state rake-fee], :as state}]
-  (let [settle-map (build-settle-map chips-change-map player-map)
+  [{:keys [chips-change-map player-map game-account-state rake-map], :as state}]
+  (let [settle-map (build-settle-map chips-change-map rake-map player-map)
 
         request
         {:type :system/settle,
          :data {:settle-map    settle-map,
-                :rake          rake-fee,
                 :settle-serial (:settle-serial game-account-state)}}]
     (log/infof "✈️Submit game result for CASH game")
     (-> state
         (update :api-requests conj request)
-        (assoc :rake-fee nil))))
+        (assoc :rake-map nil))))
 
 (defn- submit-game-result-sng
   [{:keys [player-map game-account-state], :as state}]
