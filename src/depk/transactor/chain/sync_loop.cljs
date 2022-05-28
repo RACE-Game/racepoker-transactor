@@ -110,7 +110,7 @@
                 (recur settle-serial new-settle-map new-count)))
 
             :system/set-winner
-            (let [{:keys [settle-serial winner-id]} data
+            (let [{:keys [settle-serial ranking]} data
                   last-state (a/<! (p/-fetch-game-account
                                     chain-api
                                     game-id
@@ -119,7 +119,7 @@
                                          game-id
                                          last-state
                                          settle-serial
-                                         winner-id))]
+                                         ranking))]
               (recur (inc settle-serial) acc-settle-map acc-count)))
           ;; EXIT
           (do

@@ -92,6 +92,8 @@
    ;; ----------------------------------------------
    ;; SNG
    winner-id
+   ranking
+
    start-time
    base-sb
    base-bb

@@ -65,7 +65,7 @@
                 [(or rake (js/BigInt 0)) 8]])))
    (doall)))
 
-(defn- find-player-ata-keys
+(defn- find-player-ata-keys-by-settle-map
   [players mint-pubkey bonus-mint-pubkey settle-map]
   (go-try
    (let [ata-keys-ch (->>
@@ -103,6 +103,28 @@
                                       {:pubkey     ata-pubkey,
                                        :isSigner   false,
                                        :isWritable true})))))))
+                      (a/map vector))]
+     (<!? ata-keys-ch))))
+
+(defn- find-player-ata-keys-by-ranking-pos
+  [players bonus-mint-pubkey ranking-pos]
+  (go-try
+   (let [ata-keys-ch (->>
+                      ranking-pos
+                      (map players)
+                      (keep
+                       (fn [{:keys [pubkey]}]
+                         (when pubkey
+                           (a/go
+                            (let [account-pubkey (pubkey/make-public-key pubkey)
+                                  ata-pubkey     (<!?
+                                                  (spl-token/get-associated-token-address
+                                                   bonus-mint-pubkey
+                                                   account-pubkey))]
+                              (log/infof "Use bonus ATA %s from %s" ata-pubkey pubkey)
+                              {:pubkey     ata-pubkey,
+                               :isSigner   false,
+                               :isWritable true})))))
                       (a/map vector))]
      (<!? ata-keys-ch))))
 
@@ -163,7 +185,10 @@
                                                    dealer-program-id))
 
            ata-keys
-           (<!? (find-player-ata-keys players mint-pubkey (:mint-pubkey bonus-state) settle-map))
+           (<!? (find-player-ata-keys-by-settle-map players
+                                                    mint-pubkey
+                                                    (:mint-pubkey bonus-state)
+                                                    settle-map))
 
            _ (log/infof "Fee Payer: %s" (keypair/public-key fee-payer))
            _ (log/infof "Game Account: %s" game-account-pubkey)
@@ -239,9 +264,9 @@
        :err))))
 
 (defn set-winner
-  [game-id game-account-state winner-id]
+  [game-id game-account-state ranking]
   (go-try
-   (let [_ (log/infof "📝SNG winner: %s" winner-id)
+   (let [_ (log/infof "📝SNG finished, ranking: %s" ranking)
          fee-payer (load-private-key)
 
          conn (conn/make-connection (get @config :solana-rpc-endpoint))
@@ -250,17 +275,23 @@
          dealer-program-id (pubkey/make-public-key (get @config :dealer-program-address))
 
          {:keys [players stake-account-pubkey mint-pubkey transactor-pubkey owner-pubkey
-                 settle-serial]}
+                 settle-serial bonus-pubkey]}
          game-account-state
 
          _ (log/infof "📝On chain players: %s" players)
 
-         ix-data (ib/make-instruction-data [set-winner-ix-id 1])
+         player-id-to-pos (->> (map (comp str :pubkey) players)
+                               (map-indexed (fn [idx pk] [pk idx]))
+                               (into {}))
+
+         ranking-pos-list (map player-id-to-pos ranking)
+
+         _ (log/infof "📝Ranking positions: %s" ranking-pos-list)
 
          [pda] (<!? (pubkey/find-program-address #js [(buffer-from "stake")]
                                                  dealer-program-id))
 
-         winner-pubkey (pubkey/make-public-key winner-id)
+         winner-pubkey (pubkey/make-public-key (first ranking))
 
          ata-pubkey (<!?
                      (spl-token/get-associated-token-address
@@ -277,33 +308,58 @@
                             mint-pubkey
                             owner-pubkey))
 
-         ix-keys [{:pubkey     (keypair/public-key fee-payer),
-                   :isSigner   true,
+         bonus-state (when bonus-pubkey
+                       (some-> (<!? (conn/get-account-info conn bonus-pubkey "finalized"))
+                               :data
+                               (parse-bonus-state-data)))
+
+         ix-data (ib/make-instruction-data [set-winner-ix-id 1])
+
+         ata-keys
+         (if bonus-state
+           (<!?
+            (find-player-ata-keys-by-ranking-pos players
+                                                 (:mint-pubkey bonus-state)
+                                                 ranking-pos-list))
+           [])
+
+         ix-keys
+         (cond->
+           [{:pubkey     (keypair/public-key fee-payer),
+             :isSigner   true,
+             :isWritable false}
+            {:pubkey     game-account-pubkey,
+             :isSigner   false,
+             :isWritable true}
+            {:pubkey     stake-account-pubkey,
+             :isSigner   false,
+             :isWritable true}
+            {:pubkey     pda,
+             :isSigner   false,
+             :isWritable false}
+            {:pubkey     transactor-ata-pubkey,
+             :isSigner   false,
+             :isWritable true}
+            {:pubkey     owner-ata-pubkey,
+             :isSigner   false,
+             :isWritable true}
+            {:pubkey     ata-pubkey,
+             :isSigner   false,
+             :isWritable true}
+            {:pubkey     spl-token/token-program-id,
+             :isSigner   false,
+             :isWritable false}]
+
+           bonus-state
+           (into [{:pubkey     bonus-pubkey,
+                   :isSigner   false,
                    :isWritable false}
-                  {:pubkey     game-account-pubkey,
+                  {:pubkey     (:stake-pubkey bonus-state),
                    :isSigner   false,
-                   :isWritable true}
-                  {:pubkey     stake-account-pubkey,
-                   :isSigner   false,
-                   :isWritable true}
-                  {:pubkey     pda,
-                   :isSigner   false,
-                   :isWritable false}
-                  {:pubkey     winner-pubkey,
-                   :isSigner   false,
-                   :isWritable false}
-                  {:pubkey     ata-pubkey,
-                   :isSigner   false,
-                   :isWritable true}
-                  {:pubkey     transactor-ata-pubkey,
-                   :isSigner   false,
-                   :isWritable true}
-                  {:pubkey     owner-ata-pubkey,
-                   :isSigner   false,
-                   :isWritable true}
-                  {:pubkey     spl-token/token-program-id,
-                   :isSigner   false,
-                   :isWritable false}]
+                   :isWritable true}])
+
+           true
+           (into ata-keys))
 
          ix
          (transaction/make-transaction-instruction
@@ -314,11 +370,14 @@
          (doto (transaction/make-transaction)
           (transaction/add ix))
 
-         sig (<!? (conn/send-transaction conn tx [fee-payer]))
+         sig
+         (<!? (conn/send-transaction conn tx [fee-payer]))
 
-         ret (when sig (<!? (conn/confirm-transaction conn sig "finalized")))
+         ret
+         (when sig (<!? (conn/confirm-transaction conn sig "finalized")))
 
-         err (when ret (get-in ret [:value :err]))]
+         err
+         (when ret (get-in ret [:value :err]))]
      (cond
        (and sig ret (nil? err))
        (do (log/infof "🎉Transaction succeed #%s %s" settle-serial sig)
@@ -383,11 +442,11 @@
 
  ;; Send SetWinner transaction to Solana
  (p/-set-winner
-   [this game-id game-account-state settle-serial winner-id]
+   [this game-id game-account-state settle-serial ranking]
    (run-with-retry-loop this
                         game-id
                         settle-serial
-                        (fn [] (set-winner game-id game-account-state winner-id))))
+                        (fn [] (set-winner game-id game-account-state ranking))))
 
  (p/-fetch-game-account
    [_this game-id {:keys [commitment settle-serial], :or {commitment "finalized"}}]

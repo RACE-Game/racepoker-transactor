@@ -152,18 +152,25 @@
 
 (defn remove-eliminated-players
   "Remove all players who have no chips"
-  [{:keys [player-map], :as state}]
+  [{:keys [player-map game-type ranking], :as state}]
   (let [eliminated-pids (->> player-map
                              vals
+                             (sort-by :position >)
                              (filter #(= (js/BigInt 0) (:chips %)))
-                             (map :player-id))
+                             (mapv :player-id))
+
         remove-by-pids  (fn [m]
-                          (apply dissoc m eliminated-pids))]
+                          (apply dissoc m eliminated-pids))
+
+        ranking         (when (#{:sng :bonus} game-type)
+                          (into eliminated-pids ranking))]
+
     (log/infof "🧹Remove eliminated players: %s" eliminated-pids)
     (-> state
         (update :player-map remove-by-pids)
         (update :rsa-pub-map remove-by-pids)
-        (update :sig-map remove-by-pids))))
+        (update :sig-map remove-by-pids)
+        (assoc :ranking ranking))))
 
 (defn reset-sng-state
   [{:keys [winner-id base-sb base-bb], :as state}]
@@ -400,6 +407,7 @@
         :player-actions     [],
         :winning-type       nil,
         :winner-id          nil,
+        :ranking            nil,
         :after-key-share    nil,
         :chips-change-map   nil,
         :rake-map           nil})))
@@ -958,7 +966,7 @@
         (assoc :rake-map nil))))
 
 (defn- submit-game-result-sng
-  [{:keys [player-map game-account-state], :as state}]
+  [{:keys [player-map game-account-state ranking], :as state}]
   (let [live-players (->> player-map
                           vals
                           (filter #(> (:chips %) (js/BigInt 0))))]
@@ -966,14 +974,26 @@
       (let [winner-id (->> live-players
                            first
                            :player-id)
+
+            eliminated-players (->> player-map
+                                    vals
+                                    (sort-by :position >)
+                                    (filter #(= (:chips %) (js/BigInt 0))))
+
+            ranking   (-> [winner-id]
+                          (into (mapv :player-id eliminated-players))
+                          (into ranking))
+
             request
             {:type :system/set-winner,
-             :data {:winner-id     winner-id,
+             :data {:ranking       ranking,
                     :settle-serial (:settle-serial game-account-state)}}]
+
         (log/infof "✈️Submit game result for SNG game")
         (-> state
             (update :api-requests conj request)
-            (assoc :winner-id winner-id)))
+            (assoc :winner-id winner-id)
+            (assoc :ranking ranking)))
       state)))
 
 (defn- submit-game-result
