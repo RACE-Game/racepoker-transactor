@@ -501,6 +501,10 @@
                    (:player-id (first remain-players)))
         (misc/single-player-win new-state (:player-id (first remain-players))))
 
+      ;; Can't leave during key-share
+      (= status :game-status/key-share)
+      (misc/cant-leave-game! state event)
+
       ;; Game is running, calculate next state
       :else
       (do
