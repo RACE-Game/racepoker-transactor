@@ -153,19 +153,22 @@
 (defn remove-eliminated-players
   "Remove all players who have no chips"
   [{:keys [player-map game-type ranking], :as state}]
-  (let [eliminated-pids (->> player-map
-                             vals
-                             (sort-by :position >)
-                             (filter #(= (js/BigInt 0) (:chips %)))
-                             (mapv :player-id))
+  (let [eliminated-players (->> player-map
+                                vals
+                                (sort-by :position >)
+                                (filter #(= (js/BigInt 0) (:chips %))))
 
-        remove-by-pids  (fn [m]
-                          (apply dissoc m eliminated-pids))
+        eliminated-pids    (mapv :player-id eliminated-players)
 
-        ranking         (when (#{:sng :bonus} game-type)
-                          (into eliminated-pids ranking))]
+        remove-by-pids     (fn [m]
+                             (apply dissoc m eliminated-pids))
 
-    (log/infof "🧹Remove eliminated players: %s" eliminated-pids)
+        ranking            (when (#{:sng :bonus} game-type)
+                             (into (or ranking []) eliminated-pids))]
+
+    (log/infof "🧹Remove eliminated players: %s, ranking: %s"
+               eliminated-pids
+               ranking)
     (-> state
         (update :player-map remove-by-pids)
         (update :rsa-pub-map remove-by-pids)
@@ -407,7 +410,6 @@
         :player-actions     [],
         :winning-type       nil,
         :winner-id          nil,
-        :ranking            nil,
         :after-key-share    nil,
         :chips-change-map   nil,
         :rake-map           nil})))
@@ -980,20 +982,20 @@
                                     (sort-by :position >)
                                     (filter #(= (:chips %) (js/BigInt 0))))
 
-            ranking   (-> [winner-id]
-                          (into (mapv :player-id eliminated-players))
-                          (into ranking))
+            ranking   (-> (or ranking [])
+                          (into (map :player-id) eliminated-players)
+                          (conj winner-id))
 
             request
             {:type :system/set-winner,
-             :data {:ranking       ranking,
+             :data {:ranking       (reverse ranking),
                     :settle-serial (:settle-serial game-account-state)}}]
 
         (log/infof "✈️Submit game result for SNG game")
         (-> state
             (update :api-requests conj request)
             (assoc :winner-id winner-id)
-            (assoc :ranking ranking)))
+            (assoc :ranking nil)))
       state)))
 
 (defn- submit-game-result
