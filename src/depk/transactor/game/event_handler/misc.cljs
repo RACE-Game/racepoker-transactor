@@ -152,7 +152,7 @@
 
 (defn remove-eliminated-players
   "Remove all players who have no chips"
-  [{:keys [player-map game-type ranking], :as state}]
+  [{:keys [player-map game-type ranking winner-id], :as state}]
   (let [eliminated-players (->> player-map
                                 vals
                                 (sort-by :position >)
@@ -163,8 +163,10 @@
         remove-by-pids     (fn [m]
                              (apply dissoc m eliminated-pids))
 
-        ranking            (when (#{:sng :bonus} game-type)
-                             (into (or ranking []) eliminated-pids))]
+        ;; Build the final ranking with winner ids
+        ranking            (when (and (#{:sng :bonus} game-type)
+                                      (not winner-id))
+                             (into (or ranking ()) eliminated-pids))]
 
     (log/infof "🧹Remove eliminated players: %s, ranking: %s"
                eliminated-pids
@@ -182,6 +184,7 @@
         (assoc state
                :player-map {}
                :start-time nil
+               :ranking    nil
                :sb         base-sb
                :bb         base-bb))
     state))
@@ -981,20 +984,20 @@
                                     (sort-by :position >)
                                     (filter #(= (:chips %) (js/BigInt 0))))
 
-            ranking   (-> (or ranking [])
+            ranking   (-> (or ranking ())
                           (into (map :player-id) eliminated-players)
                           (conj winner-id))
 
             request
             {:type :system/set-winner,
-             :data {:ranking       (reverse ranking),
+             :data {:ranking       ranking,
                     :settle-serial (:settle-serial game-account-state)}}]
 
         (log/infof "✈️Submit game result for SNG game")
         (-> state
             (update :api-requests conj request)
             (assoc :winner-id winner-id)
-            (assoc :ranking nil)))
+            (assoc :ranking ranking)))
       state)))
 
 (defn- submit-game-result
