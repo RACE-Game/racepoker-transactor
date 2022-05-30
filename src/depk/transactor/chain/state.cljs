@@ -37,6 +37,7 @@
 (def rebuy-ix-id 5)
 (def attach-bonus-ix-id 6)
 (def init-bonus-ix-id 7)
+(def close-game-ix-id 8)
 
 ;; Game Account
 

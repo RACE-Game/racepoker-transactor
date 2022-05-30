@@ -772,7 +772,6 @@
 
   winner-id-sets is a list of player-id set, ranked from strongest hands to weakest."
   [{:keys [pots], :as state} winner-id-sets]
-  ;; (log/infof "Assign winner to pots: %s" winner-id-sets)
   (let [new-pots (->> pots
                       (mapv (fn [pot]
                               (loop [[id-set & rest-id-sets] winner-id-sets]
