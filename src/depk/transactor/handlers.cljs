@@ -3,6 +3,7 @@
    [depk.transactor.log :as log]
    [clojure.string :as str]
    [cljs.core.async :as a]
+   [depk.transactor.util :as u]
    [depk.transactor.game :as game]
    [depk.transactor.state.game-manager :refer [game-manager]]
    [cognitect.transit :as t]
@@ -192,7 +193,7 @@
 
   Including how many games are running."
   [^js req ^js res]
-  (let [w (t/writer :json)]
+  (let [w (t/writer :json {:handlers {js/BigInt u/bigint-writer}})]
     (doto res
      (.contentType "application/transit+json")
      (.send
