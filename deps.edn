@@ -1,7 +1,7 @@
 {:paths   ["src" "test"],
 
  :deps    {org.clojure/clojure         {:mvn/version "1.11.1"},
-           org.clojure/clojurescript   {:mvn/version "1.11.51"},
+           org.clojure/clojurescript   {:mvn/version "1.11.57"},
            org.clojure/core.async      {:mvn/version "1.5.640"},
            solana-clj/solana-clj       {:local/root "../solana-clj"},
            com.taoensso/timbre         {:mvn/version "5.2.1"},
@@ -14,7 +14,7 @@
            ring/ring-defaults          {:mvn/version "0.3.2"},
            mount/mount                 {:mvn/version "0.1.16"},
            metosin/reitit              {:mvn/version "0.5.13"},
-           thheller/shadow-cljs        {:mvn/version "2.19.0"},
+           thheller/shadow-cljs        {:mvn/version "2.19.2"},
            ring-cors/ring-cors         {:mvn/version "0.1.13"},
            binaryage/devtools          {:mvn/version "1.0.4"},
            pjstadig/humane-test-output {:mvn/version "0.11.0"}},

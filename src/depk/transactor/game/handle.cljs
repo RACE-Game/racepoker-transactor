@@ -9,13 +9,16 @@
     * Event loop
   "
   (:require
-   [cljs.core.async           :as a]
-   [depk.transactor.event     :as event]
-   [depk.transactor.chain     :as chain]
-   [depk.transactor.store     :as store]
+   [cljs.core.async :as a]
+   [depk.transactor.game.models :as m]
+   [depk.transactor.event :as event]
+   [depk.transactor.chain :as chain]
+   [depk.transactor.store :as store]
    [depk.transactor.broadcast :as broadcast]
    [depk.transactor.game.event-loop :as eloop]
-   [depk.transactor.log       :as log]))
+   [depk.transactor.log :as log]
+   ["path" :as path]
+   ["worker_threads" :refer [Worker]]))
 
 (defrecord GameHandle
   [event-bus
@@ -25,27 +28,36 @@
    event-loop])
 
 (defn make-game-handle
-  [game-id init-state ws-conn]
+  [game-id post-msg-fn]
   (log/infof "🏁Create game handle for game: %s" game-id)
-  (let [opts        {:game-id game-id, :init-state init-state}
-        chain-api   (chain/make-solana-api)
-        event-bus   (event/make-mem-event-bus)
-        store-api   (store/make-fake-store-api)
-        broadcaster (broadcast/make-broadcaster ws-conn)
-        event-loop  (eloop/make-event-loop)]
-    ;; Attach components to event bus
-    (event/attach event-loop event-bus)
-    (event/attach chain-api event-bus)
-    (event/attach store-api event-bus)
-    (event/attach broadcaster event-bus)
-    ;; Start components
-    (event/start-component event-bus opts)
-    (event/start-component chain-api opts)
-    (event/start-component event-loop opts)
-    (event/start-component store-api opts)
-    (event/start-component broadcaster opts)
+  (a/go
+   (let [chain-api          (chain/make-solana-api)
+         game-account-state (a/<! (chain/fetch-game-account chain-api
+                                                            game-id
+                                                            {:commitment "finalized"}))
+         mint-info          (a/<! (chain/fetch-mint-info chain-api
+                                                         (str (:mint-pubkey
+                                                               game-account-state))))
+         init-state         (m/make-game-state game-account-state mint-info {:game-id game-id})
+         opts               {:game-id game-id, :init-state init-state}
+         event-bus          (event/make-mem-event-bus)
+         store-api          (store/make-fake-store-api)
+         broadcaster        (broadcast/make-broadcaster post-msg-fn)
+         event-loop         (eloop/make-event-loop)]
+     ;; Attach components to event bus
+     (event/attach event-loop event-bus)
+     (event/attach chain-api event-bus)
+     (event/attach store-api event-bus)
+     (event/attach broadcaster event-bus)
+     ;; Start components
+     (event/start-component event-bus opts)
+     (event/start-component chain-api opts)
+     (event/start-component event-loop opts)
+     (event/start-component store-api opts)
+     (event/start-component broadcaster opts)
 
-    (->GameHandle event-bus chain-api store-api broadcaster event-loop)))
+     (log/infof "🏁Game handle started")
+     (->GameHandle event-bus chain-api store-api broadcaster event-loop))))
 
 (defn game-handle?
   [x]
@@ -62,7 +74,3 @@
 (defn get-game-account-snapshot
   [game-handle]
   (broadcast/get-game-account-snapshot (:broadcaster game-handle)))
-
-(defn shutdown-game-handle
-  [game-handle]
-  (event/shutdown (:event-bus game-handle)))

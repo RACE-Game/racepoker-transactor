@@ -2,79 +2,59 @@
   "Game manager for game status in memory."
   (:require
    [depk.transactor.util        :refer [go-try <!?]]
-   [depk.transactor.game.handle :as handle]
+   [depk.transactor.game.worker :as worker]
    [depk.transactor.log         :as log]
-   [depk.transactor.chain       :as chain]
-   [depk.transactor.game.models :as m]
-   [depk.transactor.state.global-chain-api :refer [global-chain-api]]))
+   [depk.transactor.chain       :as chain]))
 
 (defn game-not-exist!
   [game-id]
   (throw (ex-info "Game not exist" {:game-id game-id})))
 
-(defrecord GameManager [game-handle-map])
+(defrecord GameManager [game-worker-map])
 
-(defn assign-new-game-handle
-  [game-handle-map game-id init-state ws-conn]
-  (if (get game-handle-map game-id)
-    game-handle-map
-    (let [game-handle (handle/make-game-handle game-id init-state ws-conn)]
-      (assoc game-handle-map game-id game-handle))))
+(defn assign-new-game-worker
+  [game-worker-map game-id ws-conn]
+  (if (get game-worker-map game-id)
+    game-worker-map
+    (let [game-worker (worker/make-worker game-id ws-conn)]
+      (assoc game-worker-map game-id game-worker))))
 
 (defn find-game-unchecked
   "Find a running game handle by game-id."
   [manager game-id]
-  (get @(:game-handle-map manager) game-id))
+  (get @(:game-worker-map manager) game-id))
 
 (defn find-game
-  "Find a running game handle by game-id, will throw raise an exception when not found."
+  "Find a running game worker by game-id, will throw raise an exception when not found."
   [manager game-id]
-  (if-let [handle (find-game-unchecked manager game-id)]
-    handle
-    (throw (ex-info "Game not found!" {:game-id game-id}))))
+  (if-let [worker (find-game-unchecked manager game-id)]
+    worker
+    (game-not-exist! game-id)))
 
 (defn try-start-game
-  "Try to start game handle when non-exist."
+  "Try to start game worker when non-exist."
   [manager game-id]
   (go-try
    (when-not (find-game-unchecked manager game-id)
-     (let [game-account-state (<!? (chain/fetch-game-account @global-chain-api
-                                                             game-id
-                                                             {:commitment "finalized"}))
-
-           ;; Use a fixed one for SNG/Bonus game.
-           mint-info          (<!? (chain/fetch-mint-info @global-chain-api
-                                                          (str (:mint-pubkey
-                                                                game-account-state))))
-           init-state         (m/make-game-state game-account-state mint-info {:game-id game-id})
-           {:keys [game-handle-map]} manager]
-       (swap! game-handle-map assign-new-game-handle game-id init-state (:ws-conn manager))))))
-
-(defn try-stop-game
-  [manager game-id]
-  (let [game-handle (find-game-unchecked manager game-id)]
-    (handle/shutdown-game-handle game-handle)
-    (swap! (:game-handle-map manager) dissoc game-id)))
+     (let [{:keys [game-worker-map ws-conn]} manager]
+       (swap! game-worker-map assign-new-game-worker game-id ws-conn)))))
 
 (defn make-game-manager
   [ws-conn]
   (log/info "🏁Initialize game manager")
-  (let [game-handle-map (atom {})]
-    (map->GameManager {:game-handle-map game-handle-map,
+  (let [game-worker-map (atom {})]
+    (map->GameManager {:game-worker-map game-worker-map,
                        :ws-conn         ws-conn})))
 
 (defn fetch-game-histories
-  [manager game-id]
-  ;; (let [{:keys [store-api]} manager]
-  ;;   (api/fetch-game-histories store-api game-id))
-)
+  [manager game-id])
 
 (defn list-game-ids-by-player-id
   [manager player-id]
-  (when-let [handle-map @(:game-handle-map manager)]
-    (->> handle-map
-         (keep (fn [[game-id h]]
-                 (let [player-ids (some-> (handle/get-snapshot h)
+  (when-let [worker-map @(:game-worker-map manager)]
+    (->> worker-map
+         (keep (fn [[game-id w]]
+                 (let [player-ids (some-> (worker/get-snapshot w)
                                           :player-map
                                           keys)]
                    (when (seq (filter #(= % player-id) player-ids))
@@ -82,18 +62,18 @@
 
 (defn list-running-games
   [manager]
-  (when-let [handle-map @(:game-handle-map manager)]
-    (->> handle-map
-         (keep (fn [[game-id h]]
-                 (let [{:keys [player-map]} (handle/get-snapshot h)]
+  (when-let [worker-map @(:game-worker-map manager)]
+    (->> worker-map
+         (keep (fn [[game-id w]]
+                 (let [{:keys [player-map]} (worker/get-snapshot w)]
                    [game-id {:player-ids (keys player-map)}])))
          (into {}))))
 
 (defn list-players
   [manager]
-  (when-let [handle-map @(:game-handle-map manager)]
-    (->> handle-map
-         (mapcat (fn [[_ h]]
-                   (let [{:keys [player-map]} (handle/get-snapshot h)]
+  (when-let [worker-map @(:game-worker-map manager)]
+    (->> worker-map
+         (mapcat (fn [[_ w]]
+                   (let [{:keys [player-map]} (worker/get-snapshot w)]
                      (keys player-map))))
          (distinct))))

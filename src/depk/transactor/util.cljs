@@ -26,6 +26,20 @@
    {:handlers {js/BigInt bigint-writer}}
    {:handlers {"n" bigint-reader}}))
 
+(def transit-writer
+  (transit/writer :json {:handlers {js/BigInt bigint-writer}}))
+
+(def transit-reader
+  (transit/reader :json {:handlers {"n" bigint-reader}}))
+
+(defn transit-write
+  [o]
+  (transit/write transit-writer o))
+
+(defn transit-read
+  [o]
+  (transit/read transit-reader o))
+
 (defn abs
   "Abs for js/BigInt."
   [x]

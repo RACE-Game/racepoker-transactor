@@ -3,7 +3,7 @@
   (:require
    [depk.transactor.util :refer [go-try <!?]]
    [depk.transactor.game.models :as m]
-   [depk.transactor.game.handle :as handle]
+   [depk.transactor.game.worker :as worker]
    [depk.transactor.game.event-loop :as eloop]
    [depk.transactor.game.manager :as manager]
    [depk.transactor.log :as log]
@@ -21,17 +21,11 @@
    (log/infof "👔player[%s] attach to game [%s]" player-id game-id)
    (manager/try-start-game game-manager game-id)))
 
-(defn shutdown-game
-  [game-manager game-id]
-  {:pre [(string? game-id)]}
-  (go-try
-   (manager/try-stop-game game-manager game-id)))
-
 (defn state
   [game-manager game-id]
   {:pre [(string? game-id)]}
-  (when-let [game-handle (manager/find-game-unchecked game-manager game-id)]
-    (m/game-state->resp (handle/get-snapshot game-handle))))
+  (when-let [game-worker (manager/find-game-unchecked game-manager game-id)]
+    (m/game-state->resp (worker/get-snapshot game-worker))))
 
 ;; Leaving game
 ;; Must provides all keys
@@ -42,10 +36,10 @@
              (vector? released-keys))]}
   (go-try
    ;; (log/infof "player[%s] leave game [%s]" player-id game-id)
-   (if-let [game-handle (manager/find-game game-manager game-id)]
-     (handle/send-event game-handle
+   (if-let [game-worker (manager/find-game game-manager game-id)]
+     (worker/send-event game-worker
                         (m/make-event :client/leave
-                                      (handle/get-snapshot game-handle)
+                                      (worker/get-snapshot game-worker)
                                       {:released-keys released-keys}
                                       player-id))
      (throw (ex-info "game not exist" {:game-id game-id})))))
@@ -57,10 +51,10 @@
          (string? rsa-pub)
          (string? sig)]}
   (go-try
-   (if-let [game-handle (manager/find-game game-manager game-id)]
-     (handle/send-event game-handle
+   (if-let [game-worker (manager/find-game game-manager game-id)]
+     (worker/send-event game-worker
                         (m/make-event :client/ready
-                                      (handle/get-snapshot game-handle)
+                                      (worker/get-snapshot game-worker)
                                       {:rsa-pub rsa-pub,
                                        :sig     sig}
                                       player-id))
@@ -71,10 +65,10 @@
   [game-manager game-id player-id]
   {:pre [(string? game-id)]}
   (go-try
-   (if-let [game-handle (manager/find-game game-manager game-id)]
-     (handle/send-event game-handle
+   (if-let [game-worker (manager/find-game game-manager game-id)]
+     (worker/send-event game-worker
                         (m/make-event :system/alive
-                                      (handle/get-snapshot game-handle)
+                                      (worker/get-snapshot game-worker)
                                       {}
                                       player-id))
      (throw (ex-info "game not exist" {:game-id game-id})))))
@@ -84,10 +78,10 @@
   [game-manager game-id player-id]
   {:pre [(string? game-id)]}
   (go-try
-   (if-let [game-handle (manager/find-game game-manager game-id)]
-     (handle/send-event game-handle
+   (if-let [game-worker (manager/find-game game-manager game-id)]
+     (worker/send-event game-worker
                         (m/make-event :system/dropout
-                                      (handle/get-snapshot game-handle)
+                                      (worker/get-snapshot game-worker)
                                       {}
                                       player-id))
      (throw (ex-info "game not exist" {:game-id game-id})))))
@@ -101,10 +95,10 @@
          (some? data)]}
   (go-try
    ;; (log/infof "player[%s] shuffle cards" player-id)
-   (if-let [game-handle (manager/find-game game-manager game-id)]
-     (handle/send-event game-handle
+   (if-let [game-worker (manager/find-game game-manager game-id)]
+     (worker/send-event game-worker
                         (m/make-event :client/shuffle-cards
-                                      (handle/get-snapshot game-handle)
+                                      (worker/get-snapshot game-worker)
                                       {:data data}
                                       player-id))
      (throw (ex-info "game not exist" {:game-id game-id})))))
@@ -116,10 +110,10 @@
          (some? data)]}
   (go-try
    ;; (log/infof "player[%s] encrypt cards" player-id)
-   (if-let [game-handle (manager/find-game game-manager game-id)]
-     (handle/send-event game-handle
+   (if-let [game-worker (manager/find-game game-manager game-id)]
+     (worker/send-event game-worker
                         (m/make-event :client/encrypt-cards
-                                      (handle/get-snapshot game-handle)
+                                      (worker/get-snapshot game-worker)
                                       {:data data}
                                       player-id))
      (throw (ex-info "game not exist" {:game-id game-id})))))
@@ -131,10 +125,10 @@
          (map? share-keys)]}
   (go-try
    ;; (log/infof "player[%s] share keys" player-id)
-   (if-let [game-handle (manager/find-game game-manager game-id)]
-     (handle/send-event game-handle
+   (if-let [game-worker (manager/find-game game-manager game-id)]
+     (worker/send-event game-worker
                         (m/make-event :client/share-keys
-                                      (handle/get-snapshot game-handle)
+                                      (worker/get-snapshot game-worker)
                                       {:share-keys share-keys}
                                       player-id))
      (error-game-not-exist! game-id))))
@@ -146,10 +140,10 @@
          (vector? released-keys)]}
   (go-try
    ;; (log/infof "player[%s] release keys" player-id)
-   (if-let [game-handle (manager/find-game game-manager game-id)]
-     (handle/send-event game-handle
+   (if-let [game-worker (manager/find-game game-manager game-id)]
+     (worker/send-event game-worker
                         (m/make-event :client/release
-                                      (handle/get-snapshot game-handle)
+                                      (worker/get-snapshot game-worker)
                                       {:released-keys released-keys}
                                       player-id))
      (error-game-not-exist! game-id))))
@@ -161,10 +155,10 @@
          (> amount 0)]}
   (go-try
    ;; (log/infof "player[%s] bet" player-id)
-   (if-let [game-handle (manager/find-game game-manager game-id)]
-     (handle/send-event game-handle
+   (if-let [game-worker (manager/find-game game-manager game-id)]
+     (worker/send-event game-worker
                         (m/make-event :player/bet
-                                      (handle/get-snapshot game-handle)
+                                      (worker/get-snapshot game-worker)
                                       {:amount amount}
                                       player-id))
      (error-game-not-exist! game-id))))
@@ -177,10 +171,10 @@
          (> amount 0)]}
   (go-try
    ;; (log/infof "player[%s] raise" player-id)
-   (if-let [game-handle (manager/find-game game-manager game-id)]
-     (handle/send-event game-handle
+   (if-let [game-worker (manager/find-game game-manager game-id)]
+     (worker/send-event game-worker
                         (m/make-event :player/raise
-                                      (handle/get-snapshot game-handle)
+                                      (worker/get-snapshot game-worker)
                                       {:amount amount}
                                       player-id))
      (error-game-not-exist! game-id))))
@@ -191,10 +185,10 @@
          (string? player-id)]}
   (go-try
    ;; (log/infof "player[%s] call" player-id)
-   (if-let [game-handle (manager/find-game game-manager game-id)]
-     (handle/send-event game-handle
+   (if-let [game-worker (manager/find-game game-manager game-id)]
+     (worker/send-event game-worker
                         (m/make-event :player/call
-                                      (handle/get-snapshot game-handle)
+                                      (worker/get-snapshot game-worker)
                                       {}
                                       player-id))
      (error-game-not-exist! game-id))))
@@ -205,10 +199,10 @@
          (string? player-id)]}
   (go-try
    ;; (log/infof "player[%s] fold" player-id)
-   (if-let [game-handle (manager/find-game game-manager game-id)]
-     (handle/send-event game-handle
+   (if-let [game-worker (manager/find-game game-manager game-id)]
+     (worker/send-event game-worker
                         (m/make-event :player/fold
-                                      (handle/get-snapshot game-handle)
+                                      (worker/get-snapshot game-worker)
                                       {:share-keys share-keys}
                                       player-id))
      (error-game-not-exist! game-id))))
@@ -219,10 +213,10 @@
          (string? player-id)]}
   (go-try
    ;; (log/infof "player[%s] check" player-id)
-   (if-let [game-handle (manager/find-game game-manager game-id)]
-     (handle/send-event game-handle
+   (if-let [game-worker (manager/find-game game-manager game-id)]
+     (worker/send-event game-worker
                         (m/make-event :player/check
-                                      (handle/get-snapshot game-handle)
+                                      (worker/get-snapshot game-worker)
                                       {}
                                       player-id))
      (error-game-not-exist! game-id))))

@@ -1,12 +1,13 @@
 (ns depk.transactor.chain.sync-loop
   "Sychronization for blockchain states."
   (:require
-   [cljs.core.async          :as a]
-   [depk.transactor.log      :as log]
+   [cljs.core.async      :as a]
+   [depk.transactor.log  :as log]
    [depk.transactor.chain.protocol :as p]
-   [depk.transactor.util     :as u]
-   [clojure.set              :as set]
-   [depk.transactor.constant :as c]))
+   [depk.transactor.util :as u]
+   [clojure.set          :as set]
+   [depk.transactor.constant :as c]
+   ["process"            :as process]))
 
 (def sync-loop-event-types
   [:system/settle
@@ -62,69 +63,64 @@
   "Sync transactor state with on-chain state."
   [chain-api game-id input output init-state]
   (log/infof "🏁Start state sync loop for game[%s]" game-id)
-  (let [running_ (atom true)]
-    ;; Sync joined players
-    (a/go-loop [buyin-serial (:buyin-serial init-state)]
-      (when @running_
-        (let [state (a/<! (p/-fetch-game-account chain-api game-id {:commitment "finalized"}))]
+  (a/go-loop [buyin-serial (:buyin-serial init-state)]
+    (let [state (a/<! (p/-fetch-game-account chain-api game-id {:commitment "finalized"}))]
+      (when (and state (< buyin-serial (:buyin-serial state)))
+        (log/infof "👀️Read game[%s] state, %s -> %s"
+                   game-id
+                   buyin-serial
+                   (:buyin-serial state))
+        (a/>! output
+              {:type :system/sync-state, :game-id game-id, :data {:game-account-state state}}))
 
-          (when (and state (< buyin-serial (:buyin-serial state)))
-            (log/infof "👀️Read game[%s] state, %s -> %s"
-                       game-id
-                       buyin-serial
-                       (:buyin-serial state))
-            (a/>! output
-                  {:type :system/sync-state, :game-id game-id, :data {:game-account-state state}}))
-          (a/<! (a/timeout 3000))
-          (recur (max buyin-serial (:buyin-serial state))))))
+      (a/<! (a/timeout 3000))
+      (recur (max buyin-serial (:buyin-serial state)))))
 
-    ;; Sync player chips, status
-    (a/go-loop [settle-serial  (:settle-serial init-state)
-                acc-settle-map nil
-                acc-count      0]
-      (let [{:keys [type data], :as event} (a/<! input)]
-        (if event
-          (condp = type
-            :system/settle
-            (let [{:keys [rake settle-map]} data
-                  any-leave?     (some #(= :leave (:settle-status %)) (vals settle-map))
-                  new-count      (inc acc-count)
-                  new-settle-map (merge-settle-map acc-settle-map settle-map)
+  ;; Sync player chips, status
+  (a/go-loop [settle-serial  (:settle-serial init-state)
+              acc-settle-map nil
+              acc-count      0]
+    (let [{:keys [type data], :as event} (a/<! input)]
+      (if event
+        (condp = type
+          :system/settle
+          (let [{:keys [rake settle-map]} data
+                any-leave?     (some #(= :leave (:settle-status %)) (vals settle-map))
+                new-count      (inc acc-count)
+                new-settle-map (merge-settle-map acc-settle-map settle-map)
 
-                  last-state     (a/<! (p/-fetch-game-account
-                                        chain-api
-                                        game-id
-                                        {:settle-serial settle-serial}))]
+                last-state     (a/<! (p/-fetch-game-account
+                                      chain-api
+                                      game-id
+                                      {:settle-serial settle-serial}))]
 
-              (log/infof "📥New settle, rake: %s" rake)
-              (doseq [[pid {:keys [settle-status settle-type amount]}] settle-map]
-                (log/infof "📥- %s %s %s %s" pid settle-status settle-type amount))
+            (log/infof "📥New settle, rake: %s" rake)
+            (doseq [[pid {:keys [settle-status settle-type amount]}] settle-map]
+              (log/infof "📥- %s %s %s %s" pid settle-status settle-type amount))
 
-              (if (or any-leave? (>= new-count settle-batch-size))
-                (let [_ (a/<! (p/-settle chain-api
-                                         game-id
-                                         last-state
-                                         settle-serial
-                                         new-settle-map))]
-                  (recur (inc settle-serial) nil 0))
-                (recur settle-serial new-settle-map new-count)))
+            (if (or any-leave? (>= new-count settle-batch-size))
+              (let [_ (a/<! (p/-settle chain-api
+                                       game-id
+                                       last-state
+                                       settle-serial
+                                       new-settle-map))]
+                (recur (inc settle-serial) nil 0))
+              (recur settle-serial new-settle-map new-count)))
 
-            :system/set-winner
-            (let [{:keys [settle-serial ranking]} data
-                  last-state (a/<! (p/-fetch-game-account
-                                    chain-api
-                                    game-id
-                                    {:settle-serial settle-serial}))
-                  _ (a/<! (p/-set-winner chain-api
-                                         game-id
-                                         last-state
-                                         settle-serial
-                                         ranking))]
-              (recur (inc settle-serial) acc-settle-map acc-count)))
-          ;; EXIT
-          (do
-            (log/infof "💤️Sync loop quit for game[%s]" game-id)
-            (reset! running_ false)))))))
+          :system/set-winner
+          (let [{:keys [settle-serial ranking]} data
+                last-state (a/<! (p/-fetch-game-account
+                                  chain-api
+                                  game-id
+                                  {:settle-serial settle-serial}))
+                _ (a/<! (p/-set-winner chain-api
+                                       game-id
+                                       last-state
+                                       settle-serial
+                                       ranking))]
+            (recur (inc settle-serial) acc-settle-map acc-count)))
+        ;; EXIT
+        (log/infof "💤️Sync loop quit for game[%s]" game-id)))))
 
 (comment
 

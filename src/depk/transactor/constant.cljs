@@ -1,6 +1,6 @@
 (ns depk.transactor.constant)
 
-(def version "ALPHA 0.1.31")
+(def version "ALPHA 0.2.0")
 
 (def max-player-num 9)
 
@@ -13,9 +13,10 @@
 (def droupout-player-action-timeout-delay 5000)
 (def reset-timeout-delay 1000)
 (def sng-next-game-timeout-delay 30000)
+(def max-drop-count 2)
 
 (def increase-blinds-interval (* 3 60 1000))
-(def shutdown-game-delay 30000)
+(def shutdown-game-delay 5000)
 
 (def level-info-map
   {:nl100  {:sb (js/BigInt 1), :bb (js/BigInt 2)},

@@ -19,7 +19,7 @@
    (make-event type state data nil))
   ([type state data player-id]
    (let [dispatch-id (:state-id state)]
-     (->Event type dispatch-id data player-id))))
+     (into {} (->Event type dispatch-id data player-id)))))
 
 (defrecord PlayerState
   [
@@ -32,7 +32,9 @@
    ;; player status: wait in-action acted fold allin
    status
    ;; online status: normal dropout leave
-   online-status])
+   online-status
+   ;; count the number of continuous drop
+   drop-count])
 
 (defn make-player-state
   ([player-id chips position]
@@ -166,6 +168,9 @@
 
    ;; winning type: last-player showdown runner
    winning-type
+
+   ;; player ids of the leaving or kicked players
+   leaving-player-ids
 
    ;; Affect the :this-event key in state broadcast.
    ;; The default value of :this-event is the type of current event.

@@ -32,6 +32,7 @@
 
 (defn make-mem-event-bus
   []
+  (log/infof "🏁Use in-memory event bus")
   (let [input      (a/chan 10)
         output     (a/chan 10)
         output-pub (a/pub output :type)]

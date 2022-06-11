@@ -2,11 +2,11 @@
  :builds {:app  {:target     :node-script,
                  :source-map true,
                  :main       depk.transactor.main/main,
-                 :devtools   {:preloads [devtools.preload]},
                  :output-to  "target/transactor.dev.js",
                  :release    {:output-to       "target/transactor.release.js",
                               :closure-defines
                               {depk.transactor.log.disable-log false}}},
+
           :test {:target          :node-test,
                  :output-to       "target/tests.js",
                  :ns-regexp       "-test$",

@@ -13,10 +13,6 @@
 
 ;; Websocket Event Handler
 
-(def pending-shutdown_
-  "A set for pending shutdown, a map from game-id to uuid."
-  (atom {}))
-
 (defmulti event-msg-handler :id)
 
 (defmethod event-msg-handler :default
@@ -24,21 +20,8 @@
   (let [[ev-id ev-data] event]
     (case ev-id
       :chsk/uidport-close
-      (let [[game-id player-id] ev-data
-            uuid (uuid/v4)]
-
-        (game/dropout @game-manager game-id player-id)
-
-        ;; 5 mins, no reconnect, stop event bus.
-        ;; Set UUID to `pending-shutdown_` atom, to avoid edge cases
-        ;; Make sure the shutdown runs 5 mins after latest disconnect
-        (when (empty? (:any @connected-uids))
-          (swap! pending-shutdown_ assoc game-id uuid)
-          (a/go
-           (a/<! (a/timeout c/shutdown-game-delay))
-           (when (and (empty? (:any @connected-uids))
-                      (= uuid (get @pending-shutdown_ game-id)))
-             (game/shutdown-game @game-manager game-id)))))
+      (let [[game-id player-id] ev-data]
+        (game/dropout @game-manager game-id player-id))
 
       :chsk/uidport-open
       (let [[game-id player-id] ev-data]

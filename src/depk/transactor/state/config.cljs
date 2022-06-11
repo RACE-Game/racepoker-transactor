@@ -8,8 +8,8 @@
 (def env (atom :local))
 
 (defn use-env
-  [env-kw]
-  (reset! env env-kw))
+  [e]
+  (reset! env (keyword e)))
 
 ;; quick and dirty hack
 (defn build-config
