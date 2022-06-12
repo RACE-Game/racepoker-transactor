@@ -65,8 +65,10 @@
   (when-let [worker-map @(:game-worker-map manager)]
     (->> worker-map
          (keep (fn [[game-id w]]
-                 (let [{:keys [player-map]} (worker/get-snapshot w)]
-                   [game-id {:player-ids (keys player-map)}])))
+                 (let [{:keys [player-map start-time]} (worker/get-snapshot w)]
+                   [game-id
+                    {:start-time start-time,
+                     :player-ids (keys player-map)}])))
          (into {}))))
 
 (defn list-players
