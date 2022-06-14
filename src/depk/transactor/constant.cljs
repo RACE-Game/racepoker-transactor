@@ -1,6 +1,6 @@
 (ns depk.transactor.constant)
 
-(def version "0.2.0")
+(def version "10")
 
 (def max-player-num 9)
 
@@ -15,7 +15,7 @@
 (def sng-next-game-timeout-delay 30000)
 (def max-drop-count 2)
 
-(def increase-blinds-interval (* 3 60 1000))
+(def increase-blinds-interval (* 5 60 1000))
 (def shutdown-game-delay 5000)
 
 (def level-info-map
