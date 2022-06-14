@@ -6,7 +6,6 @@
 
 (defn main
   [& args]
-  (println args)
   (if isMainThread
     (main-server (first args))
     (main-worker)))
