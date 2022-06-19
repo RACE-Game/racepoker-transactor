@@ -19,7 +19,8 @@
          _ (log/infof "👷Starting worker thread: %s" game-id)
          ;; Function passed to broadcaster, to collect SSE
          post-msg-fn (fn [data]
-                       (.postMessage ^js parentPort (u/transit-write data)))
+                       (let [s (u/transit-write data)]
+                         (.postMessage ^js parentPort s)))
          handle      (a/<! (handle/make-game-handle game-id post-msg-fn))]
 
      ;; Catch and log all exceptions

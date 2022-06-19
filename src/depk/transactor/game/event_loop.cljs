@@ -48,8 +48,9 @@
                 (assoc :timeout-event nil)
 
                 dispatch-event
-                (assoc :timeout-event [(+ (.getTime (js/Date.)) (first dispatch-event))
-                                       (second dispatch-event)])
+                (assoc :timeout-event
+                       [(+ (.getTime (js/Date.)) (first dispatch-event))
+                        (second dispatch-event)])
 
                 true
                 (assoc :this-event
@@ -116,12 +117,12 @@
 )
 
 (defn dispatch-broadcast-state
-  [game-id state output]
+  [game-id event state output]
   (put! output
         {:type :system/broadcast-state,
-         :data {:game-id            game-id,
-                :state              (game-state->resp state),
-                :game-account-state (:game-account-state state)}}))
+         :data {:game-id game-id,
+                :state   (game-state->resp state),
+                :event   event}}))
 
 (defn take-event
   [input state]
@@ -172,7 +173,7 @@
               ;; (.info js/console "after:" state)
 
               (dispatch-api-request event api-requests output)
-              (dispatch-broadcast-state game-id state output)
+              (dispatch-broadcast-state game-id event state output)
               (recur state records))
             (recur old-state records)))
         (recur state records))

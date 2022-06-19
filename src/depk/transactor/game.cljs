@@ -25,6 +25,7 @@
   [game-manager game-id]
   {:pre [(string? game-id)]}
   (when-let [game-worker (manager/find-game-unchecked game-manager game-id)]
+    (log/infof "👔fetch game [%s] state" game-id)
     (m/game-state->resp (worker/get-snapshot game-worker))))
 
 ;; Leaving game

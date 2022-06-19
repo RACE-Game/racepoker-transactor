@@ -11,9 +11,9 @@
   [snapshot ws-conn]
   (let [{:keys [chsk-send! connected-uids]} ws-conn]
     (fn [data]
-      (let [{:keys [game-id message]} (u/transit-read data)]
-        (when (= :game/state (first message))
-          (reset! snapshot (last message)))
+      (let [{:keys [game-id message state]} (u/transit-read data)]
+        (when (= :game/event (first message))
+          (reset! snapshot state))
         (doseq [uid   (:any @connected-uids)
                 :when (= game-id (first uid))]
           (chsk-send! uid message))))))

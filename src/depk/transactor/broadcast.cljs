@@ -16,7 +16,7 @@
 (defn start-broadcast-loop
   [broadcaster opts]
   (log/infof "🏁Start broadcaster for game[%s]" (:game-id opts))
-  (let [{:keys [post-msg-fn input snapshot game-account-snapshot]} broadcaster]
+  (let [{:keys [post-msg-fn input snapshot]} broadcaster]
     (a/go-loop [{:keys [type data], :as event} (a/<! input)]
       (if-not event
         ;; EXIT
@@ -24,14 +24,13 @@
         (do
           (condp = type
             :system/broadcast-state
-            (let [{:keys [state game-id game-account-state]} data]
+            (let [{:keys [state game-id event]} data]
               ;; Do not dispatch reset event.
               (log/infof "🔈Broadcaster event: %s status: %s" (:this-event state) (:status state))
               (reset! snapshot state)
-              (reset! game-account-snapshot game-account-state)
               (post-msg-fn {:game-id game-id,
-                            :message [:game/state (shrink-state state)]}))
-
+                            :state   state,
+                            :message [:game/event event]}))
             :noop)
           (recur (a/<! input)))))))
 

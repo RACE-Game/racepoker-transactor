@@ -12,15 +12,19 @@
   We get ciphers by encrypting card-strs.
   "
   (:require
-   ["crypto"        :as crypto]
-   ["buffer"        :as buffer]
-   [cljs-bean.core  :refer [->clj]]
-   [cljs.core.async :as a]
+   #?@(:node
+         [["crypto" :as crypto]]
+       :cljs
+         [])
+   ["buffer"             :as buffer]
    [cljs.core.async.interop :refer [<p!]]
-   [clojure.string  :as str]
+   [clojure.string       :as str]
    [depk.transactor.util :refer [go-try go-loop-try <!?]]))
 
-(def subtle (.. crypto -webcrypto -subtle))
+#?(:node
+     (def subtle (.. crypto -webcrypto -subtle))
+   :cljs
+     (def subtle js/crypto.subtle))
 
 (def public-exponent (js/Uint8Array. #js [1 0 1]))
 
@@ -95,7 +99,7 @@
               :counter aes-counter,
               :length  128}
             aes-key
-            plain-text))
+            (.encode (js/TextEncoder.) plain-text)))
 
 (defn decrypt-aes-p
   [cipher-text aes-key]

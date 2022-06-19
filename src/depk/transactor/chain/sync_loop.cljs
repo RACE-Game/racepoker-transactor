@@ -1,13 +1,14 @@
 (ns depk.transactor.chain.sync-loop
   "Sychronization for blockchain states."
   (:require
-   [cljs.core.async      :as a]
-   [depk.transactor.log  :as log]
+   [cljs.core.async :as a]
+   [depk.transactor.game.models :as m]
+   [depk.transactor.log :as log]
    [depk.transactor.chain.protocol :as p]
    [depk.transactor.util :as u]
-   [clojure.set          :as set]
+   [clojure.set :as set]
    [depk.transactor.constant :as c]
-   ["process"            :as process]))
+   ["process" :as process]))
 
 (def sync-loop-event-types
   [:system/settle
@@ -71,7 +72,10 @@
                    buyin-serial
                    (:buyin-serial state))
         (a/>! output
-              {:type :system/sync-state, :game-id game-id, :data {:game-account-state state}}))
+              {:type    :system/sync-state,
+               :game-id game-id,
+               :data
+               {:game-account-state (m/parse-raw-game-account-state state)}}))
 
       (a/<! (a/timeout 3000))
       (recur (max buyin-serial (:buyin-serial state)))))

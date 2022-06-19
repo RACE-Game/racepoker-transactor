@@ -223,7 +223,7 @@
   ([game-account-state mint-info init-state]
    (let [state-id   (uuid/v4)
          player-map (players->player-map (:players game-account-state))]
-     ;; (log/infof "player-map: %s" player-map)
+     (log/info "🏁Init game state")
      (into {}
            (map->GameState
             (merge
@@ -255,13 +255,15 @@
 
   This help reducing the response's body size."
   [state]
-  (select-keys state
-               [:buyin-serial :settle-serial
-                :status :street :player-map :pots :min-raise
-                :street-bet :bet-map :action-player-id
-                :showdown-map :prize-map :state-id :prepare-cards
-                :shuffle-player-id :encrypt-player-id
-                :base-sb :btn :sb :bb :require-key-idents :share-key-map :collect-bet-map
-                :card-ciphers :player-actions :winning-type :dispatch-id
-                :game-id :this-event :winner-id :size :op-player-ids :start-time
-                :rsa-pub-map :sig-map]))
+  (dissoc state :game-account-state :mint-info))
+
+(defn parse-raw-game-account-state
+  "Parse game account state, remove useless fields."
+  [game-account-state]
+  (letfn [(parse-players [players]
+                         (vec (for [p players]
+                                (when p
+                                  (into {} (update p :pubkey str))))))]
+    (-> game-account-state
+        (update :players parse-players)
+        (select-keys [:players :buyin-serial :settle-serial]))))

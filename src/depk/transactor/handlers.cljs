@@ -43,8 +43,10 @@
   ;; (log/infof "Sync game state: %s" uid)
   (let [[game-id player-id] uid
         state (game/state @game-manager game-id)]
-    (?reply-fn {:result :ok,
-                :state  state})))
+    (if (seq state)
+      (?reply-fn {:result :ok,
+                  :state  state})
+      (?reply-fn {:result :err}))))
 
 (defmethod event-msg-handler :client/leave
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
