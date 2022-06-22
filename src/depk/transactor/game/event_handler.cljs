@@ -161,6 +161,7 @@
                                (#{:sng :bonus} game-type))
                         (.getTime (js/Date.))
                         start-time)]
+       (log/infof "🔘Start game, BTN: %s" next-btn)
        (-> state
            (assoc :start-time start-time)
            (assoc :btn next-btn)
@@ -284,8 +285,7 @@
       (do
         (log/infof "🔑Next street")
         (-> new-state
-            (assoc :status :game-status/play
-                   :collect-bet-map nil)
+            (assoc :status :game-status/play)
             (misc/next-state)))
 
       (= :runner after-key-share)
@@ -645,7 +645,8 @@
   (when-not player-id
     (misc/invalid-player-id! state event))
 
-  (let [curr-bet (get bet-map player-id (js/BigInt 0))]
+  (let [curr-bet (get bet-map player-id (js/BigInt 0))
+        amount   (- amount curr-bet)]
 
     (when-not (= :game-status/play status)
       (misc/invalid-game-status! state event))

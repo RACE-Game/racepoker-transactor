@@ -1,17 +1,10 @@
 (ns depk.transactor.broadcast
   (:require
-   [cljs.core.async :as a]
+   [cljs.core.async      :as a]
    [depk.transactor.broadcast.protocol :as p]
    [depk.transactor.event.protocol :as ep]
-   [depk.transactor.log :as log]))
-
-(defn shrink-state
-  [state]
-  (let [status (:status state)]
-    (case status
-      ;; :game-status/play (dissoc state :prepare-cards)
-
-      state)))
+   [depk.transactor.log  :as log]
+   [depk.transactor.util :as u]))
 
 (defn start-broadcast-loop
   [broadcaster opts]
@@ -28,9 +21,11 @@
               ;; Do not dispatch reset event.
               (log/infof "🔈Broadcaster event: %s status: %s" (:this-event state) (:status state))
               (reset! snapshot state)
-              (post-msg-fn {:game-id game-id,
-                            :state   state,
-                            :message [:game/event event]}))
+              ;; The state will be sent in Transit serialized
+              ;; So the main thread doesn't have to unpack/pack it.
+              (post-msg-fn {:game-id          game-id,
+                            :serialized-state (u/transit-write state),
+                            :message          [:game/event event]}))
             :noop)
           (recur (a/<! input)))))))
 

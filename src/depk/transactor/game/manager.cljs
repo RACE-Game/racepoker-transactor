@@ -49,26 +49,15 @@
 (defn fetch-game-histories
   [manager game-id])
 
-(defn list-game-ids-by-player-id
-  [manager player-id]
-  (when-let [worker-map @(:game-worker-map manager)]
-    (->> worker-map
-         (keep (fn [[game-id w]]
-                 (let [player-ids (some-> (worker/get-snapshot w)
-                                          :player-map
-                                          keys)]
-                   (when (seq (filter #(= % player-id) player-ids))
-                     game-id)))))))
-
 (defn list-running-games
   [manager]
   (when-let [worker-map @(:game-worker-map manager)]
     (->> worker-map
          (keep (fn [[game-id w]]
-                 (let [{:keys [player-map start-time]} (worker/get-snapshot w)]
+                 (let [{:keys [player-ids start-time]} (worker/get-snapshot w)]
                    [game-id
                     {:start-time start-time,
-                     :player-ids (keys player-map)}])))
+                     :player-ids player-ids}])))
          (into {}))))
 
 (defn list-players
@@ -76,6 +65,6 @@
   (when-let [worker-map @(:game-worker-map manager)]
     (->> worker-map
          (mapcat (fn [[_ w]]
-                   (let [{:keys [player-map]} (worker/get-snapshot w)]
-                     (keys player-map))))
+                   (let [{:keys [player-ids]} (worker/get-snapshot w)]
+                     player-ids)))
          (distinct))))

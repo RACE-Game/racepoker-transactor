@@ -12,6 +12,9 @@
 (defrecord Event
   [type dispatch-id data player-id])
 
+;; TODO
+;; Remove dispatch-id in this structure
+;; dispatch-id is still necessary, but is no longer needed here
 (defn make-event
   ([type state]
    (make-event type state {}))
@@ -171,6 +174,10 @@
 
    ;; player ids of the leaving or kicked players
    leaving-player-ids
+
+   ;; Display instructions
+   ;; Decide how client will display
+   display
 
    ;; Affect the :this-event key in state broadcast.
    ;; The default value of :this-event is the type of current event.

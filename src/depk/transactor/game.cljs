@@ -26,7 +26,7 @@
   {:pre [(string? game-id)]}
   (when-let [game-worker (manager/find-game-unchecked game-manager game-id)]
     (log/infof "👔fetch game [%s] state" game-id)
-    (m/game-state->resp (worker/get-snapshot game-worker))))
+    (:serialized-state (worker/get-snapshot game-worker))))
 
 ;; Leaving game
 ;; Must provides all keys

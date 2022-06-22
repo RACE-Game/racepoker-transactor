@@ -60,6 +60,12 @@
            :state        state
            :api-requests api-requests)))
 
+(defn pre-process-state
+  [state]
+  (-> state
+      (assoc :state-id (str (random-uuid)))
+      (dissoc :display)))
+
 (defn handle-event
   "Apply event to state, return a channel that contains the result map.
 
@@ -73,8 +79,9 @@
   [state event]
   (go
    (try
-     (let [new-state-id (uuid/v4)
-           new-state    (event-handler/handle-event (assoc state :state-id new-state-id) event)]
+     (let [new-state (-> state
+                         (pre-process-state)
+                         (event-handler/handle-event event))]
        (if (map? new-state)
          (handle-result event {:result :ok, :state new-state})
          (let [v (<! new-state)]
@@ -122,7 +129,7 @@
         {:type :system/broadcast-state,
          :data {:game-id game-id,
                 :state   (game-state->resp state),
-                :event   event}}))
+                :event   (assoc event :state-id (:state-id state))}}))
 
 (defn take-event
   [input state]
@@ -134,7 +141,8 @@
        (let [to-ch      (a/timeout ms)
              [val port] (a/alts! [to-ch input])]
          (if (= port to-ch)
-           to-evt
+           ;; Fix the dispatch-id of timeout event
+           (assoc to-evt :dispatch-id (:state-id state))
            val))
        (a/<! input)))))
 

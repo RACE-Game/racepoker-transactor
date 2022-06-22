@@ -39,7 +39,9 @@
 
 (defn invalid-player-id!
   [state event]
-  (throw (ex-info "Invalid player id"
+  (throw (ex-info (gstr/format "Invalid player id, current: %s, in event: %s"
+                               (:shuffle-player-id state)
+                               (:player-id event))
                   {:state state,
                    :event event})))
 
@@ -188,6 +190,17 @@
                :sb         base-sb
                :bb         base-bb))
     state))
+
+(defn add-display
+  [state display]
+  (update state :display (fnil conj []) display))
+
+(defn add-collect-bets-display
+  [state]
+  (let [{:keys [bet-map]} state]
+    (if (seq bet-map)
+      (add-display state [:display/collect-bets {:bet-map bet-map}])
+      state)))
 
 (defn remove-non-alive-players
   "Remove all players who doesn't have live online status."
@@ -344,7 +357,10 @@
         player-ids    (->> (map :player-id (list-players-in-order state btn player-online?))
                            (take 3))]
     (log/infof "🫱Op player ids: %s" player-ids)
-    (assoc state :op-player-ids player-ids)))
+    (assoc state
+           :op-player-ids     player-ids
+           :shuffle-player-id nil
+           :encrypt-player-id nil)))
 
 (defn next-op-player-id
   [state current-player-id]
@@ -359,6 +375,7 @@
 (defn with-next-op-player-id-as
   [state k]
   (let [id (next-op-player-id state (get state k))]
+    (log/infof "🫴Set %s: %s -> %s" k (get state k) id)
     (assoc state k id)))
 
 (defn reset-player-map-status
@@ -406,7 +423,6 @@
         :min-raise          nil,
         :street-bet         nil,
         :bet-map            nil,
-        :collect-bet-map    nil,
         :pots               [],
         :showdown-map       nil,
         :prize-map          nil,
@@ -653,7 +669,9 @@
                                          (js/BigInt 0)
                                          (js/BigInt 0))
                                    reminder)]
-    (assoc state :prize-map prize-map)))
+    (-> state
+        (assoc :prize-map prize-map)
+        (add-display [:display/dispatch-prizes {:prize-map prize-map}]))))
 
 
 (defn take-rake
@@ -759,7 +777,8 @@
          :player-map new-player-map
          :min-raise  bb
          :street-bet bb)
-        (ask-player-for-action action-player-id))))
+        (ask-player-for-action action-player-id)
+        (add-display [:display/deal-cards {}]))))
 
 (defn apply-prize-map
   "Update player chips by prize-map."
@@ -782,7 +801,9 @@
                                   (if (seq winner-ids)
                                     (assoc pot :winner-ids winner-ids)
                                     (recur rest-id-sets)))))))]
-    (assoc state :pots new-pots)))
+    (-> state
+        (assoc :pots new-pots)
+        (add-display [:display/assign-pots {:pots new-pots}]))))
 
 (defn collect-bet-to-pots
   "Update pots.
@@ -848,8 +869,8 @@
       (log/infof "💵Return bet %s to %s" ret-bet ret-player-id))
 
     (-> state
+        (add-collect-bets-display)
         (assoc :pots rep-pots)
-        (assoc :collect-bet-map bet-map)
         (assoc :player-map player-map)
         (assoc :bet-map nil))))
 
@@ -1030,7 +1051,7 @@
                             winner-player-ids
                             (set (keys player-map)))]
 
-    (log/infof "🩹Terminate game, winner ids: %s, revert bet-map: %s"
+    (log/infof "💣Terminate game, winner ids: %s, revert bet-map: %s"
                winner-player-ids
                bet-map)
     (-> state
