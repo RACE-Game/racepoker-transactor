@@ -142,7 +142,8 @@
         msg {:game-id    (:game-id ?data),
              :sender     player-id,
              :text       (:text ?data),
-             :message/id (uuid/v4)}]
+             :message/id (uuid/v4),
+             :timestamp  (js/Date.)}]
     (doseq [u (:any @connected-uids)]
       (when (= game-id (first u))
         (send-fn u [:message/text msg])))))
@@ -155,7 +156,8 @@
          msg {:game-id    (:game-id ?data),
               :sender     player-id,
               :sticker-id (:sticker-id ?data),
-              :message/id (uuid/v4)}]
+              :message/id (uuid/v4),
+              :timestamp  (js/Date.)}]
      (doseq [u (:any @connected-uids)]
        (when (= game-id (first u))
          (send-fn u [:message/sticker msg]))))))

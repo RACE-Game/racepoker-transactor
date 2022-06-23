@@ -25,6 +25,8 @@
               ;; So the main thread doesn't have to unpack/pack it.
               (post-msg-fn {:game-id          game-id,
                             :serialized-state (u/transit-write state),
+                            :player-ids       (keys (:player-map state)),
+                            :start-time       (:start-time state),
                             :message          [:game/event event]}))
             :noop)
           (recur (a/<! input)))))))
