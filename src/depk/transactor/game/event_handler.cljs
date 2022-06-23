@@ -184,7 +184,8 @@
   (when-not (= :game-status/shuffle status)
     (misc/invalid-game-status! state event))
 
-  (when-not (= shuffle-player-id player-id)
+  (when (or (not player-id)
+            (not (= shuffle-player-id player-id)))
     (misc/invalid-player-id! state event))
 
   (let [new-shuffle-player-id (misc/next-op-player-id state shuffle-player-id)
@@ -218,7 +219,8 @@
   (when-not (= :game-status/encrypt status)
     (misc/invalid-game-status! state event))
 
-  (when-not (= encrypt-player-id player-id)
+  (when (or (not player-id)
+            (not (= encrypt-player-id player-id)))
     (misc/invalid-player-id! state event))
 
   (let [new-encrypt-player-id (misc/next-op-player-id state encrypt-player-id)
@@ -386,10 +388,8 @@
     (println sig)
     (misc/cant-update-rsa-pub! state event))
 
-  (when-not player-id
-    (misc/invalid-player-id! state event))
-
-  (when-not (get player-map player-id)
+  (when (or (not player-id)
+            (not (get player-map player-id)))
     (misc/invalid-player-id! state event))
 
   (when-not (#{:game-status/init} status)
@@ -413,10 +413,8 @@
    {player-id :player-id,
     :as       event}]
 
-  (when-not player-id
-    (misc/invalid-player-id! state event))
-
-  (when-not (get player-map player-id)
+  (when (or (not player-id)
+            (not (get player-map player-id)))
     (misc/invalid-player-id! state event))
 
   (log/infof "💔️Player dropout: %s" player-id)
@@ -434,10 +432,8 @@
    {player-id :player-id,
     :as       event}]
 
-  (when-not player-id
-    (misc/invalid-player-id! state event))
-
-  (when-not (get player-map player-id)
+  (when (or (not player-id)
+            (not (get player-map player-id)))
     (misc/invalid-player-id! state event))
 
   (when (#{:game-status/init} status)
@@ -458,12 +454,13 @@
 ;; 2. Game is not running
 ;; Send a claim transaction for player
 (defmethod handle-event :client/leave
-  [{:keys [status action-player-id game-type start-time state-id], :as state}
+  [{:keys [status action-player-id game-type start-time state-id player-map], :as state}
    {{:keys [released-keys]} :data,
     player-id :player-id,
     :as       event}]
 
-  (when-not player-id
+  (when (or (not player-id)
+            (not (get player-map player-id)))
     (misc/invalid-player-id! state event))
 
   (let [new-state      (-> state
@@ -519,13 +516,14 @@
           (misc/reserve-timeout))))))
 
 (defmethod handle-event :player/fold
-  [{:keys [status action-player-id state-id], :as state}
+  [{:keys [status action-player-id state-id player-map], :as state}
    ;; use released keys
    {{:keys [released-keys]} :data,
     player-id :player-id,
     :as       event}]
 
-  (when-not player-id
+  (when (or (not player-id)
+            (not (get player-map player-id)))
     (misc/invalid-player-id! state event))
 
   (when-not (= :game-status/play status)
@@ -543,7 +541,8 @@
   [{:keys [bet-map player-map status action-player-id street-bet state-id], :as state}
    {player-id :player-id, :as event}]
 
-  (when-not player-id
+  (when (or (not player-id)
+            (not (get player-map player-id)))
     (misc/invalid-player-id! state event))
 
   (when-not (= :game-status/play status)
@@ -568,10 +567,11 @@
         (misc/next-state))))
 
 (defmethod handle-event :player/check
-  [{:keys [bet-map status action-player-id street-bet state-id], :as state}
+  [{:keys [bet-map status action-player-id street-bet state-id player-map], :as state}
    {player-id :player-id, :as event}]
 
-  (when-not player-id
+  (when (or (not player-id)
+            (not (get player-map player-id)))
     (misc/invalid-player-id! state event))
 
   (when-not (= :game-status/play status)
@@ -594,7 +594,8 @@
     player-id        :player-id,
     :as              event}]
 
-  (when-not player-id
+  (when (or (not player-id)
+            (not (get player-map player-id)))
     (misc/invalid-player-id! state event))
 
   (when-not (= :game-status/play status)
@@ -642,7 +643,8 @@
     player-id        :player-id,
     :as              event}]
 
-  (when-not player-id
+  (when (or (not player-id)
+            (not (get player-map player-id)))
     (misc/invalid-player-id! state event))
 
   (let [curr-bet (get bet-map player-id (js/BigInt 0))
