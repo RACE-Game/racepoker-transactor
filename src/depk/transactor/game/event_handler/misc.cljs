@@ -1103,6 +1103,7 @@
 
      (-> state
          (assoc :showdown-map showdown)
+         (assoc :community-cards community-cards)
          (assign-winner-to-pots winner-id-sets)
          (update-prize-map)
          (take-rake)

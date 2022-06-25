@@ -351,8 +351,8 @@
 
   (-> state
       (assoc-in [:player-map action-player-id :status] :player-status/fold)
-      (misc/add-log {:player-id action-player-id
-                     :type :log/player-action-timeout})
+      (misc/add-log {:player-id action-player-id,
+                     :type      :log/player-action-timeout})
       (misc/next-state)))
 
 ;; client/ready
@@ -551,7 +551,7 @@
         (assoc-in [:player-map player-id :status] status)
         (misc/add-log {:player-id player-id,
                        :type      :log/player-call,
-                       :amount    amount-to-call})
+                       :amount    bet})
         (misc/next-state))))
 
 (defmethod handle-event :player/check
