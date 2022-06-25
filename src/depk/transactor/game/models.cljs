@@ -163,9 +163,6 @@
    ;; uuid, updated whenever state changes
    state-id
 
-   ;; a list of player actions in this game
-   player-actions
-
    ;; api requests
    api-requests
 
@@ -183,6 +180,9 @@
    ;; The default value of :this-event is the type of current event.
    ;; Set this value to overwrite.
    overwrite-this-event
+
+   ;; Logs
+   logs
   ])
 
 ;;; Initial state builder

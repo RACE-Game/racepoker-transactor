@@ -195,6 +195,10 @@
   [state display]
   (update state :display (fnil conj []) display))
 
+(defn add-log
+  [state log]
+  (update state :logs (fnil conj []) (assoc log :id (str (random-uuid)))))
+
 (defn add-collect-bets-display
   [state]
   (let [{:keys [bet-map]} state]
@@ -426,7 +430,7 @@
         :pots               [],
         :showdown-map       nil,
         :prize-map          nil,
-        :player-actions     [],
+        :logs               [],
         :winning-type       nil,
         :winner-id          nil,
         :after-key-share    nil,
@@ -672,7 +676,6 @@
     (-> state
         (assoc :prize-map prize-map)
         (add-display [:display/dispatch-prizes {:prize-map prize-map}]))))
-
 
 (defn take-rake
   [{:keys [game-type prize-map rake street], :as state}]
@@ -1049,12 +1052,16 @@
         ;; Then everyone is the winner.
         winner-player-ids (if (seq winner-player-ids)
                             winner-player-ids
-                            (set (keys player-map)))]
+                            (set (keys player-map)))
+
+        log {:type :log/game-terminated,
+             :non-compliant-player-ids non-compliant-player-ids}]
 
     (log/infof "💣Terminate game, winner ids: %s, revert bet-map: %s"
                winner-player-ids
                bet-map)
     (-> state
+        (add-log log)
         (assign-winner-to-pots [winner-player-ids])
         (update-prize-map)
         (take-rake)
@@ -1077,19 +1084,22 @@
   [{:keys [community-cards], :as state} winning-type]
   (go-try
    (let [showdown-card-map (<!? (decrypt-showdown-card-map state))
-         community-cards   (or community-cards (<!? (decrypt-community-cards state)))
-         showdown          (->> (for [[player-id hole-cards] showdown-card-map]
-                                  (let [res (evaluator/evaluate-cards (concat hole-cards
-                                                                              community-cards))]
-                                    [player-id
-                                     (assoc res
-                                            :player-id  player-id
-                                            :hole-cards hole-cards)]))
-                                (into {}))
-         winner-id-sets    (->> showdown
-                                (group-by (comp :value second))
-                                (sort-by first compare-value)
-                                (mapv #(set (mapv first (second %)))))]
+         community-cards (or community-cards (<!? (decrypt-community-cards state)))
+         showdown (->> (for [[player-id hole-cards] showdown-card-map]
+                         (let [res (evaluator/evaluate-cards (concat hole-cards
+                                                                     community-cards))]
+                           [player-id
+                            (assoc res
+                                   :player-id  player-id
+                                   :hole-cards hole-cards)]))
+                       (into {}))
+         winner-id-sets (->> showdown
+                             (group-by (comp :value second))
+                             (sort-by first compare-value)
+                             (mapv #(set (mapv first (second %)))))
+
+         log {:type         :log/showdown,
+              :showdown-map showdown}]
 
      (-> state
          (assoc :showdown-map showdown)
@@ -1100,6 +1110,7 @@
          (update-chips-change-map)
          (submit-game-result)
          (dispatch-reset)
+         (add-log log)
          (assoc :status       :game-status/showdown
                 :winning-type winning-type)))))
 
@@ -1130,7 +1141,9 @@
                                (if (= :player-status/acted (:status player-state))
                                  (assoc player-state :status :player-status/wait)
                                  player-state)])
-                            (into {}))]
+                            (into {}))
+        log {:type   :log/street,
+             :street street}]
     (-> state
         (collect-bet-to-pots)
         (assoc
@@ -1142,7 +1155,8 @@
          :action-player-id nil
          :street-bet       nil)
         (update-require-key-idents)
-        (take-released-keys))))
+        (take-released-keys)
+        (add-log log))))
 
 (defn next-street
   [street]

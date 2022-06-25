@@ -38,20 +38,6 @@
       (misc/merge-sync-state game-account-state)
       (misc/reserve-timeout)))
 
-;; system/force-sync-state
-;; receiving this event when something goes wrong.
-;; (defmethod handle-event :system/recover-state
-;;   [{:keys [mint-info game-id game-no]}
-;;    {{:keys [game-account-state]} :data, :as event}]
-
-;;   (log/infof "🏥Recover game account state, game-no: %s -> %s, players: %s"
-;;              game-no
-;;              (:game-no game-account-state)
-;;              (:players game-account-state))
-
-;;   (-> (m/make-game-state game-account-state mint-info {:game-id game-id})
-;;       (misc/dispatch-reset)))
-
 ;; system/reset
 ;; receiving this event for reset states
 (defmethod handle-event :system/reset
@@ -281,7 +267,9 @@
       (= :settle after-key-share)
       (do
         (log/infof "🔑Settle showdown")
-        (misc/settle new-state :showdown))
+        (-> new-state
+            (assoc :street :street/showdown)
+            (misc/settle :showdown)))
 
       (= :init-street after-key-share)
       (do
@@ -363,6 +351,8 @@
 
   (-> state
       (assoc-in [:player-map action-player-id :status] :player-status/fold)
+      (misc/add-log {:player-id action-player-id
+                     :type :log/player-action-timeout})
       (misc/next-state)))
 
 ;; client/ready
@@ -467,10 +457,7 @@
                            (update-in [:player-map player-id]
                                       assoc
                                       :online-status :leave
-                                      :status        :player-status/fold)
-                           (update :player-actions
-                                   conj
-                                   {:action :fold, :player-id player-id, :state-id state-id}))
+                                      :status        :player-status/fold))
 
         remain-players
         (->> (:player-map new-state)
@@ -534,7 +521,8 @@
 
   (-> state
       (assoc-in [:player-map player-id :status] :player-status/fold)
-      (update :player-actions conj {:action :fold, :player-id player-id, :state-id state-id})
+      (misc/add-log {:player-id player-id,
+                     :type      :log/player-fold})
       (misc/next-state)))
 
 (defmethod handle-event :player/call
@@ -561,9 +549,9 @@
         (update-in [:bet-map player-id] (fnil + (js/BigInt 0)) bet)
         (update-in [:total-bet-map player-id] (fnil + (js/BigInt 0) (js/BigInt 0)) bet)
         (assoc-in [:player-map player-id :status] status)
-        (update :player-actions
-                conj
-                {:action :call, :amount bet, :player-id player-id, :state-id state-id})
+        (misc/add-log {:player-id player-id,
+                       :type      :log/player-call,
+                       :amount    amount-to-call})
         (misc/next-state))))
 
 (defmethod handle-event :player/check
@@ -585,7 +573,8 @@
 
   (-> state
       (assoc-in [:player-map player-id :status] :player-status/acted)
-      (update :player-actions conj {:action :check, :player-id player-id, :state-id state-id})
+      (misc/add-log {:player-id player-id,
+                     :type      :log/player-check})
       (misc/next-state)))
 
 (defmethod handle-event :player/bet
@@ -631,9 +620,9 @@
                   (if allin? :player-status/allin :player-status/acted))
         (assoc :min-raise  bet
                :street-bet bet)
-        (update :player-actions
-                conj
-                {:action :bet, :amount amount, :player-id player-id, :state-id state-id})
+        (misc/add-log {:player-id player-id,
+                       :type      :log/player-bet,
+                       :amount    amount})
         (assoc :overwrite-this-event (if allin? :player/allin :player/bet))
         (misc/next-state))))
 
@@ -647,8 +636,8 @@
             (not (get player-map player-id)))
     (misc/invalid-player-id! state event))
 
-  (let [curr-bet (get bet-map player-id (js/BigInt 0))
-        amount   (- amount curr-bet)]
+  (let [curr-bet   (get bet-map player-id (js/BigInt 0))
+        add-amount (- amount curr-bet)]
 
     (when-not (= :game-status/play status)
       (misc/invalid-game-status! state event))
@@ -659,16 +648,16 @@
     (when (= (js/BigInt 0) street-bet)
       (misc/player-cant-raise! state event))
 
-    (when-not (and (= js/BigInt (type amount))
-                   (> amount (js/BigInt 0)))
+    (when-not (and (= js/BigInt (type add-amount))
+                   (> add-amount (js/BigInt 0)))
       (misc/invalid-amount! state event))
 
-    (when-not (or (>= (+ curr-bet amount) (+ street-bet min-raise))
-                  (= amount (get-in player-map [player-id :chips])))
+    (when-not (or (>= (+ curr-bet add-amount) (+ street-bet min-raise))
+                  (= add-amount (get-in player-map [player-id :chips])))
       (misc/player-raise-too-small! state event))
 
     (let [player         (get player-map player-id)
-          [bet player allin?] (misc/take-bet-from-player player amount)
+          [bet player allin?] (misc/take-bet-from-player player add-amount)
           new-street-bet (+ curr-bet bet)
           new-min-raise  (- new-street-bet street-bet)]
       (-> state
@@ -679,8 +668,8 @@
                     (if allin? :player-status/allin :player-status/acted))
           (assoc :min-raise  new-min-raise
                  :street-bet new-street-bet)
-          (update :player-actions
-                  conj
-                  {:action :raise, :amount amount, :player-id player-id, :state-id state-id})
+          (misc/add-log {:player-id player-id,
+                         :type      :log/player-raise,
+                         :amount    amount})
           (assoc :overwrite-this-event (if allin? :player/allin :player/raise))
           (misc/next-state)))))
