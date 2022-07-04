@@ -21,6 +21,8 @@
   (h/attach-event-handler @websocket)
   (doto express-app
    (.use (cors))
+   (.use (.urlencoded body-parser
+                      #js {:extended false}))
    (.ws "/api"
         (fn [ws req next]
           ((:ajax-get-or-ws-handshake @websocket)
@@ -31,7 +33,15 @@
             :websocket  ws})))
    (.get "/api" (:ajax-get-or-ws-handshake @websocket))
    (.post "/api" (:ajax-post @websocket))
-   (.get "/stats" (fn [req res] (h/stats req res)))
+   (.get "/tournament/:tournamentId"
+         (fn [req res]
+           (h/get-tournament req res)))
+   (.put "/tournament/:tournamentId"
+         (fn [req res]
+           (h/load-tournament req res)))
+   (.get "/stats"
+         (fn [req res]
+           (h/stats req res)))
    (.use (fn [req _res next]
            (log/warnf "Unhandled request: %s" (.-originalUrl ^js req))
            (next)))))

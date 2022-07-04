@@ -38,6 +38,24 @@
       (misc/merge-sync-state game-account-state)
       (misc/reserve-timeout)))
 
+(defmethod handle-event :system/next-game
+  [{:keys [], :as state}
+   {{:keys [game-account-state]} :data, :as event}]
+
+  (log/infof "✨Received confirmation from tournament reconciler, %s" game-account-state)
+
+  (-> state
+      (assoc :halt? false)
+      (misc/merge-sync-state game-account-state)
+      (misc/reserve-timeout)))
+
+(defmethod handle-event :system/resit-table
+  [{:keys [], :as state}
+   {{:keys [resit-map]} :data, :as event}]
+  (log/infof "✨Received resit notification from tournament reconciler: %s" resit-map)
+  (-> state
+      (assoc :resit-map resit-map)))
+
 ;; system/reset
 ;; receiving this event for reset states
 (defmethod handle-event :system/reset
@@ -62,14 +80,14 @@
 ;; - generate a default deck of cards
 ;; - ask the first player (BTN) to shuffle the cards.
 (defmethod handle-event :system/start-game
-  [{:keys [status player-map game-type size start-time game-account-state], :as state}
+  [{:keys [status player-map game-type size start-time game-account-state halt?], :as state}
    event]
 
   (when-not (= :game-status/init status)
     (misc/invalid-game-status! state event))
 
   (log/infof "🎰Start game[%s / %s], number of players: %s"
-             (name game-type)
+             (str game-type)
              size
              (count player-map))
   (doseq [[id p] player-map]
@@ -80,6 +98,12 @@
     ;; ------------------------------------------------
     ;; Common fail case
     ;; ------------------------------------------------
+
+    halt?
+    (do
+      (log/infof "🛑Game halted.")
+      (-> state
+          (misc/dispatch-reset)))
 
     ;; If the number of players is not enough for starting
     ;; Require further alive event from the only client
@@ -104,7 +128,7 @@
 
     ;; SNG type without full table
     ;; Kick the non-ready players
-    (and (#{:bonus :sng :tournament} game-type)
+    (and (#{:sng} game-type)
          (nil? start-time)              ; Nil start-time means the first start
          (or (not (every? #(= :normal (:online-status %)) (vals player-map)))
              (< (count player-map) size)))
@@ -115,7 +139,7 @@
 
     ;; At least one player is ready.
     ;; Otherwise the SNG game can not start.
-    (and (#{:sng :bonus} game-type)
+    (and (#{:sng} game-type)
          (every? #(not= :normal (:online-status %)) (vals player-map))
          (= :in-progress (:status game-account-state)))
     (do
@@ -132,6 +156,23 @@
          (not (every? #(= :normal (:online-status %)) (vals player-map))))
     (do
       (log/infof "🛑Not all players are ready")
+      (-> state
+          (misc/dispatch-reset)))
+
+    ;; ------------------------------------------------
+    ;; Tournament fail case
+    ;; ------------------------------------------------
+    (and (= :tournament game-type)
+         (= (count player-map) 1))
+    (do
+      (log/infof "🛑No enough players to start")
+      (-> state
+          (misc/dispatch-reset)))
+
+    (and (= :tournament game-type)
+         (every? #(not= :normal (:online-status %)) (vals player-map)))
+    (do
+      (log/infof "🛑Need at least one ready player to start")
       (-> state
           (misc/dispatch-reset)))
 
@@ -251,6 +292,7 @@
 
   (doseq [[key-ident _] share-keys]
     (when-not (misc/valid-key-ident? state key-ident player-id)
+      (println key-ident)
       (misc/invalid-share-key! state event)))
 
   (when-not (seq share-keys)

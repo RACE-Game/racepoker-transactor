@@ -1,35 +1,27 @@
-(ns depk.transactor.main-worker
+(ns depk.transactor.main-tournament
   (:require
    ["worker_threads"     :refer [parentPort workerData]]
    [depk.transactor.state.config :refer [use-env]]
+   [depk.transactor.tournament.handle :as handle]
    [depk.transactor.util :as u]
    [cljs.core.async      :as a]
-   [depk.transactor.game.handle :as handle]
    [depk.transactor.log  :as log]
-   [goog.string          :refer [format]]
    [mount.core           :as mount]))
 
-(defn main-worker
+(defn start-tournament-worker
   []
   (a/go
-   (let [game-id     (aget workerData "game-id")
-         env         (aget workerData "env")
+   (let [params      (u/transit-read (aget workerData "params"))
+         {:keys [tournament-id env]} params
+         _ (u/register-global-error-handler! (str "Tournament " tournament-id))
          _ (use-env env)
          _ (mount/start #'depk.transactor.state.config/config)
-         _ (log/infof "👷Starting worker thread: %s" game-id)
+         _ (log/infof "👷Starting worker thread: %s" tournament-id)
          ;; Function passed to broadcaster, to collect SSE
          post-msg-fn (fn [data]
                        (let [s (u/transit-write data)]
                          (.postMessage ^js parentPort s)))
-         handle      (a/<! (handle/make-game-handle game-id post-msg-fn))]
-
-     ;; Catch and log all exceptions
-     (.on js/process
-          "uncaughtException"
-          (fn [err]
-            (js/console.error
-             (format "[Worker %s]There was an uncaught error, " game-id)
-             err)))
+         handle      (a/<! (handle/make-tournament-handle tournament-id post-msg-fn))]
 
      ;; Receive events
      (.on parentPort

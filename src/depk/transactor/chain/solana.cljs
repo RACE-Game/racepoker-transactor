@@ -8,7 +8,6 @@
    [solana-clj.publickey :as pubkey]
    [solana-clj.keypair :as keypair]
    [solana-clj.spl-token :as spl-token]
-   [solana-clj.system-program :as system-program]
    [solana-clj.extra.buffer-layout :as    bl
                                    :refer [buffer-from]]
    [solana-clj.extra.instruction-builder :as ib]
@@ -17,9 +16,12 @@
    [depk.transactor.state.config :refer [config]]
    [depk.transactor.log :as log]
    [depk.transactor.chain.state :refer [parse-state-data set-winner-ix-id settle-ix-id
-                                        parse-bonus-state-data]]
+                                        start-tournament-ix-id
+                                        settle-tournament-ix-id
+                                        parse-bonus-state-data
+                                        parse-tournament-state-data
+                                        rank-layout]]
    [depk.transactor.util :as u]
-   [depk.transactor.chain.sync-loop :as sync-loop]
    ["fs" :as fs]
    ["bn.js" :as bn]))
 
@@ -386,6 +388,121 @@
        :else
        (do (log/errorf "🚨Transaction failed: #%s %s" settle-serial err) :err)))))
 
+
+(defn start-tournament
+  [tournament-id tournament-account-state]
+  (go-try
+   (let [_ (log/infof "📝Start tournament: %s" tournament-id)
+
+         fee-payer (load-private-key)
+
+         fee-payer-pubkey (keypair/public-key fee-payer)
+
+         settle-serial (:settle-serial tournament-account-state)
+
+         conn (conn/make-connection (get @config :solana-rpc-endpoint))
+
+         tournament-account-pubkey (pubkey/make-public-key tournament-id)
+
+         dealer-program-id (pubkey/make-public-key (get @config :dealer-program-address))
+
+         ix-data (ib/make-instruction-data
+                  [start-tournament-ix-id 1])
+
+         ix (transaction/make-transaction-instruction
+             {:programId dealer-program-id,
+              :keys      [{:pubkey     fee-payer-pubkey,
+                           :isSigner   true,
+                           :isWritable false}
+                          {:pubkey     tournament-account-pubkey,
+                           :isSigner   false,
+                           :isWritable true}],
+              :data      ix-data})
+
+         tx (doto (transaction/make-transaction)
+             (transaction/add ix))
+
+         sig (<!? (conn/send-transaction conn tx [fee-payer]))
+
+         ret
+         (when sig (<!? (conn/confirm-transaction conn sig "finalized")))
+
+         err
+         (when ret (get-in ret [:value :err]))]
+
+     (cond
+       (and sig ret (nil? err))
+       (do (log/infof "🎉Transaction succeed #%s %s" settle-serial sig)
+           :ok)
+
+       :else
+       (do (log/errorf "🚨Transaction failed: #%s %s" settle-serial err) :err)))))
+
+(defn settle-tournament
+  "Settle the result of tournament."
+  [tournament-id tournament-account-state ranks]
+  (go-try
+   (let [_ (log/infof "📝Settle tournament: %s" tournament-id)
+         _ (doseq [r ranks]
+             (log/infof "📝- %s" r))
+
+         fee-payer        (load-private-key)
+         fee-payer-pubkey (keypair/public-key fee-payer)
+         settle-serial    (:settle-serial tournament-account-state)
+
+         offset           0
+         cnt              (count ranks)
+         conn             (conn/make-connection (get @config :solana-rpc-endpoint))
+
+         rank-pubkey      (:rank-pubkey tournament-account-state)
+         tournament-account-pubkey (pubkey/make-public-key tournament-id)
+         dealer-program-id (pubkey/make-public-key (get @config :dealer-program-address))
+
+         ix-data          (ib/make-instruction-data
+                           [settle-tournament-ix-id 1]
+                           [cnt 4]
+                           [offset 4])
+
+         ix-keys          (into
+                           [{:pubkey     fee-payer-pubkey,
+                             :isSigner   true,
+                             :isWritable false}
+                            {:pubkey     tournament-account-pubkey,
+                             :isSigner   false,
+                             :isWritable true}
+                            {:pubkey     rank-pubkey,
+                             :isSigner   false,
+                             :isWritable true}]
+                           (map (fn [a]
+                                  {:pubkey     (pubkey/make-public-key a),
+                                   :isSigner   false,
+                                   :isWritable false}))
+                           ranks)
+
+         ix               (transaction/make-transaction-instruction
+                           {:programId dealer-program-id,
+                            :keys      ix-keys,
+                            :data      ix-data})
+
+         tx               (doto (transaction/make-transaction)
+                           (transaction/add ix))
+
+         sig              (<!? (conn/send-transaction conn tx [fee-payer]))
+
+         ret
+         (when sig (<!? (conn/confirm-transaction conn sig "finalized")))
+
+         err
+         (when ret (get-in ret [:value :err]))]
+
+     (cond
+       (and sig ret (nil? err))
+       (do (log/infof "🎉Transaction succeed #%s %s" settle-serial sig)
+           :ok)
+
+       :else
+       (do (log/errorf "🚨Transaction failed: #%s %s" settle-serial err) :err)))))
+
 ;;; Implementations
 
 (defrecord SolanaApi [input output pending confirming])
@@ -400,34 +517,34 @@
     (->SolanaApi input output pending confirming)))
 
 (defn run-with-retry-loop
-  [chain-api game-id settle-serial f]
+  [settle-serial fetch-fn submit-fn]
   (a/go-loop []
-    (let [rs (a/<! (f))]
+    (let [rs (a/<! (submit-fn))]
       (cond
         (= rs :ok)
-        (a/<! (p/-fetch-game-account chain-api game-id {:commitment "finalized"}))
+        (a/<! (fetch-fn))
 
         (= rs :err)
         (let [_ (a/<! (a/timeout 5000))
 
-              game-account-state
-              (a/<! (p/-fetch-game-account chain-api game-id {:commitment "finalized"}))]
+              state
+              (a/<! (fetch-fn))]
           ;; Only increased serial means succeed
           (cond
-            (nil? game-account-state)
-            (do (log/info "😱Failed to fetch game-account-state, retry")
+            (nil? state)
+            (do (log/info "😱Failed to fetch, retry")
                 (recur))
 
-            (>= settle-serial (:settle-serial game-account-state))
+            (>= settle-serial (:settle-serial state))
             (do (log/infof "😡Retry Settle transaction, current serial: %s"
-                           (:settle-serial game-account-state))
+                           (:settle-serial state))
                 (recur))
 
             :else
             (do (log/infof "😃The settle-serial updated. serial: %s -> %s"
                            settle-serial
-                           (:settle-serial game-account-state))
-                game-account-state)))))))
+                           (:settle-serial state))
+                state)))))))
 
 (extend-type SolanaApi
  p/IChainApi
@@ -435,29 +552,54 @@
  ;; Send Settle transaction to Solana
  (p/-settle
    [this game-id game-account-state settle-serial settle-map]
-   (run-with-retry-loop this
-                        game-id
-                        settle-serial
-                        (fn [] (settle game-id game-account-state settle-map))))
+   (run-with-retry-loop
+    settle-serial
+    (fn [] (p/-fetch-game-account this game-id {:commitment "finalized"}))
+    (fn [] (settle game-id game-account-state settle-map))))
 
  ;; Send SetWinner transaction to Solana
  (p/-set-winner
    [this game-id game-account-state settle-serial ranking]
-   (run-with-retry-loop this
-                        game-id
-                        settle-serial
-                        (fn [] (set-winner game-id game-account-state ranking))))
+   (run-with-retry-loop
+    settle-serial
+    (fn [] (p/-fetch-game-account this game-id {:commitment "finalized"}))
+    (fn [] (set-winner game-id game-account-state ranking))))
+
+ (p/-start-tournament
+   [this tournament-id tournament-account-state settle-serial]
+   (run-with-retry-loop
+    settle-serial
+    (fn []
+      (p/-fetch-tournament-account this
+                                   tournament-id
+                                   {:commitment     "finalized",
+                                    :without-ranks? true}))
+    (fn []
+      (start-tournament tournament-id tournament-account-state))))
+
+ (p/-settle-tournament
+   [this tournament-id tournament-account-state settle-serial ranks]
+   (run-with-retry-loop
+    settle-serial
+    (fn []
+      (p/-fetch-tournament-account this
+                                   tournament-id
+                                   {:commitment     "finalized",
+                                    :without-ranks? true}))
+    (fn []
+      (settle-tournament tournament-id tournament-account-state ranks))))
 
  (p/-fetch-game-account
    [_this game-id {:keys [commitment settle-serial], :or {commitment "finalized"}}]
    (a/go-loop []
      (let [conn (conn/make-connection (get @config :solana-rpc-endpoint))
            game-account-pubkey (pubkey/make-public-key game-id)
-           game-account-state (some->
-                               (a/<!
-                                (conn/get-account-info conn game-account-pubkey commitment))
-                               :data
-                               (parse-state-data))]
+           game-account-state (try (some->
+                                    (a/<!
+                                     (conn/get-account-info conn game-account-pubkey commitment))
+                                    :data
+                                    (parse-state-data))
+                                   (catch js/Error _ nil))]
        (if (and settle-serial (not= settle-serial (:settle-serial game-account-state)))
          (recur)
          game-account-state))))
@@ -470,28 +612,36 @@
           mint-state  (<!? (spl-token/get-mint conn mint-pubkey "finalized"))]
       mint-state)))
 
- ep/IAttachable
- (ep/-input
-   [this]
-   (:input this))
-
- (ep/-output
-   [this]
-   (:output this))
-
- (ep/-interest-event-types
-   [_this]
-   [:system/settle
-    :system/set-winner])
-
- ep/IComponent
- (ep/-start [this opts]
-   (let [{:keys [input output]}       this
-         {:keys [game-id init-state]} opts]
-     (sync-loop/start-sync-loop
-      this
-      game-id
-      input
-      output
-      (:game-account-state init-state)))
-   nil))
+ (p/-fetch-tournament-account
+   [_this tournament-id
+    {:keys [commitment settle-serial without-ranks?],
+     :or   {commitment     "finalized",
+            without-ranks? false}}]
+   (a/go-loop []
+     (let [conn    (conn/make-connection (get @config :solana-rpc-endpoint))
+           address (pubkey/make-public-key tournament-id)
+           tournament-state (try (some->
+                                  (a/<! (conn/get-account-info conn address commitment))
+                                  :data
+                                  (parse-tournament-state-data))
+                                 (catch js/Error _ nil))]
+       (if (and settle-serial (not= settle-serial (:settle-serial tournament-state)))
+         (recur)
+         (if without-ranks?
+           tournament-state
+           (let [{:keys [rank-size rank-pubkey num-players]} tournament-state
+                 ranks-layout (bl/array rank-size (bl/option rank-layout))
+                 rank-state   (loop []
+                                (let [ranks (try (some->>
+                                                  (a/<! (conn/get-account-info conn
+                                                                               rank-pubkey
+                                                                               commitment))
+                                                  :data
+                                                  (buffer-from)
+                                                  (bl/unpack ranks-layout)
+                                                  (filter some?))
+                                                 (catch js/Error e (println e)))]
+                                  (if (and (seq ranks) (= (count ranks) num-players))
+                                    ranks
+                                    (recur))))]
+             (assoc tournament-state :ranks rank-state))))))))

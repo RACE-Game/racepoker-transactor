@@ -1,14 +1,11 @@
 (ns depk.transactor.game
   "Commit game events to Arweave and Solana."
   (:require
-   [depk.transactor.util :refer [go-try <!?]]
-   [depk.transactor.game.models :as m]
-   [depk.transactor.game.worker :as worker]
-   [depk.transactor.game.event-loop :as eloop]
-   [depk.transactor.game.manager :as manager]
-   [depk.transactor.log :as log]
-   [depk.transactor.event.protocol :as ep]
-   ["buffer" :as buffer]))
+   [depk.transactor.util           :refer [go-try tournament-game-id?]]
+   [depk.transactor.game.models    :as m]
+   [depk.transactor.game.worker    :as worker]
+   [depk.transactor.worker-manager :as manager]
+   [depk.transactor.log            :as log]))
 
 (defn error-game-not-exist!
   [game-id]
@@ -19,12 +16,15 @@
   {:pre [(string? game-id)]}
   (go-try
    (log/infof "👔player[%s] attach to game [%s]" player-id game-id)
-   (manager/try-start-game game-manager game-id)))
+   ;; We can only start normal game through this API
+   (if-not (tournament-game-id? game-id)
+     (manager/try-start game-manager game-id worker/make-worker)
+     :ok)))
 
 (defn state
   [game-manager game-id]
   {:pre [(string? game-id)]}
-  (when-let [game-worker (manager/find-game-unchecked game-manager game-id)]
+  (when-let [game-worker (manager/find-worker-unchecked game-manager game-id)]
     (log/infof "👔fetch game [%s] state" game-id)
     (:serialized-state (worker/get-snapshot game-worker))))
 
@@ -37,7 +37,7 @@
              (vector? released-keys))]}
   (go-try
    ;; (log/infof "player[%s] leave game [%s]" player-id game-id)
-   (if-let [game-worker (manager/find-game game-manager game-id)]
+   (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :client/leave
                                       (worker/get-snapshot game-worker)
@@ -52,7 +52,7 @@
          (string? rsa-pub)
          (string? sig)]}
   (go-try
-   (if-let [game-worker (manager/find-game game-manager game-id)]
+   (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :client/ready
                                       (worker/get-snapshot game-worker)
@@ -66,7 +66,7 @@
   [game-manager game-id player-id]
   {:pre [(string? game-id)]}
   (go-try
-   (if-let [game-worker (manager/find-game game-manager game-id)]
+   (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :system/alive
                                       (worker/get-snapshot game-worker)
@@ -79,7 +79,7 @@
   [game-manager game-id player-id]
   {:pre [(string? game-id)]}
   (go-try
-   (if-let [game-worker (manager/find-game game-manager game-id)]
+   (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :system/dropout
                                       (worker/get-snapshot game-worker)
@@ -96,7 +96,7 @@
          (some? data)]}
   (go-try
    ;; (log/infof "player[%s] shuffle cards" player-id)
-   (if-let [game-worker (manager/find-game game-manager game-id)]
+   (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :client/shuffle-cards
                                       (worker/get-snapshot game-worker)
@@ -111,7 +111,7 @@
          (some? data)]}
   (go-try
    ;; (log/infof "player[%s] encrypt cards" player-id)
-   (if-let [game-worker (manager/find-game game-manager game-id)]
+   (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :client/encrypt-cards
                                       (worker/get-snapshot game-worker)
@@ -126,7 +126,7 @@
          (map? share-keys)]}
   (go-try
    ;; (log/infof "player[%s] share keys" player-id)
-   (if-let [game-worker (manager/find-game game-manager game-id)]
+   (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :client/share-keys
                                       (worker/get-snapshot game-worker)
@@ -141,7 +141,7 @@
          (vector? released-keys)]}
   (go-try
    ;; (log/infof "player[%s] release keys" player-id)
-   (if-let [game-worker (manager/find-game game-manager game-id)]
+   (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :client/release
                                       (worker/get-snapshot game-worker)
@@ -156,7 +156,7 @@
          (> amount 0)]}
   (go-try
    ;; (log/infof "player[%s] bet" player-id)
-   (if-let [game-worker (manager/find-game game-manager game-id)]
+   (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :player/bet
                                       (worker/get-snapshot game-worker)
@@ -172,7 +172,7 @@
          (> amount 0)]}
   (go-try
    ;; (log/infof "player[%s] raise" player-id)
-   (if-let [game-worker (manager/find-game game-manager game-id)]
+   (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :player/raise
                                       (worker/get-snapshot game-worker)
@@ -186,7 +186,7 @@
          (string? player-id)]}
   (go-try
    ;; (log/infof "player[%s] call" player-id)
-   (if-let [game-worker (manager/find-game game-manager game-id)]
+   (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :player/call
                                       (worker/get-snapshot game-worker)
@@ -200,7 +200,7 @@
          (string? player-id)]}
   (go-try
    ;; (log/infof "player[%s] fold" player-id)
-   (if-let [game-worker (manager/find-game game-manager game-id)]
+   (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :player/fold
                                       (worker/get-snapshot game-worker)
@@ -214,7 +214,7 @@
          (string? player-id)]}
   (go-try
    ;; (log/infof "player[%s] check" player-id)
-   (if-let [game-worker (manager/find-game game-manager game-id)]
+   (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :player/check
                                       (worker/get-snapshot game-worker)
@@ -230,9 +230,21 @@
   [_game-manager _game-id])
 
 (defn list-running-games
-  [game-manager]
-  (manager/list-running-games game-manager))
+  [manager]
+  (when-let [worker-map @(:worker-map manager)]
+    (->> worker-map
+         (keep (fn [[game-id w]]
+                 (let [{:keys [player-ids start-time]} (worker/get-snapshot w)]
+                   [game-id
+                    {:start-time start-time,
+                     :player-ids player-ids}])))
+         (into {}))))
 
 (defn list-players
-  [game-manager]
-  (manager/list-players game-manager))
+  [manager]
+  (when-let [worker-map @(:worker-map manager)]
+    (->> worker-map
+         (mapcat (fn [[_ w]]
+                   (let [{:keys [player-ids]} (worker/get-snapshot w)]
+                     player-ids)))
+         (distinct))))

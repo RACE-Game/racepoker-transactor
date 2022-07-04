@@ -1,18 +1,10 @@
-(ns depk.transactor.chain.sync-loop
-  "Sychronization for blockchain states."
+(ns depk.transactor.chain.submitter
   (:require
-   [cljs.core.async :as a]
-   [depk.transactor.game.models :as m]
-   [depk.transactor.log :as log]
+   [cljs.core.async      :as a]
    [depk.transactor.chain.protocol :as p]
-   [depk.transactor.util :as u]
-   [clojure.set :as set]
-   [depk.transactor.constant :as c]
-   ["process" :as process]))
-
-(def sync-loop-event-types
-  [:system/settle
-   :system/set-winner])
+   [depk.transactor.event.protocol :as ep]
+   [depk.transactor.log  :as log]
+   [depk.transactor.util :as u]))
 
 (def settle-batch-size
   "A batch size for settlement."
@@ -54,33 +46,8 @@
   [m1 m2]
   (merge-with merge-settle-item m1 m2))
 
-(defn outdated-state?
-  [ctx state]
-  (let [{:keys [curr-settle-serial curr-buyin-serial]} ctx]
-    (or (< (:settle-serial state) curr-settle-serial)
-        (< (:buyin-serial state) curr-buyin-serial))))
-
-(defn start-sync-loop
-  "Sync transactor state with on-chain state."
-  [chain-api game-id input output init-state]
-  (log/infof "🏁Start state sync loop for game[%s]" game-id)
-  (a/go-loop [buyin-serial (:buyin-serial init-state)]
-    (let [state (a/<! (p/-fetch-game-account chain-api game-id {:commitment "finalized"}))]
-      (when (and state (< buyin-serial (:buyin-serial state)))
-        (log/infof "👀️Read game[%s] state, %s -> %s"
-                   game-id
-                   buyin-serial
-                   (:buyin-serial state))
-        (a/>! output
-              {:type    :system/sync-state,
-               :game-id game-id,
-               :data
-               {:game-account-state (m/parse-raw-game-account-state state)}}))
-
-      (a/<! (a/timeout 3000))
-      (recur (max buyin-serial (:buyin-serial state)))))
-
-  ;; Sync player chips, status
+(defn start
+  [chain-api game-id input init-state]
   (a/go-loop [settle-serial  (:settle-serial init-state)
               acc-settle-map nil
               acc-count      0]
@@ -126,20 +93,26 @@
         ;; EXIT
         (log/infof "💤️Sync loop quit for game[%s]" game-id)))))
 
-(comment
+(defrecord Submitter [chain-api input])
 
-  (-> (merge-settle-map {"1" {:settle-status :no-update,
-                              :settle-type   :chips-add,
-                              :amount        (js/BigInt 400)},
-                         "2" {:settle-status :no-update,
-                              :settle-type   :chips-sub,
-                              :amount        (js/BigInt 400)}}
-                        {"1" {:settle-status :leave,
-                              :settle-type   :chips-add,
-                              :amount        (js/BigInt 400)},
-                         "2" {:settle-status :no-update,
-                              :settle-type   :chips-sub,
-                              :amount        (js/BigInt 400)}})
-      (merge-settle-map {"2" {:settle-status :leave,
-                              :settle-type   :no-update,
-                              :amount        (js/BigInt 400)}})))
+(extend-type Submitter
+ ep/IAttachable
+ (-input [_this]
+   nil)
+ (-output [this]
+   (:output this))
+ (-interest-event-types [_this]
+   [:system/settle
+    :system/set-winner])
+
+ ep/IComponent
+ (-start [this opts]
+   (let [{:keys [chain-api input]}    this
+         {:keys [game-id init-state]} opts]
+     (log/infof "🏁Start submitter for game[%s]" game-id)
+     (start chain-api game-id input init-state))))
+
+(defn make-submitter
+  [chain-api]
+  (let [input (a/chan)]
+    (->Submitter chain-api input)))

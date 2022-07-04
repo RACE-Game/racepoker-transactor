@@ -3,13 +3,12 @@
    ["path" :as path]
    ["worker_threads" :refer [Worker]]
    [depk.transactor.state.config :refer [env]]
-   [depk.transactor.constant :as c]
    [depk.transactor.log :as log]
    [depk.transactor.util :as u]))
 
 (defn make-worker-message-handler
-  [snapshot ws-conn]
-  (let [{:keys [chsk-send! connected-uids]} ws-conn]
+  [snapshot opts]
+  (let [{:keys [chsk-send! connected-uids]} (:websocket opts)]
     (fn [data]
       (let [{:keys [game-id message serialized-state player-ids start-time]} (u/transit-read data)]
         (when (= :game/event (first message))
@@ -23,26 +22,33 @@
 
 (defn on-worker-error
   [x]
-  (log/errorf "💀Worker error. %s" x))
+  (log/errorf "💀Game worker error. %s" x))
 
 (defn on-worker-exit
   [x]
-  (log/infof "💀Worker exit. %s" x))
+  (log/infof "💀Game worker exit. %s" x))
 
 (defn make-worker
-  [game-id ws-conn]
-  (let [snapshot   (atom {})
-        on-message (make-worker-message-handler snapshot ws-conn)
-        worker     (doto (Worker. js/__filename
-                                  #js
-                                   {:workerData #js
-                                                 {"game-id" game-id,
-                                                  "env"     (name @env)}})
+  [game-id opts]
+  (log/infof "📯Spawn game worker. %s" game-id)
+  (let [{:keys [tournament-id players]} opts
+        snapshot   (atom {})
+        on-message (make-worker-message-handler snapshot opts)
+        worker     (doto
+                    (Worker. js/__filename
+                             #js
+                              {:workerData
+                               #js
+                                {:worker "game",
+                                 :params (u/transit-write
+                                          {:game-id       game-id,
+                                           :env           @env,
+                                           :tournament-id tournament-id,
+                                           :players       players})}})
                     (.on "message" on-message)
                     (.on "error" on-worker-error)
                     (.on "exit" on-worker-exit)
                     (.ref))]
-    (log/infof "📯Spawn worker. %s" game-id)
     {:worker   worker,
      :snapshot snapshot}))
 

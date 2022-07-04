@@ -2,7 +2,7 @@
   (:require
    [depk.transactor.state.config :refer [use-env]]
    [depk.transactor.state.express]
-   [depk.transactor.state.game-manager]
+   [depk.transactor.state.worker-manager]
    [depk.transactor.state.global-chain-api]
    [mount.core :as mount]))
 
@@ -17,5 +17,5 @@
 
   (when env (use-env env))
   (mount/start #'depk.transactor.state.config/config
-               #'depk.transactor.state.game-manager/game-manager
+               #'depk.transactor.state.worker-manager/worker-manager
                #'depk.transactor.state.express/server))

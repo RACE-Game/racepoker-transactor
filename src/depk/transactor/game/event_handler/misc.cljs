@@ -394,7 +394,7 @@
 
 (defn increase-blinds
   [{:keys [base-sb base-bb game-type start-time], :as state}]
-  (if (and (#{:sng :bonus} game-type)
+  (if (and (#{:sng :tournament} game-type)
            start-time)
     (let [cnt (js/BigInt
                (inc (int (/ (- (.getTime (js/Date.)) start-time)
@@ -448,7 +448,6 @@
          (into {}))))
 
 (defn dispatch-reset
-  "Dispatch reset event."
   [state]
   (assoc state
          :dispatch-event
@@ -1024,6 +1023,20 @@
             (assoc :ranking ranking)))
       state)))
 
+(defn- submit-game-result-tournament
+  [{:keys [chips-change-map player-map game-account-state rake-map], :as state}]
+  (let [settle-map (build-settle-map chips-change-map rake-map player-map)
+
+        request
+        {:type :system/settle,
+         :data {:settle-map    settle-map,
+                :settle-serial (:settle-serial game-account-state)}}]
+    (log/infof "✈️Submit game result for TOURNAMENT game")
+    (-> state
+        (update :api-requests conj request)
+        (assoc :rake-map nil)
+        (assoc :halt? true))))
+
 (defn- submit-game-result
   "Add request to :api-requests, submit game result."
   [{:keys [game-type], :as state}]
@@ -1031,8 +1044,11 @@
     :cash
     (submit-game-result-cash state)
 
-    (:sng :bonus :tournament)
-    (submit-game-result-sng state)))
+    :sng
+    (submit-game-result-sng state)
+
+    :tournament
+    (submit-game-result-tournament state)))
 
 (defn terminate
   "Terminate current game.
@@ -1069,8 +1085,8 @@
         (update-chips-change-map)
         (submit-game-result)
         (remove-non-alive-players)
-        (dispatch-reset)
         ;; TODO, new status/type ?
+        (dispatch-reset)
         (assoc :status       :game-status/settle
                :winning-type :last-player))))
 
@@ -1110,8 +1126,8 @@
          (apply-prize-map)
          (update-chips-change-map)
          (submit-game-result)
-         (dispatch-reset)
          (add-log log)
+         (dispatch-reset)
          (assoc :status       :game-status/showdown
                 :winning-type winning-type)))))
 

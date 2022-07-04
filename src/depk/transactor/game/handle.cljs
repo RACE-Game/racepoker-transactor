@@ -2,11 +2,11 @@
   "Game handle is used to control a set of components of a game.
 
   A running game includes following components:
-    * Event bus
-    * Chain API
-    * Store API
-    * Broadcaster
-    * Event loop
+      - Event bus
+      - Chain API
+      - Store API
+      - Broadcaster
+      - Event loop
   "
   (:require
    [cljs.core.async :as a]
@@ -40,18 +40,22 @@
                                                                game-account-state))))
          init-state         (m/make-game-state game-account-state mint-info {:game-id game-id})
          opts               {:game-id game-id, :init-state init-state}
+         synchronizer       (chain/make-synchronizer chain-api)
+         submitter          (chain/make-submitter chain-api)
          event-bus          (event/make-mem-event-bus)
          store-api          (store/make-fake-store-api)
-         broadcaster        (broadcast/make-broadcaster post-msg-fn)
+         broadcaster        (broadcast/make-game-broadcaster post-msg-fn)
          event-loop         (eloop/make-event-loop)]
      ;; Attach components to event bus
      (event/attach event-loop event-bus)
-     (event/attach chain-api event-bus)
+     (event/attach synchronizer event-bus)
+     (event/attach submitter event-bus)
      (event/attach store-api event-bus)
      (event/attach broadcaster event-bus)
      ;; Start components
      (event/start-component event-bus opts)
-     (event/start-component chain-api opts)
+     (event/start-component synchronizer opts)
+     (event/start-component submitter opts)
      (event/start-component event-loop opts)
      (event/start-component store-api opts)
      (event/start-component broadcaster opts)
@@ -66,11 +70,3 @@
 (defn send-event
   [game-handle event]
   (event/send (:event-bus game-handle) event))
-
-(defn get-snapshot
-  [game-handle]
-  (broadcast/get-snapshot (:broadcaster game-handle)))
-
-(defn get-game-account-snapshot
-  [game-handle]
-  (broadcast/get-game-account-snapshot (:broadcaster game-handle)))

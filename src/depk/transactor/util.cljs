@@ -2,11 +2,13 @@
   (:refer-clojure :exclude [abs])
   (:require-macros depk.transactor.util)
   (:require
-   [cljs.core.async   :refer [<! >! go-loop chan close!]]
-   [clojure.walk      :as walk]
+   ["buffer"          :as buffer]
+   ["tweetnacl"       :as nacl]
+   [clojure.string    :as str]
    [cognitect.transit :as transit]
    [depk.transactor.log]
-   [taoensso.sente.packers.transit :as sente-transit]))
+   [taoensso.sente.packers.transit :as sente-transit]
+   [goog.string       :refer [format]]))
 
 (def request-log-ignores
   #{"/api/v1/game/state"})
@@ -20,17 +22,23 @@
   (transit/read-handler
    (fn [t] (js/BigInt t))))
 
+(def transit-writer-opts
+  {:handlers {js/BigInt bigint-writer}})
+
+(def transit-reader-opts
+  {:handlers {"n" bigint-reader}})
+
 (def sente-packer
   (sente-transit/->TransitPacker
    :json
-   {:handlers {js/BigInt bigint-writer}}
-   {:handlers {"n" bigint-reader}}))
+   transit-writer-opts
+   transit-reader-opts))
 
 (def transit-writer
-  (transit/writer :json {:handlers {js/BigInt bigint-writer}}))
+  (transit/writer :json transit-writer-opts))
 
 (def transit-reader
-  (transit/reader :json {:handlers {"n" bigint-reader}}))
+  (transit/reader :json transit-reader-opts))
 
 (defn transit-write
   [o]
@@ -46,3 +54,25 @@
   (if (> x (js/BigInt 0))
     x
     (- x)))
+
+(defn verify-signature
+  [message signed-message pubkey]
+  (let [msg-buf    (buffer/Buffer.from message)
+        signed-buf (buffer/Buffer.from signed-message "hex")
+        key-buf    (buffer/Buffer.from pubkey)]
+    (when-not (nacl/sign.detached.verify msg-buf signed-buf key-buf)
+      (throw (ex-info "Invalid signature" {})))))
+
+
+(defn register-global-error-handler!
+  [label]
+  (.on js/process
+       "uncaughtException"
+       (fn [err]
+         (js/console.error
+          (format "[%s]There was an uncaught error" label)
+          err))))
+
+(defn tournament-game-id?
+  [id]
+  (str/includes? id "#"))

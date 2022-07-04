@@ -85,6 +85,8 @@
    size
    ;; game status: init prepare shuffle encrypt key-share play showdown settle
    status
+   ;; Halt the game, waiting for the tournament reply
+   halt?
    ;; street: preflop flop turn river
    street
    player-map
@@ -218,6 +220,17 @@
        (map (juxt :player-id identity))
        (into {})))
 
+(defn parse-raw-game-account-state
+  "Parse game account state, remove useless fields."
+  [game-account-state]
+  (letfn [(parse-players [players]
+                         (vec (for [p players]
+                                (when p
+                                  (into {} (update p :pubkey str))))))]
+    (-> game-account-state
+        (update :players parse-players)
+        (select-keys [:players :buyin-serial :settle-serial]))))
+
 (defn make-game-state
   ([game-account-state init-state]
    (let [state-id (uuid/v4)]
@@ -243,12 +256,16 @@
               :base-ante          (:ante game-account-state),
               :rake               (+ (js/BigInt (:transactor-rake game-account-state))
                                      (js/BigInt (:owner-rake game-account-state))),
-              :game-account-state game-account-state,
+              :game-account-state (parse-raw-game-account-state game-account-state),
               ;; If game already started, set a start-time
               ;; Mark this game is in progress
               ;; We can't kick players from a started SNG game
-              :start-time         (when (= :in-progress (:status game-account-state))
-                                    (.getTime (js/Date.))),
+              :start-time         (cond
+                                    (= :in-progress (:status game-account-state))
+                                    (.getTime (js/Date.))
+
+                                    (:start-time game-account-state)
+                                    (:start-time game-account-state)),
               :state-id           state-id,
               :status             :game-status/init,
               :game-no            0,
@@ -263,14 +280,3 @@
   This help reducing the response's body size."
   [state]
   (dissoc state :game-account-state :mint-info))
-
-(defn parse-raw-game-account-state
-  "Parse game account state, remove useless fields."
-  [game-account-state]
-  (letfn [(parse-players [players]
-                         (vec (for [p players]
-                                (when p
-                                  (into {} (update p :pubkey str))))))]
-    (-> game-account-state
-        (update :players parse-players)
-        (select-keys [:players :buyin-serial :settle-serial]))))

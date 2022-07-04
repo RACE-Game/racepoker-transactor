@@ -38,6 +38,12 @@
 (def attach-bonus-ix-id 6)
 (def init-bonus-ix-id 7)
 (def close-game-ix-id 8)
+(def init-tournament-ix-id 9)
+(def join-tournament-ix-id 10)
+(def settle-tournament-ix-id 11)
+(def start-tournament-ix-id 12)
+(def grant-tournament-ix-id 13)
+(def rebuy-tournament-ix-id 14)
 
 ;; Game Account
 
@@ -46,7 +52,6 @@
 (defrecord Player [pubkey chips buyin-serial rebuy])
 
 (def player-layout (bl/struct ->Player [:pubkey :u64 :u32 :u8]))
-
 
 (defrecord GameState [is-initialized buyin-serial settle-serial players stake-account-pubkey
                       mint-pubkey ante sb bb buyin size game-type transactor-pubkey owner-pubkey
@@ -136,3 +141,54 @@
 (defn parse-bonus-state-data
   [data]
   (bl/unpack bonus-state-layout (bl/buffer-from data)))
+
+
+;; Tournament ranks
+
+(defrecord Rank [pubkey rebuy buyin-serial])
+
+(def rank-layout
+  (bl/struct ->Rank
+             [:pubkey ; pubkey
+              :u8     ; rebuy
+              :u32    ; buyin-serial
+             ]))
+
+(def rank-data-len (bl/size rank-layout))
+
+(defn parse-rank-data
+  [data]
+  (bl/unpack rank-layout (bl/buffer-from data)))
+
+;; Tournament Account
+;; Since the number of participants is uncertain, we need another account to save the ranks
+;; The size of the ranks will be stored in this account.
+
+(defrecord TournamentState [is-initialized settle-serial buyin-serial size transactor-pubkey
+                            owner-pubkey ticket-pubkey ticket-price rank-pubkey rank-size
+                            num-players buyin-limit start-time status name])
+
+(def tournament-state-layout
+  (bl/struct ->TournamentState
+             [:bool   ; is-initialized
+              :u32    ; settle-serial
+              :u32    ; buyin-serial
+              :u8     ; size
+              :pubkey ; transactor-pubkey
+              :pubkey ; owner-pubkey
+              :pubkey ; ticket-pubkey
+              :u64    ; ticket-price
+              :pubkey ; rank-pubkey
+              :u32    ; rank-size
+              :u32    ; num-players
+              :u8     ; buyin-limit
+              :u32    ; start-time
+              (bl/enum :registering :playing :completed) ; status
+              :str16 ; name
+             ]))
+
+(def tournament-state-data-len (bl/size tournament-state-layout))
+
+(defn parse-tournament-state-data
+  [data]
+  (bl/unpack tournament-state-layout (bl/buffer-from data)))

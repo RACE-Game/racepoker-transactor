@@ -5,15 +5,27 @@
    [cljs.core.async :as a]
    [depk.transactor.util :as u]
    [depk.transactor.game :as game]
-   [depk.transactor.state.game-manager :refer [game-manager]]
+   [depk.transactor.tournament :as tournament]
+   [depk.transactor.state.worker-manager :refer [worker-manager]]
    [cognitect.transit :as t]
    [depk.transactor.constant :as c]
    ["uuid" :as uuid]
    [goog.string :as gstr]))
 
-;; Websocket Event Handler
+;;; Websocket Event Handler
 
 (defmulti event-msg-handler :id)
+
+(defn attach-event-handler
+  "Attach game event handler to websocket channel."
+  [ws-conn]
+  (let [{:keys [ch-chsk]} ws-conn]
+    (a/go-loop [evt (a/<! ch-chsk)]
+      (try
+        (event-msg-handler evt)
+        (catch js/Error e
+          (log/errorf "💥Error in event message handler: %s" (ex-message e))))
+      (recur (a/<! ch-chsk)))))
 
 (defmethod event-msg-handler :default
   [{:as ev-msg, :keys [event id ?data ring-req ?reply-fn send-fn connected-uids]}]
@@ -21,11 +33,11 @@
     (case ev-id
       :chsk/uidport-close
       (let [[game-id player-id] ev-data]
-        (game/dropout @game-manager game-id player-id))
+        (game/dropout @worker-manager game-id player-id))
 
       :chsk/uidport-open
       (let [[game-id player-id] ev-data]
-        (game/alive @game-manager game-id player-id))
+        (game/alive @worker-manager game-id player-id))
 
       :noop)))
 
@@ -34,7 +46,7 @@
   (log/infof "🚩Attach game: %s" (take 2 uid))
   (let [[game-id player-id] uid]
     (a/go
-     (if (a/<! (game/attach-game @game-manager game-id player-id))
+     (if (a/<! (game/attach-game @worker-manager game-id player-id))
        (?reply-fn {:result :ok})
        (?reply-fn {:result :err})))))
 
@@ -42,7 +54,7 @@
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
   ;; (log/infof "Sync game state: %s" uid)
   (let [[game-id player-id] uid
-        state (game/state @game-manager game-id)]
+        state (game/state @worker-manager game-id)]
     (if (seq state)
       (?reply-fn {:result :ok,
                   :state  state})
@@ -54,7 +66,7 @@
   (a/go
    (let [[game-id player-id]     uid
          {:keys [released-keys]} ?data]
-     (a/<! (game/leave @game-manager game-id player-id released-keys))
+     (a/<! (game/leave @worker-manager game-id player-id released-keys))
      (?reply-fn {:result :ok}))))
 
 (defmethod event-msg-handler :client/ready
@@ -62,7 +74,7 @@
   ;; (log/infof "Keep alive: %s" uid)
   (a/go
    (let [[game-id player-id rsa-pub sig] uid]
-     (a/<! (game/ready @game-manager game-id player-id rsa-pub sig))
+     (a/<! (game/ready @worker-manager game-id player-id rsa-pub sig))
      (?reply-fn {:result :ok}))))
 
 (defmethod event-msg-handler :client/shuffle-cards
@@ -71,7 +83,7 @@
   (a/go
    (let [[game-id player-id] uid
          {:keys [data]}      ?data]
-     (a/<! (game/shuffle-cards @game-manager game-id player-id data))
+     (a/<! (game/shuffle-cards @worker-manager game-id player-id data))
      (?reply-fn {:result :ok}))))
 
 (defmethod event-msg-handler :client/encrypt-cards
@@ -80,7 +92,7 @@
   (a/go
    (let [[game-id player-id] uid
          {:keys [data]}      ?data]
-     (a/<! (game/encrypt-cards @game-manager game-id player-id data))
+     (a/<! (game/encrypt-cards @worker-manager game-id player-id data))
      (?reply-fn {:result :ok}))))
 
 (defmethod event-msg-handler :client/share-keys
@@ -89,7 +101,7 @@
   (a/go
    (let [[game-id player-id]  uid
          {:keys [share-keys]} ?data]
-     (a/<! (game/share-keys @game-manager game-id player-id share-keys))
+     (a/<! (game/share-keys @worker-manager game-id player-id share-keys))
      (?reply-fn {:result :ok}))))
 
 (defmethod event-msg-handler :player/call
@@ -97,7 +109,7 @@
   (log/infof "⚽Call: %s" (take 2 uid))
   (a/go
    (let [[game-id player-id] uid]
-     (a/<! (game/player-call @game-manager game-id player-id))
+     (a/<! (game/player-call @worker-manager game-id player-id))
      (?reply-fn {:result :ok}))))
 
 (defmethod event-msg-handler :player/raise
@@ -106,7 +118,7 @@
    (let [[game-id player-id] uid
          {:keys [amount]}    ?data]
      (log/infof "⚽Raise: %s %s" (take 2 uid) amount)
-     (a/<! (game/player-raise @game-manager game-id player-id amount))
+     (a/<! (game/player-raise @worker-manager game-id player-id amount))
      (?reply-fn {:result :ok}))))
 
 (defmethod event-msg-handler :player/check
@@ -114,7 +126,7 @@
   (log/infof "⚽Check: %s" (take 2 uid))
   (a/go
    (let [[game-id player-id] uid]
-     (a/<! (game/player-check @game-manager game-id player-id))
+     (a/<! (game/player-check @worker-manager game-id player-id))
      (?reply-fn {:result :ok}))))
 
 (defmethod event-msg-handler :player/bet
@@ -123,7 +135,7 @@
    (let [[game-id player-id] uid
          {:keys [amount]}    ?data]
      (log/infof "⚽Bet: %s %s" (take 2 uid) amount)
-     (a/<! (game/player-bet @game-manager game-id player-id amount))
+     (a/<! (game/player-bet @worker-manager game-id player-id amount))
      (?reply-fn {:result :ok}))))
 
 (defmethod event-msg-handler :player/fold
@@ -132,7 +144,7 @@
   (a/go
    (let [[game-id player-id]  uid
          {:keys [share-keys]} ?data]
-     (a/<! (game/player-fold @game-manager game-id player-id share-keys))
+     (a/<! (game/player-fold @worker-manager game-id player-id share-keys))
      (?reply-fn {:result :ok}))))
 
 (defmethod event-msg-handler :message/text
@@ -162,18 +174,32 @@
        (when (= game-id (first u))
          (send-fn u [:message/sticker msg]))))))
 
-(defn attach-event-handler
-  "Attach game event handler to websocket channel."
-  [ws-conn]
-  (let [{:keys [ch-chsk]} ws-conn]
-    (a/go-loop [evt (a/<! ch-chsk)]
-      (try
-        (event-msg-handler evt)
-        (catch js/Error e
-          (log/errorf "💥Error in event message handler: %s" (ex-message e))))
-      (recur (a/<! ch-chsk)))))
+(defmethod event-msg-handler :tournament/join
+  [{:as ev-msg, :keys [connected-uids event id uid ?data ring-req ?reply-fn send-fn]}]
+  (a/go
+  ))
 
-;; HTTP handlers
+;;; HTTP handlers
+
+(defn get-tournament
+  "Get the tournament information."
+  [^js req ^js res]
+  (let [tournament-id (aget req "params" "tournamentId")
+        state         (tournament/state @worker-manager tournament-id)]
+    (doto res
+     (.contentType "application/transit+json")
+     (.send state))))
+
+(defn load-tournament
+  "Load the tournament."
+  [^js req ^js res]
+  (let [tournament-id (aget req "params" "tournamentId")
+        signed-message (aget req "body" "signed-message")
+        w (t/writer :json {:handlers {js/BigInt u/bigint-writer}})]
+    (tournament/launch-tournament @worker-manager tournament-id)
+    (doto res
+     (.contentType "application/transit+json")
+     (.send (t/write w {:result :ok})))))
 
 (defn stats
   "Return current running status.
@@ -186,5 +212,5 @@
      (.send
       (t/write w
                {:version c/version,
-                :games   (game/list-running-games @game-manager),
-                :players (game/list-players @game-manager)})))))
+                :games   (game/list-running-games @worker-manager),
+                :players (game/list-players @worker-manager)})))))

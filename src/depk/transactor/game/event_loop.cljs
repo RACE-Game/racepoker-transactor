@@ -3,11 +3,9 @@
    [cljs.core.async :as    a
                     :refer [go go-loop <! timeout close! put!]]
    [depk.transactor.game.event-handler :as event-handler]
-   ["uuid" :as uuid]
    [depk.transactor.log :as log]
    [depk.transactor.game.models :refer [game-state->resp make-event]]
-   [depk.transactor.event.protocol :as ep]
-   [depk.transactor.util :refer [go-try <!?]]))
+   [depk.transactor.event.protocol :as ep]))
 
 (def event-list
   #{:system/sync-state
@@ -28,7 +26,10 @@
     :player/call
     :player/check
     :player/raise
-    :player/bet})
+    :player/bet
+    ;; Only for tournament games
+    :system/next-game
+    :system/resit-table})
 
 (defn handle-result
   "Handle the result of event handler.
@@ -104,7 +105,7 @@
   [event api-requests output]
   (doseq [req api-requests]
     (when req
-      (log/infof "⌛Event [%s] dispatch api request" (:type event))
+      (log/infof "⌛Event [%s] dispatch api request: %s" (:type event) req)
       (put! output req))))
 
 (defn collect-and-dispatch-game-history
