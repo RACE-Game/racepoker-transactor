@@ -10,7 +10,7 @@
 
 (def sign-tmpl
   (str
-   "I request to attach to game %s\n"
+   "Signature for RACE Poker\n"
    "Wallet address: %s\n"
    "RSA: %s\n"
    "ED25519: %s"))
@@ -23,7 +23,7 @@
      k   (pubkey/to-buffer (pubkey/make-public-key pubkey))
      msg
      (buffer/Buffer.from
-      (gstr/format sign-tmpl game-id pubkey rsa-pub ed-pub sig))]
+      (gstr/format sign-tmpl pubkey rsa-pub ed-pub sig))]
     (if (nacl/sign.detached.verify msg (buffer/Buffer.from sig "hex") k)
       (do (log/infof "✅Signature check succeed.")
           [game-id pubkey rsa-pub ed-pub sig])

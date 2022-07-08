@@ -12,7 +12,7 @@
   []
   (a/go
    (let [params      (u/transit-read (aget workerData "params"))
-         {:keys [game-id tournament-id players size env]} params
+         {:keys [game-id tournament-id players size start-time env]} params
          _ (u/register-global-error-handler! (str "Tournament game " tournament-id "#" game-id))
          _ (log/infof "👷Starting tournament game worker thread: %s # %s" tournament-id game-id)
          _ (log/infof "👷Worker params: %s" params)
@@ -22,7 +22,7 @@
          post-msg-fn (fn [data]
                        (let [s (u/transit-write data)]
                          (.postMessage ^js parentPort s)))
-         handle      (a/<! (handle/make-game-handle game-id players size post-msg-fn))]
+         handle      (a/<! (handle/make-game-handle game-id players size start-time post-msg-fn))]
 
      ;; Receive events
      (.on parentPort

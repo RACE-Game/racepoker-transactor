@@ -46,6 +46,7 @@
 
   (-> state
       (assoc :halt? false)
+      (assoc :status :game-status/init)
       (misc/merge-sync-state game-account-state)
       (misc/reserve-timeout)))
 
@@ -54,7 +55,8 @@
    {{:keys [resit-map]} :data, :as event}]
   (log/infof "✨Received resit notification from tournament reconciler: %s" resit-map)
   (-> state
-      (assoc :resit-map resit-map)))
+      (assoc :resit-map resit-map)
+      (assoc :status :game-status/init)))
 
 ;; system/reset
 ;; receiving this event for reset states
@@ -68,7 +70,7 @@
       (misc/remove-non-alive-players)
       (misc/add-joined-player)
       (misc/reset-player-map-status)
-      (misc/increase-blinds)            ; For SNG only
+      (misc/increase-blinds)            ; For SNG & Tournament
       (misc/reset-game-state)
       (misc/dispatch-start-game)))
 
@@ -414,10 +416,10 @@
   (when (and (get rsa-pub-map player-id)
              (or (not= (get rsa-pub-map player-id) rsa-pub)
                  (not= (get sig-map player-id) sig)))
-    (println rsa-pub-map)
-    (println rsa-pub)
-    (println sig-map)
-    (println sig)
+    ;; (println rsa-pub-map)
+    ;; (println rsa-pub)
+    ;; (println sig-map)
+    ;; (println sig)
     (misc/cant-update-rsa-pub! state event))
 
   (when (or (not player-id)

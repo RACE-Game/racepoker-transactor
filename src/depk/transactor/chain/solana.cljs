@@ -614,7 +614,7 @@
 
  (p/-fetch-tournament-account
    [_this tournament-id
-    {:keys [commitment settle-serial without-ranks?],
+    {:keys [commitment buyin-serial without-ranks?],
      :or   {commitment     "finalized",
             without-ranks? false}}]
    (a/go-loop []
@@ -625,7 +625,7 @@
                                   :data
                                   (parse-tournament-state-data))
                                  (catch js/Error _ nil))]
-       (if (and settle-serial (not= settle-serial (:settle-serial tournament-state)))
+       (if (and buyin-serial (not= buyin-serial (:buyin-serial tournament-state)))
          (recur)
          (if without-ranks?
            tournament-state
@@ -641,7 +641,7 @@
                                                   (bl/unpack ranks-layout)
                                                   (filter some?))
                                                  (catch js/Error e (println e)))]
-                                  (if (and (seq ranks) (= (count ranks) num-players))
+                                  (if (and ranks (= (count ranks) num-players))
                                     ranks
                                     (recur))))]
              (assoc tournament-state :ranks rank-state))))))))

@@ -19,6 +19,8 @@
    games
    ;; table size
    size
+   ;; Tournament start-time
+   start-time
 
    ;; The start time for the tournament
    started?])
@@ -41,6 +43,8 @@
     (->> (map->Tournament
           {:tournament-id tournament-id,
            :ranks         (:ranks parsed-account-state),
+           :status        (:status tournament-account-state),
+           :start-time    (:start-time tournament-account-state),
            :size          (:size tournament-account-state),
            :num-players   (:num-players tournament-account-state),
            :tournament-account-state parsed-account-state})

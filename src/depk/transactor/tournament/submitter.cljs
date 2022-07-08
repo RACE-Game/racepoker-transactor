@@ -52,7 +52,7 @@
    nil)
  (-interest-event-types [_this]
    [:system/settle-tournament
-    :system/start-tournament])
+    :system/submit-start-tournament])
 
  ep/IComponent
  (-start [this opts]

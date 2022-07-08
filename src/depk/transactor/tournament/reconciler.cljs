@@ -50,7 +50,7 @@
     (if (>= idx (:size game))
       (throw (ex-info "No seat available" {:game game, :player player}))
       (-> game
-          (assoc-in [:players idx] (if init? player (assoc player :buyin-serial buyin-serial)))
+          (assoc-in [:players idx] (if init? player (assoc player :buyin-serial new-buyin-serial)))
           (assoc :buyin-serial new-buyin-serial)))))
 
 (defn- assign-players-to-games
@@ -98,7 +98,7 @@
         new-state (assoc state
                          :games    games
                          :started? true
-                         :status   :confirming)
+                         :status   :playing)
         evts      (cond->
                     [{:type :system/tournament-broadcast,
                       :data {:state new-state,
@@ -109,7 +109,7 @@
                     (conj {:type :system/submit-start-tournament,
                            :data {}}))]
 
-    (log/infof "🌠Create tournament tables, num: %s" num-games)
+    (log/infof "🌠Start tournament, creating %s tables" num-games)
     [new-state evts]))
 
 (defmulti apply-event
@@ -189,13 +189,18 @@
 
 (defn update-ranks
   [{:keys [state], :as ctx} settle-map]
-  (let [ranks (->> (:ranks state)
-                   (mapv (partial update-player settle-map)))]
-    (update ctx :state assoc :ranks (sort-by :chips > ranks))))
+  (let [{:keys [ranks num-players]} state
+        alive         (take-while #(> (:chips %) (js/BigInt 0)) ranks)
+        eliminated    (take-last (- num-players (count alive)) ranks)
+        updated-alive (->> alive
+                           (mapv (partial update-player settle-map))
+                           (sort-by :chips >))
+        new-ranks     (vec (concat updated-alive eliminated))]
+    (update ctx :state assoc :ranks new-ranks)))
 
 (defn resit-players
   [{:keys [state updated-game], :as ctx}]
-  (let [{:keys [games size]}       state
+  (let [{:keys [games size]}  state
         sorted-games          (sort-by count-game-players games)
 
         [resit-map new-games]
@@ -248,20 +253,24 @@
     (if (= 1 (count alive-players))
       (-> ctx
           (update :state assoc :status :completed)
-          ;; (update :events
-          ;;         conj
-          ;;         {:type :system/settle-tournament,
-          ;;          :data {:ranks (mapv :pubkey (:ranks state))}})
-      )
+          (update :events
+                  conj
+                  {:type :system/settle-tournament,
+                   :data {:ranks (mapv :pubkey (:ranks state))}}))
       ctx)))
+
+
+(defmethod apply-event :system/start-tournament
+  [{:keys [tournament-id], :as state} _]
+  (start-tournament tournament-id state))
 
 (defmethod apply-event :system/sync-tournament-state
   [old-state
    {{:keys [state]} :data}]
   (if (= :registering (:status old-state))
     [state
-     {:type :system/tournament-broadcast,
-      :data {:state state}}]
+     [{:type :system/tournament-broadcast,
+       :data {:state state}}]]
     [old-state nil]))
 
 (defmethod apply-event :system/tournament-game-settle
@@ -279,30 +288,34 @@
 
 (defn start-reconciler
   [{:keys [input output]} {:keys [tournament-id init-state]}]
-  (a/go-loop [state init-state]
-    (let [{:keys [started? tournament-account-state]} state
-          {:keys [status start-time]} tournament-account-state]
-      (cond
-        ;; Start the tournament
-        (and (#{:registering :playing} status)
-             (not started?)
-             (> (current-unix-timestamp) start-time))
-        (let [[new-state evts] (start-tournament tournament-id init-state)]
-          (log/infof "🌠Starting tournament")
-          (log/infof "🌠Tournament reconciler emits events: %s" (mapv :type evts))
-          (a/<! (a/onto-chan! output evts false))
-          (recur new-state))
+  (let [current-time (current-unix-timestamp)
+        {:keys [start-time status]} init-state]
+    (if (#{:playing :registering} status)
+      (a/go
+       (if (> current-time start-time)
+         ;; Start directly
+         (a/>! input {:type :system/start-tournament})
 
-        ;; Wait for next input
-        :else
-        (let [[evt ch] (a/alts! [input (a/timeout 1000)])]
-          (if (= ch input)
-            (let [[new-state evts] (apply-event state evt)]
-              (log/infof "🌠Tournament reconciler received event: %s" (:type evt))
-              ;; (log/infof "🌠Tournament reconciler emits event: %s" (mapv :type evts))
-              (a/<! (a/onto-chan! output evts false))
-              (recur new-state))
-            (recur state)))))))
+         ;; Trigger start event after timeout
+         (let [secs (- start-time current-time)]
+           (log/infof "🌠Schedule tournament starting after %s seconds" secs)
+           (a/<! (a/timeout (* 1000 secs)))
+           (a/>! input {:type :system/start-tournament}))))
+      (do
+        (log/error "🌠Tournament already completed")
+        (a/close! input))))
+
+  (a/go-loop [state init-state]
+    (if-let [evt (a/<! input)]
+      (let [[new-state evts] (apply-event state evt)]
+        (log/infof "🌠Tournament reconciler received event: %s" (:type evt))
+        (log/infof "🌠Tournament reconciler emits event: %s" (mapv :type evts))
+        (a/<! (a/onto-chan! output evts false))
+        (when-not (= :completed (:status new-state))
+          (recur new-state)))
+      (do
+        (log/infof "💤️Reconciler quit for tournament[%s]" tournament-id)
+        (a/close! output)))))
 
 (defrecord TournamentReconciler [input output game-map ranks])
 
@@ -317,6 +330,7 @@
      :system/sync-tournament-state})
  event-p/IComponent
  (-start [this opts]
+   (log/infof "🏁Start reconciler for tournament[%s]" (:tournament-id opts))
    (start-reconciler this opts)))
 
 (defn make-tournament-reconciler

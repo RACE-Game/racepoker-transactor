@@ -22,10 +22,11 @@
    event-loop])
 
 (defn make-game-handle
-  [game-id players size post-msg-fn]
+  [game-id players size start-time post-msg-fn]
   (log/infof "🏁Create game handle for game: %s" game-id)
   (a/go
    (let [game-account-state {:players         players,
+                             :start-time      start-time,
                              :game-type       :tournament,
                              :buyin-serial    1,
                              :settle-serial   1,

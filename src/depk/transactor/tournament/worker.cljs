@@ -26,13 +26,14 @@
             ;; Start new tournament, create tables
             :system/start-tournament
             (let [{:keys [games]} data]
-              (doseq [{:keys [game-id players size]} games]
+              (doseq [{:keys [game-id players size start-time]} games]
                 (tournament-game/start-tournament-game
                  @worker-manager
                  {:tournament-id tournament-id,
                   :game-id       game-id,
                   :players       players,
                   :size          size,
+                  :start-time    start-time,
                   :report-fn     (fn [event]
                                    (send-event {:worker worker} event))})))
 
@@ -69,11 +70,9 @@
      (.on "message" on-message)
      (.on "error" on-worker-error)
      (.on "exit" on-worker-exit)
-     (.ref))
+     (.unref))
     {:worker   worker,
      :snapshot snapshot}))
-
-
 
 (defn get-snapshot
   [worker]

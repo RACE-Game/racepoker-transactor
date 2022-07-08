@@ -97,10 +97,10 @@
 
 (extend-type Submitter
  ep/IAttachable
- (-input [_this]
+ (-input [this]
+   (:input this))
+ (-output [_this]
    nil)
- (-output [this]
-   (:output this))
  (-interest-event-types [_this]
    [:system/settle
     :system/set-winner])
