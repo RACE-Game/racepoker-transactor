@@ -16,9 +16,7 @@
    [depk.transactor.store :as store]
    [depk.transactor.broadcast :as broadcast]
    [depk.transactor.game.event-loop :as eloop]
-   [depk.transactor.log :as log]
-   ["path" :as path]
-   ["worker_threads" :refer [Worker]]))
+   [depk.transactor.log :as log]))
 
 (defrecord GameHandle
   [event-bus

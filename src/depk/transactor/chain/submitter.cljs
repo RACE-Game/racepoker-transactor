@@ -48,49 +48,53 @@
 
 (defn start
   [chain-api game-id input init-state]
-  (a/go-loop [settle-serial  (:settle-serial init-state)
+  (a/go-loop [settle-serial  (-> init-state
+                                 :game-account-state
+                                 :settle-serial)
               acc-settle-map nil
               acc-count      0]
     (let [{:keys [type data], :as event} (a/<! input)]
-      (if event
-        (condp = type
-          :system/settle
-          (let [{:keys [rake settle-map]} data
-                any-leave?     (some #(= :leave (:settle-status %)) (vals settle-map))
-                new-count      (inc acc-count)
-                new-settle-map (merge-settle-map acc-settle-map settle-map)
+      (case type
+        :system/settle
+        (let [{:keys [rake settle-map]} data
+              any-leave?     (some #(= :leave (:settle-status %)) (vals settle-map))
+              new-count      (inc acc-count)
+              new-settle-map (merge-settle-map acc-settle-map settle-map)
 
-                last-state     (a/<! (p/-fetch-game-account
-                                      chain-api
-                                      game-id
-                                      {:settle-serial settle-serial}))]
+              last-state     (a/<! (p/-fetch-game-account
+                                    chain-api
+                                    game-id
+                                    {:settle-serial settle-serial}))]
 
-            (log/infof "📥New settle, rake: %s" rake)
-            (doseq [[pid {:keys [settle-status settle-type amount]}] settle-map]
-              (log/infof "📥- %s %s %s %s" pid settle-status settle-type amount))
+          (log/infof "📥New settle, rake: %s" rake)
+          (doseq [[pid {:keys [settle-status settle-type amount]}] settle-map]
+            (log/infof "📥- %s %s %s %s" pid settle-status settle-type amount))
 
-            (if (or any-leave? (>= new-count settle-batch-size))
-              (let [_ (a/<! (p/-settle chain-api
-                                       game-id
-                                       last-state
-                                       settle-serial
-                                       new-settle-map))]
-                (recur (inc settle-serial) nil 0))
-              (recur settle-serial new-settle-map new-count)))
+          (if (or any-leave? (>= new-count settle-batch-size))
+            (let [settle-serial (a/<! (p/-settle chain-api
+                                                 game-id
+                                                 last-state
+                                                 settle-serial
+                                                 new-settle-map))]
+              (recur settle-serial nil 0))
+            (recur settle-serial new-settle-map new-count)))
 
-          :system/set-winner
-          (let [{:keys [settle-serial ranking]} data
-                last-state (a/<! (p/-fetch-game-account
-                                  chain-api
-                                  game-id
-                                  {:settle-serial settle-serial}))
-                _ (a/<! (p/-set-winner chain-api
-                                       game-id
-                                       last-state
-                                       settle-serial
-                                       ranking))]
-            (recur (inc settle-serial) acc-settle-map acc-count)))
+
+        :system/set-winner
+        (let [{:keys [settle-serial ranking]} data
+              last-state    (a/<! (p/-fetch-game-account
+                                   chain-api
+                                   game-id
+                                   {:settle-serial settle-serial}))
+              settle-serial (a/<! (p/-set-winner chain-api
+                                                 game-id
+                                                 last-state
+                                                 settle-serial
+                                                 ranking))]
+          (recur settle-serial acc-settle-map acc-count))
+
         ;; EXIT
+        nil
         (log/infof "💤️Sync loop quit for game[%s]" game-id)))))
 
 (defrecord Submitter [chain-api input])

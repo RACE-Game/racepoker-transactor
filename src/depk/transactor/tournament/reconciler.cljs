@@ -31,6 +31,13 @@
   []
   (int (/ (.getTime (js/Date.)) 1000)))
 
+(defn get-game
+  [state game-id]
+  (->> state
+       :games
+       (filter #(= game-id (:game-id %)))
+       first))
+
 (defn make-pseudo-game-account-state
   "We create a pseudo account state to adapt the tournament game model to on-chain game model."
   [tournament-id start-time size]
@@ -151,14 +158,10 @@
                                        (assoc :players players)
                                        (update :settle-serial inc)))))))
 
-        game-account-state (->> games
-                                (filter #(= game-id (:game-id %)))
-                                (first))
-
         new-state (assoc state :games games)]
     (-> ctx
         (assoc :state new-state)
-        (assoc :updated-game game-account-state))))
+        (assoc :updated-game-id game-id))))
 
 (defn make-notify-events
   "Make notify events.
@@ -166,25 +169,26 @@
   1. Always refresh the state snapshot.
   2. For tables cancelled, notify the resit.
   3. For the updated table, if not being cancelled, notify the next game."
-  [{:keys [state updated-game resit-map], :as ctx}]
-  (let [events (cond-> [
-                        ;; Refresh the state snapshot
-                        {:type :system/tournament-broadcast,
-                         :data {:state state}}]
+  [{:keys [state updated-game-id resit-map resit-game-id], :as ctx}]
+  (let [updated-game (get-game state updated-game-id)
+        events       (cond-> [
+                              ;; Refresh the state snapshot
+                              {:type :system/tournament-broadcast,
+                               :data {:state state}}]
 
-                 ;; Notify game to continue
-                 (some #{updated-game} (:games state))
-                 (conj {:type :system/tournament-broadcast,
-                        :data {:event {:type :system/next-game,
-                                       :data {:game-id            (:game-id updated-game),
-                                              :game-account-state updated-game}}}})
+                       ;; Notify game to continue
+                       updated-game
+                       (conj {:type :system/tournament-broadcast,
+                              :data {:event {:type :system/next-game,
+                                             :data {:game-id            updated-game-id,
+                                                    :game-account-state updated-game}}}})
 
-                 ;; Notify game to resit
-                 (seq resit-map)
-                 (conj {:type :system/tournament-broadcast,
-                        :data {:event {:type :system/resit-table,
-                                       :data {:game-id   (:game-id updated-game),
-                                              :resit-map resit-map}}}}))]
+                       ;; Notify game to resit
+                       (seq resit-map)
+                       (conj {:type :system/tournament-broadcast,
+                              :data {:event {:type :system/resit-table,
+                                             :data {:game-id   resit-game-id,
+                                                    :resit-map resit-map}}}}))]
     (update ctx :events into events)))
 
 (defn update-ranks
@@ -199,13 +203,15 @@
     (update ctx :state assoc :ranks new-ranks)))
 
 (defn resit-players
-  [{:keys [state updated-game], :as ctx}]
-  (let [{:keys [games size]}  state
-        sorted-games          (sort-by count-game-players games)
+  [{:keys [state], :as ctx}]
+  (let [{:keys [games size updated-game-id]} state
+        sorted-games (sort-by count-game-players games)
+        resit-game (first sorted-games)
 
         [resit-map new-games]
-        (when (= updated-game (first sorted-games))
-          (loop [ps        (filter some? (:players updated-game))
+        (when (or (= 1 (count-game-players resit-game))
+                  (= (:game-id resit-game) updated-game-id))
+          (loop [ps        (filter some? (:players (first sorted-games)))
                  games     (vec (next sorted-games))
                  idx       0
                  resit-map {}]
@@ -228,7 +234,7 @@
     (if (seq resit-map)
       (-> ctx
           (update :state assoc :games new-games)
-          (assoc :resit-map resit-map))
+          (assoc :resit-map resit-map :resit-game-id (:game-id (first sorted-games))))
       ctx)))
 
 (defn maybe-resit

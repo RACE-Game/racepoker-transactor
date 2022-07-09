@@ -15,18 +15,18 @@
         (let [{:keys [type data]} event]
           (case type
             :system/submit-start-tournament
-            (let [last-state (a/<! (p/-fetch-tournament-account
-                                    chain-api
-                                    tournament-id
-                                    {:settle-serial  settle-serial,
-                                     :without-ranks? true}))
+            (let [last-state    (a/<! (p/-fetch-tournament-account
+                                       chain-api
+                                       tournament-id
+                                       {:settle-serial  settle-serial,
+                                        :without-ranks? true}))
 
-                  _ (a/<! (p/-start-tournament chain-api
-                                               tournament-id
-                                               last-state
-                                               settle-serial))]
+                  settle-serial (a/<! (p/-start-tournament chain-api
+                                                           tournament-id
+                                                           last-state
+                                                           settle-serial))]
 
-              (recur (inc settle-serial)))
+              (recur settle-serial))
 
             :system/settle-tournament
             (let [{:keys [ranks]} data

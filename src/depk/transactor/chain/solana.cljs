@@ -522,7 +522,10 @@
     (let [rs (a/<! (submit-fn))]
       (cond
         (= rs :ok)
-        (a/<! (fetch-fn))
+        (do (log/infof
+             "😃Transaction succeed without tries. new settle-serial: %s"
+             (inc settle-serial))
+            (inc settle-serial))
 
         (= rs :err)
         (let [_ (a/<! (a/timeout 5000))
@@ -544,7 +547,7 @@
             (do (log/infof "😃The settle-serial updated. serial: %s -> %s"
                            settle-serial
                            (:settle-serial state))
-                state)))))))
+                (:settle-serial state))))))))
 
 (extend-type SolanaApi
  p/IChainApi
@@ -601,7 +604,11 @@
                                     (parse-state-data))
                                    (catch js/Error _ nil))]
        (if (and settle-serial (not= settle-serial (:settle-serial game-account-state)))
-         (recur)
+         (do
+           (log/infof "Fetch again, for %s != %s "
+                      settle-serial
+                      (:settle-serial game-account-state))
+           (recur))
          game-account-state))))
 
  (p/-fetch-mint-info
