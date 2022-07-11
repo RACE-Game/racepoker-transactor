@@ -1,19 +1,12 @@
 (ns depk.transactor.tournament.handle
-  "Tournament handle is used to control a set of components of a tournament.
-
-  A running tournament includes following components:
-      - Event bus
-      - Chain API
-      - Broadcaster
-      - Reconciler
-  "
+  "Tournament handle is used to control a set of components of a tournament."
   (:require
    [cljs.core.async :as a]
    [depk.transactor.tournament.models :as m]
    [depk.transactor.log :as log]
    [depk.transactor.event :as event]
    [depk.transactor.chain :as chain]
-   [depk.transactor.broadcast :as broadcast]
+   [depk.transactor.tournament.broadcaster :as broadcaster]
    [depk.transactor.tournament.synchronizer :as synchronizer]
    [depk.transactor.tournament.submitter :as submitter]
    [depk.transactor.tournament.reconciler :as reconciler]))
@@ -33,7 +26,7 @@
                                                                 tournament-id
                                                                 {:commitment "finalized"}))
          init-state       (m/make-tournament-state tournament-id tournament-state)
-         broadcaster      (broadcast/make-tournament-broadcaster post-msg-fn)
+         broadcaster      (broadcaster/make-tournament-broadcaster post-msg-fn)
          synchronizer     (synchronizer/make-tournament-synchronizer chain-api)
          submitter        (submitter/make-tournament-submitter chain-api)
          reconciler       (reconciler/make-tournament-reconciler)

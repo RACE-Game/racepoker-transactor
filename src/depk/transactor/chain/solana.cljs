@@ -605,9 +605,7 @@
                                    (catch js/Error _ nil))]
        (if (and settle-serial (not= settle-serial (:settle-serial game-account-state)))
          (do
-           (log/infof "Fetch again, for %s != %s "
-                      settle-serial
-                      (:settle-serial game-account-state))
+           (log/infof "🫠Retry fetch game account, settle-serial mismatch")
            (recur))
          game-account-state))))
 
@@ -633,7 +631,8 @@
                                   (parse-tournament-state-data))
                                  (catch js/Error _ nil))]
        (if (and buyin-serial (not= buyin-serial (:buyin-serial tournament-state)))
-         (recur)
+         (do (log/infof "🫠Retry fetch tournament, buyin-serial mismatch")
+             (recur))
          (if without-ranks?
            tournament-state
            (let [{:keys [rank-size rank-pubkey num-players]} tournament-state
@@ -650,5 +649,7 @@
                                                  (catch js/Error e (println e)))]
                                   (if (and ranks (= (count ranks) num-players))
                                     ranks
-                                    (recur))))]
+                                    (do
+                                      (log/infof "🫠Retry fetch tournament ranks, ranks data mismatch.")
+                                      (recur)))))]
              (assoc tournament-state :ranks rank-state))))))))

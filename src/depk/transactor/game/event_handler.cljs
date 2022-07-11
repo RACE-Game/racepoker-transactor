@@ -1,14 +1,9 @@
 (ns depk.transactor.game.event-handler
   (:require
-   [depk.transactor.game.models :as m]
    [depk.transactor.game.encrypt :as encrypt]
    [depk.transactor.game.event-handler.misc :as misc]
-   [depk.transactor.constant :as c]
    [depk.transactor.log :as log]
-   [depk.transactor.event.protocol :as ep]
-   [cljs.core.async :refer [go <!]]
-   ["uuid" :as uuid]))
-
+   [cljs.core.async :refer [go <!]]))
 
 (defmulti handle-event
   (fn [_state event]
@@ -46,7 +41,6 @@
 
   (-> state
       (assoc :halt? false)
-      (assoc :status :game-status/init)
       (misc/merge-sync-state game-account-state)
       (misc/reserve-timeout)))
 

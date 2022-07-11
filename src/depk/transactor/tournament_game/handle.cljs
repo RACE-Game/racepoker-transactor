@@ -1,19 +1,13 @@
 (ns depk.transactor.tournament-game.handle
-  "Game handle is used to control a set of components of a game.
-
-  A running game includes following components:
-      - Event bus
-      - Broadcaster
-      - Event loop
-  "
+  "Game handle is used to control a set of components of a game."
   (:require
-   [cljs.core.async             :as a]
+   [cljs.core.async :as a]
    [depk.transactor.tournament-game.submitter :as submitter]
    [depk.transactor.game.models :as m]
-   [depk.transactor.event       :as event]
-   [depk.transactor.broadcast   :as broadcast]
+   [depk.transactor.event :as event]
+   [depk.transactor.game.broadcaster :as broadcaster]
    [depk.transactor.game.event-loop :as eloop]
-   [depk.transactor.log         :as log]))
+   [depk.transactor.log :as log]))
 
 (defrecord TournamentGameHandle
   [event-bus
@@ -45,7 +39,7 @@
          opts               {:game-id game-id, :init-state init-state}
          event-bus          (event/make-mem-event-bus)
          submitter          (submitter/make-tournament-game-submitter post-msg-fn)
-         broadcaster        (broadcast/make-game-broadcaster post-msg-fn)
+         broadcaster        (broadcaster/make-game-broadcaster post-msg-fn)
          event-loop         (eloop/make-event-loop)]
      ;; Attach components to event bus
      (event/attach event-loop event-bus)

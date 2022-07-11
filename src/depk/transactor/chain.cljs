@@ -2,10 +2,9 @@
   (:require
    [depk.transactor.log             :as log]
    [depk.transactor.chain.protocol  :as p]
-   [depk.transactor.event.protocol  :as ep]
    [depk.transactor.chain.solana    :as solana]
-   [depk.transactor.chain.synchronizer :as synchronizer]
-   [depk.transactor.chain.submitter :as submitter]))
+   [depk.transactor.game.synchronizer :as synchronizer]
+   [depk.transactor.game.submitter :as submitter]))
 
 (defn fetch-game-account
   "Fetch account of a game."

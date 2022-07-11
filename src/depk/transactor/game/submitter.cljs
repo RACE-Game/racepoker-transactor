@@ -1,4 +1,4 @@
-(ns depk.transactor.chain.submitter
+(ns depk.transactor.game.submitter
   (:require
    [cljs.core.async      :as a]
    [depk.transactor.chain.protocol :as p]

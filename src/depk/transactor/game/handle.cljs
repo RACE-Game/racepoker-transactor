@@ -14,7 +14,7 @@
    [depk.transactor.event :as event]
    [depk.transactor.chain :as chain]
    [depk.transactor.store :as store]
-   [depk.transactor.broadcast :as broadcast]
+   [depk.transactor.game.broadcaster :as broadcaster]
    [depk.transactor.game.event-loop :as eloop]
    [depk.transactor.log :as log]))
 
@@ -42,7 +42,7 @@
          submitter          (chain/make-submitter chain-api)
          event-bus          (event/make-mem-event-bus)
          store-api          (store/make-fake-store-api)
-         broadcaster        (broadcast/make-game-broadcaster post-msg-fn)
+         broadcaster        (broadcaster/make-game-broadcaster post-msg-fn)
          event-loop         (eloop/make-event-loop)]
      ;; Attach components to event bus
      (event/attach event-loop event-bus)

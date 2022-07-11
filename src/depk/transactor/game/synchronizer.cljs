@@ -1,4 +1,4 @@
-(ns depk.transactor.chain.synchronizer
+(ns depk.transactor.game.synchronizer
   (:require
    [cljs.core.async :as a]
    [depk.transactor.chain.protocol :as p]

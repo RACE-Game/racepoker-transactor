@@ -25,7 +25,7 @@
         (if (#{:playing :completed} (:status state))
           (log/infof "💤️Synchronizer quit for tournament[%s]" tournament-id)
           (do
-            (a/<! (a/timeout 5000))
+            (a/<! (a/timeout 10000))
             (recur (max buyin-serial (:buyin-serial state)))))))))
 
 (defrecord TournamentSynchronizer [chain-api output])
