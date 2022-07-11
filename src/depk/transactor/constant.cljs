@@ -1,6 +1,6 @@
 (ns depk.transactor.constant)
 
-(def version "21")
+(def version "22")
 
 (def max-player-num 9)
 
