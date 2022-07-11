@@ -33,16 +33,27 @@
       (misc/merge-sync-state game-account-state)
       (misc/reserve-timeout)))
 
-(defmethod handle-event :system/next-game
-  [{:keys [], :as state}
-   {{:keys [game-account-state]} :data, :as event}]
-
-  (log/infof "✨Received confirmation from tournament reconciler, %s" game-account-state)
-
+(defmethod handle-event :system/start-tournament-game
+  [state event]
   (-> state
       (assoc :halt? false)
-      (misc/merge-sync-state game-account-state)
       (misc/reserve-timeout)))
+
+(defmethod handle-event :system/next-game
+  [{:keys [status], :as state}
+   {{:keys [game-account-state]} :data, :as event}]
+
+  (if (#{:game-status/showdown :game-status/settle} status)
+    ;; Reset status to init, then dispatch a reset.
+    (-> state
+        (assoc :halt? false)
+        (assoc :status :game-status/init)
+        (misc/merge-sync-state game-account-state)
+        (misc/dispatch-reset))
+    ;; Just merge game-account-state
+    (-> state
+        (misc/merge-sync-state game-account-state)
+        (misc/reserve-timeout))))
 
 (defmethod handle-event :system/resit-table
   [{:keys [], :as state}

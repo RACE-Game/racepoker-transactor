@@ -11,6 +11,7 @@
   #{:system/sync-state
     :system/reset
     :system/start-game
+    :system/start-tournament-game
     :client/shuffle-cards
     :client/encrypt-cards
     :client/share-keys

@@ -35,7 +35,10 @@
                              :owner-rake      (js/BigInt 0)}
 
          mint-info          {:decimals 0}
-         init-state         (m/make-game-state game-account-state mint-info {:game-id game-id})
+         init-state         (m/make-game-state game-account-state
+                                               mint-info
+                                               {:game-id game-id,
+                                                :halt?   true})
          opts               {:game-id game-id, :init-state init-state}
          event-bus          (event/make-mem-event-bus)
          submitter          (submitter/make-tournament-game-submitter post-msg-fn)

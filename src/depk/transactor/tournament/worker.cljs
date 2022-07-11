@@ -37,6 +37,16 @@
                   :report-fn     (fn [event]
                                    (send-event {:worker worker} event))})))
 
+            ;; Start tournament games
+            :system/start-tournament-games
+            (let [{:keys [games]} data]
+              (doseq [{:keys [game-id]} games]
+                (tournament-game/send-tournament-event
+                 @worker-manager
+                 game-id
+                 {:type :system/start-tournament-game})))
+
+
             ;; Update the pseudo game-account-state
             (:system/next-game :system/resit-table)
             (let [{:keys [game-id]} data]

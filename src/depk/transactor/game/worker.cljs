@@ -10,15 +10,17 @@
   [snapshot opts]
   (let [{:keys [chsk-send! connected-uids]} (:websocket opts)]
     (fn [data]
-      (let [{:keys [game-id message serialized-state player-ids start-time]} (u/transit-read data)]
-        (when (= :game/event (first message))
+      (let [{:keys [game-id event serialized-state player-ids start-time]} (u/transit-read data)]
+        (when serialized-state
           (reset! snapshot
             {:serialized-state serialized-state,
              :player-ids       player-ids,
              :start-time       start-time}))
-        (doseq [uid   (:any @connected-uids)
-                :when (= game-id (first uid))]
-          (chsk-send! uid message))))))
+
+        (when event
+          (doseq [uid   (:any @connected-uids)
+                  :when (= game-id (first uid))]
+            (chsk-send! uid event)))))))
 
 (defn on-worker-error
   [x]

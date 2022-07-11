@@ -25,15 +25,16 @@
             (report-fn event))
 
           :broadcast/game-event
-          (let [{:keys [game-id message serialized-state player-ids start-time]}
+          (let [{:keys [game-id event serialized-state player-ids start-time]}
                 data]
             (reset! snapshot
               {:serialized-state serialized-state,
                :player-ids       player-ids,
                :start-time       start-time})
-            (doseq [uid   (:any @connected-uids)
-                    :when (= game-id (first uid))]
-              (chsk-send! uid message)))
+            (when event
+              (doseq [uid   (:any @connected-uids)
+                      :when (= game-id (first uid))]
+                (chsk-send! uid event))))
 
           (log/errorf "Invalid worker message: %s" data))))))
 
@@ -61,7 +62,7 @@
                                            :env           @env,
                                            :tournament-id tournament-id,
                                            :size          size,
-                                           :players       players
+                                           :players       players,
                                            :start-time    start-time})}})
                     (.on "message" on-message)
                     (.on "error" on-worker-error)

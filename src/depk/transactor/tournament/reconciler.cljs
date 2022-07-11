@@ -270,6 +270,13 @@
   [{:keys [tournament-id], :as state} _]
   (start-tournament tournament-id state))
 
+(defmethod apply-event :system/start-tournament-games
+  [{:keys [games], :as state} _]
+  [state
+   [{:type :system/tournament-broadcast,
+     :data {:event {:type :system/start-tournament-games,
+                    :data {:games games}}}}]])
+
 (defmethod apply-event :system/sync-tournament-state
   [old-state
    {{:keys [state]} :data}]
@@ -306,7 +313,9 @@
          (let [secs (- start-time current-time)]
            (log/infof "🌠Schedule tournament starting after %s seconds" secs)
            (a/<! (a/timeout (* 1000 secs)))
-           (a/>! input {:type :system/start-tournament}))))
+           (a/>! input {:type :system/start-tournament})))
+       (a/<! (a/timeout 60000))
+       (a/>! input {:type :system/start-tournament-games}))
       (do
         (log/error "🌠Tournament already completed")
         (a/close! input))))
