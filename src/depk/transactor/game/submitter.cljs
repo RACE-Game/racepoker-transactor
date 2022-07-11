@@ -118,5 +118,5 @@
 
 (defn make-submitter
   [chain-api]
-  (let [input (a/chan)]
+  (let [input (a/chan 4)]
     (->Submitter chain-api input)))

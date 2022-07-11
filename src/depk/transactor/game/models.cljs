@@ -231,6 +231,11 @@
         (update :players parse-players)
         (select-keys [:players :buyin-serial :settle-serial]))))
 
+(defn parse-raw-mint-info
+  [mint-info]
+  (-> mint-info
+      (select-keys [:decimals])))
+
 (defn make-game-state
   ([game-account-state init-state]
    (let [state-id (uuid/v4)]
@@ -271,7 +276,7 @@
               :game-no            0,
               :game-type          (:game-type game-account-state),
               :size               (:size game-account-state),
-              :mint-info          mint-info,
+              :mint-info          (parse-raw-mint-info mint-info),
               :player-map         player-map}))))))
 
 (defn game-state->resp

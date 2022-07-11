@@ -62,5 +62,5 @@
 
 (defn make-tournament-submitter
   [chain-api]
-  (let [input (a/chan)]
+  (let [input (a/chan 4)]
     (->TournamentSubmitter chain-api input)))

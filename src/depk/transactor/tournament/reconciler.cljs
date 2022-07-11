@@ -324,7 +324,7 @@
     (if-let [evt (a/<! input)]
       (let [[new-state evts] (apply-event state evt)]
         (log/infof "🌠Tournament reconciler received event: %s" (:type evt))
-        (log/infof "🌠Tournament reconciler emits event: %s" (mapv :type evts))
+        (log/infof "🌠Tournament reconciler emits event: %s" (mapv (comp :type :data) evts))
         (a/<! (a/onto-chan! output evts false))
         (when-not (= :completed (:status new-state))
           (recur new-state)))
