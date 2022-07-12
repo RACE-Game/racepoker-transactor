@@ -14,16 +14,17 @@
                                                    {:commitment "finalized"}))]
       (when (and state (= :registering (:status state)))
         (when (< buyin-serial (:buyin-serial state))
-          (log/infof "👀️Read tournament[%s] state, %s -> %s"
-                     tournament-id
-                     buyin-serial
-                     (:buyin-serial state))
+          (log/log "👀️"
+                   tournament-id
+                   "Synchronizer got new tournament state, %s -> %s"
+                   buyin-serial
+                   (:buyin-serial state))
           (a/>! output
                 {:type :system/sync-tournament-state,
                  :data {:state (m/make-tournament-state tournament-id state)}}))
 
         (if (#{:playing :completed} (:status state))
-          (log/infof "💤️Synchronizer quit for tournament[%s]" tournament-id)
+          (log/log "💤️" tournament-id "Synchronizer quit")
           (do
             (a/<! (a/timeout 10000))
             (recur (max buyin-serial (:buyin-serial state)))))))))
@@ -40,7 +41,7 @@
    nil)
  event-p/IComponent
  (-start [this opts]
-   (log/infof "🏁Start synchronizer for tournament[%s]" (:tournament-id opts))
+   (log/log "🎉" (:tournament-id opts) "Start synchronizer")
    (start this opts)))
 
 (defn make-tournament-synchronizer

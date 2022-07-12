@@ -4,7 +4,6 @@
    ["buffer"            :as buffer]
    ["tweetnacl"         :as nacl]
    [solana-clj.publickey :as pubkey]
-   [solana-clj.keypair  :as keypair]
    [depk.transactor.log :as log]
    [goog.string         :as gstr]))
 
@@ -17,7 +16,6 @@
 
 (defn user-id-fn
   [{:keys [params], :as _req}]
-  (log/infof "💫Receive WS connection with params: %s" (prn-str params))
   (let
     [{:keys [pubkey rsa-pub ed-pub sig game-id]} params
      k   (pubkey/to-buffer (pubkey/make-public-key pubkey))
@@ -25,7 +23,7 @@
      (buffer/Buffer.from
       (gstr/format sign-tmpl pubkey rsa-pub ed-pub sig))]
     (if (nacl/sign.detached.verify msg (buffer/Buffer.from sig "hex") k)
-      (do (log/infof "✅Signature check succeed.")
+      (do (log/log "🤝" game-id "Receive valid connecting request from player[%s]" pubkey)
           [game-id pubkey rsa-pub ed-pub sig])
-      (do (log/infof "⭕Signature check failed.")
+      (do (log/log "⭕" game-id "Receive invalid connecting request from player[%s]" pubkey)
           (throw (ex-info "Reject connection" {:reason "Signature check failed"}))))))

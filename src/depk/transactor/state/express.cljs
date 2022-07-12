@@ -43,7 +43,7 @@
          (fn [req res]
            (h/stats req res)))
    (.use (fn [req _res next]
-           (log/warnf "Unhandled request: %s" (.-originalUrl ^js req))
+           (log/log "🚫" nil "Unhandled request: %s" (.-originalUrl ^js req))
            (next)))))
 
 (defn wrap-defaults
@@ -51,7 +51,6 @@
   (let [cookie-secret "the shiz"]
     (doto express-app
      (.use (fn [req res next]
-             (log/infof "Request: %s" (.-originalUrl ^js req))
              (next)))
      (.use (session
             #js
@@ -69,7 +68,7 @@
 
 (defn start-selected-web-server!
   [port]
-  (log/infof "🏁Starting express...")
+  (log/log "🎉" nil "Start web server")
   (let [express-app       (express)
         express-ws-server (express-ws express-app)]
 

@@ -19,7 +19,7 @@
 
 (defn make-tournament-handle
   [tournament-id post-msg-fn]
-  (log/infof "🏁Create tournament handle for tournament: %s" tournament-id)
+  (log/log "🎉" tournament-id "Create tournament handle")
   (a/go
    (let [chain-api        (chain/make-solana-api)
          tournament-state (a/<! (chain/fetch-tournament-account chain-api
@@ -45,7 +45,7 @@
      (event/start-component synchronizer opts)
      (event/start-component submitter opts)
 
-     (log/infof "🏁Tournament handle started")
+     (log/log "🎉" tournament-id "Tournament handle started")
      (->TournamentHandle event-bus chain-api broadcaster reconciler))))
 
 (defn worker-handle?

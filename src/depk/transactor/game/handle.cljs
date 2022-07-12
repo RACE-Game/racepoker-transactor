@@ -9,14 +9,14 @@
       - Event loop
   "
   (:require
-   [cljs.core.async :as a]
+   [cljs.core.async             :as a]
    [depk.transactor.game.models :as m]
-   [depk.transactor.event :as event]
-   [depk.transactor.chain :as chain]
-   [depk.transactor.store :as store]
+   [depk.transactor.event       :as event]
+   [depk.transactor.chain       :as chain]
+   [depk.transactor.store       :as store]
    [depk.transactor.game.broadcaster :as broadcaster]
    [depk.transactor.game.event-loop :as eloop]
-   [depk.transactor.log :as log]))
+   [depk.transactor.log         :as log]))
 
 (defrecord GameHandle
   [event-bus
@@ -27,7 +27,7 @@
 
 (defn make-game-handle
   [game-id post-msg-fn]
-  (log/infof "🏁Create game handle for game: %s" game-id)
+  (log/log "🎉" game-id "Create game handle")
   (a/go
    (let [chain-api          (chain/make-solana-api)
          game-account-state (a/<! (chain/fetch-game-account chain-api
@@ -58,7 +58,7 @@
      (event/start-component store-api opts)
      (event/start-component broadcaster opts)
 
-     (log/infof "🏁Game handle started")
+     (log/log "🎉" game-id "Game handle started")
      (->GameHandle event-bus chain-api store-api broadcaster event-loop))))
 
 (defn game-handle?

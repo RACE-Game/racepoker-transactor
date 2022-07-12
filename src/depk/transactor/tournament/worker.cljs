@@ -56,16 +56,16 @@
                event))))))))
 
 (defn on-worker-error
-  [x]
-  (log/errorf "💀Tournament worker error. %s" x))
+  [tournament-id x]
+  (log/log "💀" tournament-id "Tournament worker error. %s" x))
 
 (defn on-worker-exit
-  [x]
-  (log/infof "💀Tournament worker exit. %s" x))
+  [tournament-id x]
+  (log/log "💀" tournament-id "💀Tournament worker exit. %s" x))
 
 (defn make-worker
   [tournament-id opts]
-  (log/infof "📯Spawn tournament worker. %s" tournament-id)
+  (log/log "📯" tournament-id "Spawn tournament worker")
   (let [snapshot   (atom {})
         worker     (Worker. js/__filename
                             #js
@@ -78,8 +78,8 @@
         on-message (make-worker-message-handler snapshot worker opts)]
     (doto worker
      (.on "message" on-message)
-     (.on "error" on-worker-error)
-     (.on "exit" on-worker-exit)
+     (.on "error" (partial on-worker-error tournament-id))
+     (.on "exit" (partial on-worker-exit tournament-id))
      (.unref))
     {:worker   worker,
      :snapshot snapshot}))

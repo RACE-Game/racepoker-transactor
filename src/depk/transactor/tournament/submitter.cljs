@@ -7,10 +7,10 @@
 
 (defn start
   [chain-api tournament-id input init-state]
-  (log/infof "🏁Start submitter for tournament[%s]" tournament-id)
+  (log/log "🎉" tournament-id "Start submitter")
   (a/go-loop [settle-serial (:settle-serial init-state)]
     (let [event (a/<! input)]
-      (log/infof "⬆️Submitter receives event: %s" event)
+      (log/log "⬆️" tournament-id "Submitter receives event: %s" event)
       (if event
         (let [{:keys [type data]} event]
           (case type
@@ -40,7 +40,7 @@
                                           last-state
                                           settle-serial
                                           ranks)))))
-        (log/infof "💤️Submitter quit for tournament[%s]" tournament-id)))))
+        (log/log "💤️" tournament-id "Submitter quit")))))
 
 (defrecord TournamentSubmitter [chain-api input])
 

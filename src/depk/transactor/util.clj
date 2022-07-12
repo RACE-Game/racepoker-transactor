@@ -13,12 +13,10 @@
                 log# (nil? (get depk.transactor.util/request-log-ignores uri#))]
             (when-not
               (try
-                (when log# (depk.transactor.log/infof "request:[%s]" (:uri req#)))
-                ;; (when log# (info "params:[%s]" (prn-str (:body req#))))
                 (let [resp# (do ~@body)]
                   (callback# resp#))
                 (catch js/Error e#
-                  (when log# (depk.transactor.log/warnf "error:[%s]" (ex-message e#)))
+                  (.error js/console e#)
                   (callback# {:status 500, :body {:error (ex-message e#)}}))))))))))
 
 (defmacro go-try

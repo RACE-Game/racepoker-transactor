@@ -18,7 +18,7 @@
   [tournament-manager tournament-id]
   {:pre [(string? tournament-id)]}
   (go-try
-   (log/infof "🏆Start tournament [%s]" tournament-id)
+   (log/log "🏆" tournament-id "Start tournament")
    (manager/try-start tournament-manager
                       tournament-id
                       worker/make-worker)))

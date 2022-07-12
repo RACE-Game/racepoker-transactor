@@ -42,7 +42,7 @@
 (defn make-worker-manager
   "Create worker manager."
   [worker-opts]
-  (log/infof "🏁Initialize worker manager")
+  (log/log "🎉" nil "Initialize worker manager")
   (let [worker-map (atom {})]
     (map->WorkerManager {:worker-map  worker-map,
                          :worker-opts worker-opts})))

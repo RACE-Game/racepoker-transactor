@@ -66,9 +66,9 @@
                                     game-id
                                     {:settle-serial settle-serial}))]
 
-          (log/infof "📥New settle, rake: %s" rake)
+          (log/log "📥" game-id "New settle, rake: %s" rake)
           (doseq [[pid {:keys [settle-status settle-type amount]}] settle-map]
-            (log/infof "📥- %s %s %s %s" pid settle-status settle-type amount))
+            (log/log "📥" game-id "-%s %s %s %s" pid settle-status settle-type amount))
 
           (if (or any-leave? (>= new-count settle-batch-size))
             (let [settle-serial (a/<! (p/-settle chain-api
@@ -95,7 +95,7 @@
 
         ;; EXIT
         nil
-        (log/infof "💤️Sync loop quit for game[%s]" game-id)))))
+        (log/log "💤️" game-id "Sync loop quit")))))
 
 (defrecord Submitter [chain-api input])
 
@@ -113,7 +113,7 @@
  (-start [this opts]
    (let [{:keys [chain-api input]}    this
          {:keys [game-id init-state]} opts]
-     (log/infof "🏁Start submitter for game[%s]" game-id)
+     (log/log "🎉" game-id "Start submitter")
      (start chain-api game-id input init-state))))
 
 (defn make-submitter

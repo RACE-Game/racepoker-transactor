@@ -23,16 +23,16 @@
             (chsk-send! uid event)))))))
 
 (defn on-worker-error
-  [x]
-  (log/errorf "💀Game worker error. %s" x))
+  [tournament-id x]
+  (log/log "💀" tournament-id "Game worker error. %s" x))
 
 (defn on-worker-exit
-  [x]
-  (log/infof "💀Game worker exit. %s" x))
+  [tournament-id x]
+  (log/log "💀" tournament-id "Game worker exit. %s" x))
 
 (defn make-worker
   [game-id opts]
-  (log/infof "📯Spawn game worker. %s" game-id)
+  (log/log "📯" game-id "Spawn game worker")
   (let [{:keys [tournament-id players]} opts
         snapshot   (atom {})
         on-message (make-worker-message-handler snapshot opts)
@@ -48,8 +48,8 @@
                                            :tournament-id tournament-id,
                                            :players       players})}})
                     (.on "message" on-message)
-                    (.on "error" on-worker-error)
-                    (.on "exit" on-worker-exit)
+                    (.on "error" (partial on-worker-error tournament-id))
+                    (.on "exit" (partial on-worker-exit tournament-id))
                     (.ref))]
     {:worker   worker,
      :snapshot snapshot}))

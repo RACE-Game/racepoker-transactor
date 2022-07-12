@@ -14,7 +14,6 @@
  (p/-start [this _opts]
    (let [{:keys [input output]} this]
      (a/go-loop [it (a/<! input)]
-       ;; (log/infof "-->Event: %s" (:type it))
        (if it
          (do
            (a/>! output it)
@@ -24,7 +23,7 @@
 
  p/IEventBus
  (p/-shutdown [this]
-   (log/info "💤Shutdown event bus.")
+   (log/log "💤" nil "Shutdown event bus")
    (a/close! (:input this)))
 
  (p/-send [this event]
@@ -32,7 +31,7 @@
 
 (defn make-mem-event-bus
   []
-  (log/infof "🏁Use in-memory event bus")
+  (log/log "🎉" nil "Use in-memory event bus")
   (let [input      (a/chan 10)
         output     (a/chan 10)
         output-pub (a/pub output :type)]

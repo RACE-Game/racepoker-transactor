@@ -91,22 +91,22 @@
              (handle-result event {:result :ok, :state v})
              {:result :err, :state state, :error v}))))
      (catch ExceptionInfo e
-       (when (:player-id event)
-         (log/infof "🧱Error in event handler: %s, event: %s"
-                    (ex-message e)
-                    (:type event)))
        {:result :err, :state state, :error e})
      (catch js/Error e
-       (log/errorf "Error in event handler, event: %s" (prn-str event))
+       (log/log "‼️" (:game-id state) "Error when handling Event[%s]" (:type event))
        (js/console.error e)
        {:result :err, :state state, :error e}))))
 
 (defn dispatch-api-request
   "Dispatch api-requests to output channel."
-  [event api-requests output]
+  [game-id event api-requests output]
   (doseq [req api-requests]
     (when req
-      (log/infof "⌛Event [%s] dispatch api request: %s" (:type event) req)
+      (log/log "✨"
+               game-id
+               "Event[%s] dispatch api request: %s"
+               (:type event)
+               req)
       (put! output req))))
 
 (defn collect-and-dispatch-game-history
@@ -150,7 +150,7 @@
 
 (defn run-event-loop
   [game-id init-state input output]
-  (log/infof "🏁Start event loop for game[%s]" game-id)
+
   ;; Put initial event
   (go (a/>! input (make-event :system/reset init-state)))
   (go-loop [state   init-state
@@ -158,37 +158,34 @@
     (if-let [event (<! (take-event input state))]
       (if (event-list (:type event))
         (let [old-state state
-
-              _ (log/infof "🤡Event %s -> %s"
-                           (:type event)
-                           (name (:status state)))
-
               {:keys [result state api-requests dispatch-event error]}
               (<! (handle-event state event))]
 
-          (log/infof "%sEvent %s player-id: %s %s"
-                     (case result
-                       :ok      "🟩"
-                       :err     "🟥"
-                       :expired "🟨")
-                     (:type event)
-                     (:player-id event)
-                     (if error (ex-message error) ""))
+          ;; Log the event
+          (log/log (case result
+                     :ok      "🟩"
+                     :err     "🟥"
+                     :expired "🟨")
+                   game-id
+                   "Event[%s] from %s. %s"
+                   (:type event)
+                   (if-let [pid (:player-id event)]
+                     (str "Player[" pid "]")
+                     "system")
+                   (if-not error
+                     (str "Status:" (name (:status old-state)) "->" (name (:status state)))
+                     (str "Err: " (ex-message error))))
+
           (if (= result :ok)
             (let [records
                   (collect-and-dispatch-game-history old-state state event records output)]
-
-              ;; (.info js/console "event:" event)
-              ;; (.info js/console "before:" old-state)
-              ;; (.info js/console "after:" state)
-
-              (dispatch-api-request event api-requests output)
+              (dispatch-api-request game-id event api-requests output)
               (dispatch-broadcast-state game-id event state output)
               (recur state records))
             (recur old-state records)))
         (recur state records))
       ;; EXIT
-      (log/infof "💤Event loop quit for game[%s]" game-id))))
+      (log/log "💤" game-id "Event loop quit"))))
 
 (defrecord EventLoop [input output])
 
@@ -207,6 +204,7 @@
 
  ep/IComponent
  (ep/-start [this opts]
+   (log/log "🎉" (:game-id opts) "Start event loop")
    (run-event-loop (:game-id opts)
                    (:init-state opts)
                    (:input this)

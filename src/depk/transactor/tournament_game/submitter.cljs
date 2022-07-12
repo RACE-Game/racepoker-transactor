@@ -15,13 +15,15 @@
           {:keys [settle-map]}      data]
       (if event
         (do
-          (log/infof "✈️Submit settle to tournament")
+          (log/log "☎️" game-id
+                   "Submit settlement to tournament: %s"
+                   (prn-str settle-map))
           (post-msg-fn {:broadcast     :broadcast/tournament-game-settle,
                         :game-id       game-id,
                         :tournament-id (first (str/split game-id #"#")),
                         :settle-map    settle-map})
           (recur))
-        (log/infof "💤Tournament game quit for game[%s]" game-id)))))
+        (log/log "💤" game-id "Submitter quit")))))
 
 (defrecord TournamentGameSubmitter [input post-msg-fn])
 
@@ -38,7 +40,7 @@
  (-start [this opts]
    (let [{:keys [input post-msg-fn]} this
          {:keys [game-id]} opts]
-     (log/infof "🏁Start submitter for game[%s]" game-id)
+     (log/log "🎉" game-id "Start submitter")
      (start game-id input post-msg-fn))))
 
 (defn make-tournament-game-submitter

@@ -15,17 +15,17 @@
   [game-manager game-id player-id]
   {:pre [(string? game-id)]}
   (go-try
-   (log/infof "👔player[%s] attach to game [%s]" player-id game-id)
+   (log/log "➡️" game-id "Player[%s] attach to game" player-id)
    ;; We can only start normal game through this API
    (if-not (tournament-game-id? game-id)
      (manager/try-start game-manager game-id worker/make-worker)
      :ok)))
 
 (defn state
-  [game-manager game-id]
+  [game-manager game-id player-id]
   {:pre [(string? game-id)]}
   (when-let [game-worker (manager/find-worker-unchecked game-manager game-id)]
-    (log/infof "👔fetch game [%s] state" game-id)
+    (log/log "➡️" game-id "Player[%s] fetch game state" player-id)
     (:serialized-state (worker/get-snapshot game-worker))))
 
 ;; Leaving game
@@ -36,7 +36,7 @@
          (or (nil? released-keys)
              (vector? released-keys))]}
   (go-try
-   ;; (log/infof "player[%s] leave game [%s]" player-id game-id)
+   (log/log "➡️" game-id "Player[%s] leave game" player-id)
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :client/leave
@@ -52,6 +52,7 @@
          (string? rsa-pub)
          (string? sig)]}
   (go-try
+   (log/log "➡️" game-id "Player[%s] ready" player-id)
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :client/ready
@@ -66,6 +67,7 @@
   [game-manager game-id player-id]
   {:pre [(string? game-id)]}
   (go-try
+   (log/log "➡️" game-id "Player[%s] reconnect" player-id)
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :system/alive
@@ -79,6 +81,7 @@
   [game-manager game-id player-id]
   {:pre [(string? game-id)]}
   (go-try
+   (log/log "➡️" game-id "Player[%s] dropout" player-id)
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :system/dropout
@@ -95,7 +98,7 @@
          (string? player-id)
          (some? data)]}
   (go-try
-   ;; (log/infof "player[%s] shuffle cards" player-id)
+   (log/log "➡️" game-id "Player[%s] shuffle cards" player-id)
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :client/shuffle-cards
@@ -110,7 +113,7 @@
          (string? player-id)
          (some? data)]}
   (go-try
-   ;; (log/infof "player[%s] encrypt cards" player-id)
+   (log/log "➡️" game-id "Player[%s] encrypt cards" player-id)
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :client/encrypt-cards
@@ -125,7 +128,7 @@
          (string? player-id)
          (map? share-keys)]}
   (go-try
-   ;; (log/infof "player[%s] share keys" player-id)
+   (log/log "➡️" game-id "Player[%s] share keys" player-id)
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :client/share-keys
@@ -140,7 +143,7 @@
          (string? player-id)
          (vector? released-keys)]}
   (go-try
-   ;; (log/infof "player[%s] release keys" player-id)
+   (log/log "➡️" game-id "Player[%s] release keys" player-id)
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :client/release
@@ -155,7 +158,7 @@
          (string? player-id)
          (> amount 0)]}
   (go-try
-   ;; (log/infof "player[%s] bet" player-id)
+   (log/log "➡️" game-id "Player[%s] bet: %s" player-id amount)
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :player/bet
@@ -171,7 +174,7 @@
          (string? player-id)
          (> amount 0)]}
   (go-try
-   ;; (log/infof "player[%s] raise" player-id)
+   (log/log "➡️" game-id "Player[%s] raise: %s" player-id amount)
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :player/raise
@@ -185,7 +188,7 @@
   {:pre [(string? game-id)
          (string? player-id)]}
   (go-try
-   ;; (log/infof "player[%s] call" player-id)
+   (log/log "➡️" game-id "Player[%s] call" player-id)
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :player/call
@@ -199,7 +202,7 @@
   {:pre [(string? game-id)
          (string? player-id)]}
   (go-try
-   ;; (log/infof "player[%s] fold" player-id)
+   (log/log "➡️" game-id "Player[%s] fold" player-id)
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :player/fold
@@ -213,7 +216,7 @@
   {:pre [(string? game-id)
          (string? player-id)]}
   (go-try
-   ;; (log/infof "player[%s] check" player-id)
+   (log/log "➡️" game-id "Player[%s] check" player-id)
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :player/check

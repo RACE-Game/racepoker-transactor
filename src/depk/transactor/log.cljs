@@ -1,15 +1,19 @@
 (ns depk.transactor.log
-  (:require-macros depk.transactor.log)
   (:require
-   [taoensso.timbre :as log]
-   [clojure.string  :as str]))
-
-(log/merge-config! {:output-fn (fn [d]
-                                 (str
-                                  (.toLocaleString (js/Date.))
-                                  " "
-                                  (str/upper-case (name (:level d)))
-                                  " "
-                                  (force (:msg_ d))))})
+   [goog.string :refer [format]]))
 
 (goog-define disable-log false)
+
+(defn log
+  [icon id fmt & args]
+  (when-not disable-log
+    (let [msg (apply format
+                     (str "%s [%s] %s " fmt)
+                     (.toLocaleString (js/Date.))
+                     (if id
+                       (let [l (count id)]
+                         (subs id (- l 6) l))
+                       "GLOBAL")
+                     icon
+                     args)]
+      (println msg))))

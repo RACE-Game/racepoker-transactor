@@ -8,14 +8,15 @@
 
 (defn start-tournament-broadcast-loop
   [broadcaster opts]
-  (log/infof "🏁Start tournament broadcaster: %s" (:tournament-id opts))
-  (let [{:keys [post-msg-fn input]} broadcaster]
+  (let [{:keys [tournament-id]}     opts
+        {:keys [post-msg-fn input]} broadcaster]
+    (log/log "🎉" tournament-id "Start tournament broadcaster")
     (a/go-loop [{:keys [type data], :as event} (a/<! input)]
       (if-not event
         ;; EXIT
-        (log/infof "💤Tournament broadcast quit: %s" (:tournament-id opts))
+        (log/log "💤" tournament-id "Tournament broadcaster quit")
         (do
-          (log/infof "🔈Tournament broadcaster, event: %s" (:type event))
+          (log/log "🔈" tournament-id "broacast tournament Event[%s]" (:type event))
           (condp = type
             :system/tournament-broadcast
             (let [{:keys [state event]} data]

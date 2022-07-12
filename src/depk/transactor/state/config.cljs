@@ -1,9 +1,9 @@
 (ns depk.transactor.state.config
   (:require
    [depk.transactor.util.config :as conf]
-   [mount.core      :as mount]
+   [mount.core          :as mount]
    [depk.transactor.log :as log]
-   [clojure.string  :as str]))
+   [clojure.string      :as str]))
 
 (def env (atom :local))
 
@@ -17,7 +17,7 @@
   []
   (let [conf (conf/env)
         e    (str (name @env) "-")]
-    (log/infof "🌐Current environment: %s" @env)
+    (log/log "🌐" nil "Load configuration, current environment: %s" @env)
     (->> (for [[k v] conf]
            (if (str/starts-with? (name k) e)
              [(keyword (str/replace-first (name k) e ""))

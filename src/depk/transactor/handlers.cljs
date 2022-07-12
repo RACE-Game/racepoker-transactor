@@ -24,7 +24,7 @@
       (try
         (event-msg-handler evt)
         (catch js/Error e
-          (log/errorf "💥Error in event message handler: %s" (ex-message e))))
+          (log/log "💥" nil "Error in event message handler: %s" (ex-message e))))
       (recur (a/<! ch-chsk)))))
 
 (defmethod event-msg-handler :default
@@ -43,7 +43,6 @@
 
 (defmethod event-msg-handler :game/attach
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
-  (log/infof "🚩Attach game: %s" (take 2 uid))
   (let [[game-id player-id] uid]
     (a/go
      (if (a/<! (game/attach-game @worker-manager game-id player-id))
@@ -52,9 +51,8 @@
 
 (defmethod event-msg-handler :game/state
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
-  ;; (log/infof "Sync game state: %s" uid)
   (let [[game-id player-id] uid
-        state (game/state @worker-manager game-id)]
+        state (game/state @worker-manager game-id player-id)]
     (if (seq state)
       (?reply-fn {:result :ok,
                   :state  state})
@@ -62,7 +60,6 @@
 
 (defmethod event-msg-handler :client/leave
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
-  (log/infof "🚩Leave game: %s" (take 2 uid))
   (a/go
    (let [[game-id player-id]     uid
          {:keys [released-keys]} ?data]
@@ -71,7 +68,6 @@
 
 (defmethod event-msg-handler :client/ready
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
-  ;; (log/infof "Keep alive: %s" uid)
   (a/go
    (let [[game-id player-id rsa-pub sig] uid]
      (a/<! (game/ready @worker-manager game-id player-id rsa-pub sig))
@@ -79,7 +75,6 @@
 
 (defmethod event-msg-handler :client/shuffle-cards
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
-  ;; (log/infof "Client shuffle cards: %s" uid)
   (a/go
    (let [[game-id player-id] uid
          {:keys [data]}      ?data]
@@ -88,7 +83,6 @@
 
 (defmethod event-msg-handler :client/encrypt-cards
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
-  ;; (log/infof "Client encrypt cards: %s" uid)
   (a/go
    (let [[game-id player-id] uid
          {:keys [data]}      ?data]
@@ -97,7 +91,6 @@
 
 (defmethod event-msg-handler :client/share-keys
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
-  ;; (log/infof "Client share keys: %s" uid)
   (a/go
    (let [[game-id player-id]  uid
          {:keys [share-keys]} ?data]
@@ -106,7 +99,7 @@
 
 (defmethod event-msg-handler :player/call
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
-  (log/infof "⚽Call: %s" (take 2 uid))
+
   (a/go
    (let [[game-id player-id] uid]
      (a/<! (game/player-call @worker-manager game-id player-id))
@@ -117,13 +110,11 @@
   (a/go
    (let [[game-id player-id] uid
          {:keys [amount]}    ?data]
-     (log/infof "⚽Raise: %s %s" (take 2 uid) amount)
      (a/<! (game/player-raise @worker-manager game-id player-id amount))
      (?reply-fn {:result :ok}))))
 
 (defmethod event-msg-handler :player/check
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
-  (log/infof "⚽Check: %s" (take 2 uid))
   (a/go
    (let [[game-id player-id] uid]
      (a/<! (game/player-check @worker-manager game-id player-id))
@@ -134,13 +125,11 @@
   (a/go
    (let [[game-id player-id] uid
          {:keys [amount]}    ?data]
-     (log/infof "⚽Bet: %s %s" (take 2 uid) amount)
      (a/<! (game/player-bet @worker-manager game-id player-id amount))
      (?reply-fn {:result :ok}))))
 
 (defmethod event-msg-handler :player/fold
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
-  (log/infof "⚽Fold: %s" (take 2 uid))
   (a/go
    (let [[game-id player-id]  uid
          {:keys [share-keys]} ?data]
@@ -149,7 +138,6 @@
 
 (defmethod event-msg-handler :message/text
   [{:as ev-msg, :keys [connected-uids event id uid ?data ring-req ?reply-fn send-fn]}]
-  ;; (log/infof "Player send text message: %s" ?data)
   (let [[game-id player-id] uid
         msg {:game-id    (:game-id ?data),
              :sender     player-id,
@@ -162,7 +150,6 @@
 
 (defmethod event-msg-handler :message/sticker
   [{:as ev-msg, :keys [connected-uids event id uid ?data ring-req ?reply-fn send-fn]}]
-  ;; (log/infof "Player send sticker message: %s" uid)
   (a/go
    (let [[game-id player-id] uid
          msg {:game-id    (:game-id ?data),

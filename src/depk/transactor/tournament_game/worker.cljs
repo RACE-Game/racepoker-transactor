@@ -34,17 +34,15 @@
             (when event
               (doseq [uid   (:any @connected-uids)
                       :when (= game-id (first uid))]
-                (chsk-send! uid event))))
-
-          (log/errorf "Invalid worker message: %s" data))))))
+                (chsk-send! uid event)))))))))
 
 (defn on-worker-error
-  [x]
-  (log/errorf "💀Tournament Game worker error. %s" x))
+  [game-id x]
+  (log/log "💀" game-id "Tournament Game worker error. %s" x))
 
 (defn on-worker-exit
-  [x]
-  (log/infof "💀Tournament Game worker exit. %s" x))
+  [game-id x]
+  (log/log "💀" game-id "Tournament Game worker exit. %s" x))
 
 (defn make-worker
   [game-id opts]
@@ -65,10 +63,10 @@
                                            :players       players,
                                            :start-time    start-time})}})
                     (.on "message" on-message)
-                    (.on "error" on-worker-error)
-                    (.on "exit" on-worker-exit)
+                    (.on "error" (partial on-worker-error game-id))
+                    (.on "exit" (partial on-worker-exit game-id))
                     (.ref))]
-    (log/infof "📯Spawn tournament game worker. %s # %s" tournament-id game-id)
+    (log/log "📯" game-id "Spawn tournament game worker")
     {:worker   worker,
      :snapshot snapshot}))
 

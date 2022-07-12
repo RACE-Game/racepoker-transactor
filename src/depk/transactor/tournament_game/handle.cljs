@@ -17,7 +17,7 @@
 
 (defn make-game-handle
   [game-id players size start-time post-msg-fn]
-  (log/infof "🏁Create game handle for game: %s" game-id)
+  (log/log "🎉" game-id "Create game handle")
   (a/go
    (let [game-account-state {:players         players,
                              :start-time      start-time,
@@ -54,7 +54,7 @@
      (event/start-component event-loop opts)
      (event/start-component broadcaster opts)
 
-     (log/infof "🏁Game handle started")
+     (log/log "🎉" game-id "Game handle started")
      (->TournamentGameHandle event-bus
                              submitter
                              broadcaster

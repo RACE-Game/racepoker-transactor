@@ -18,12 +18,14 @@
 ;; system/sync-state
 ;; receiving this event when game account reflect there's an update from onchain state
 (defmethod handle-event :system/sync-state
-  [{:keys [status], :as state}
+  [{:keys [status game-id], :as state}
    {{:keys [game-account-state]} :data, :as event}]
 
-  (log/infof "✨New game account state, buyin-serial: %s -> %s"
-             (get-in state [:game-account-state :buyin-serial])
-             (:buyin-serial game-account-state))
+  (log/log "📦"
+           game-id
+           "Receive new game account state, %s -> %s"
+           (get-in state [:game-account-state :buyin-serial])
+           (:buyin-serial game-account-state))
 
   (when (<= (:buyin-serial game-account-state)
             (get-in state [:game-account-state :buyin-serial]))
@@ -56,9 +58,9 @@
         (misc/reserve-timeout))))
 
 (defmethod handle-event :system/resit-table
-  [{:keys [], :as state}
+  [{:keys [game-id], :as state}
    {{:keys [resit-map]} :data, :as event}]
-  (log/infof "✨Received resit notification from tournament reconciler: %s" resit-map)
+  (log/log "🪑" game-id "Receive re-sit notification: %s" (prn-str resit-map))
   (-> state
       (assoc :resit-map resit-map)
       (assoc :status :game-status/init)))
@@ -67,7 +69,6 @@
 ;; receiving this event for reset states
 (defmethod handle-event :system/reset
   [{:keys [player-map], :as state} event]
-  ;; (log/infof "Reset, player-map: %s" player-map)
   (-> state
       (misc/remove-eliminated-players)
       (misc/reset-sng-state)
@@ -87,18 +88,21 @@
 ;; - generate a default deck of cards
 ;; - ask the first player (BTN) to shuffle the cards.
 (defmethod handle-event :system/start-game
-  [{:keys [status player-map game-type size start-time game-account-state halt?], :as state}
+  [{:keys [status player-map game-type size start-time game-account-state halt? game-id], :as state}
    event]
 
   (when-not (= :game-status/init status)
     (misc/invalid-game-status! state event))
 
-  (log/infof "🎰Start game[%s / %s], number of players: %s"
-             (str game-type)
-             size
-             (count player-map))
+  (log/log "🕹️"
+           game-id
+           "Start game, %s, number of players: %s / %s"
+           (name game-type)
+           (count player-map)
+           size)
+
   (doseq [[id p] player-map]
-    (log/infof "🎰-%s %s" id (:online-status p)))
+    (log/log "😀" game-id "-%s %s" id (name (:online-status p))))
 
   (cond
 
@@ -108,7 +112,7 @@
 
     halt?
     (do
-      (log/infof "🛑Game halted.")
+      (log/log "🛑" game-id "Can not start, halted")
       (-> state
           (misc/dispatch-reset)))
 
@@ -116,7 +120,7 @@
     ;; Require further alive event from the only client
     (= (count player-map) 1)
     (do
-      (log/infof "🛑No enough players to start")
+      (log/log "🛑" game-id "Can not start, no enough players")
       (-> state
           (misc/dispatch-reset)))
 
@@ -125,7 +129,7 @@
     ;; Waiting a player to join
     (zero? (count player-map))
     (do
-      (log/infof "🛑No players to start")
+      (log/log "🛑" game-id "Can not start, no player")
       (-> state
           (misc/dispatch-reset)))
 
@@ -140,7 +144,7 @@
          (or (not (every? #(= :normal (:online-status %)) (vals player-map)))
              (< (count player-map) size)))
     (do
-      (log/infof "🚧No enough ready players for SNG/Bonus game.")
+      (log/log "🛑" game-id "Can not start, no enough ready players(SNG)")
       (-> state
           (misc/dispatch-reset)))
 
@@ -150,7 +154,7 @@
          (every? #(not= :normal (:online-status %)) (vals player-map))
          (= :in-progress (:status game-account-state)))
     (do
-      (log/infof "🛑All players are not ready (SNG)")
+      (log/log "🛑" game-id "Can not start, no one is ready(SNG)")
       (-> state
           (misc/dispatch-reset)))
 
@@ -162,7 +166,7 @@
     (and (= :cash game-type)
          (not (every? #(= :normal (:online-status %)) (vals player-map))))
     (do
-      (log/infof "🛑Not all players are ready")
+      (log/log "🛑" game-id "Can not start, some one is not ready(Cash)")
       (-> state
           (misc/dispatch-reset)))
 
@@ -172,14 +176,14 @@
     (and (= :tournament game-type)
          (= (count player-map) 1))
     (do
-      (log/infof "🛑No enough players to start")
+      (log/log "🛑" game-id "Can not start, one player left(Tournament)")
       (-> state
           (misc/dispatch-reset)))
 
     (and (= :tournament game-type)
          (every? #(not= :normal (:online-status %)) (vals player-map)))
     (do
-      (log/infof "🛑Need at least one ready player to start")
+      (log/log "🛑" game-id "Can not start, no one is ready(Tournament)")
       (-> state
           (misc/dispatch-reset)))
 
@@ -195,7 +199,7 @@
                                (#{:sng :bonus} game-type))
                         (.getTime (js/Date.))
                         start-time)]
-       (log/infof "🔘Start game, BTN: %s" next-btn)
+       (log/log "🔥" game-id "Start game, BTN position: %s" next-btn)
        (-> state
            (assoc :start-time start-time)
            (assoc :btn next-btn)
@@ -289,7 +293,7 @@
 ;; client/share-keys
 ;; receiving this event when player share its keys.
 (defmethod handle-event :client/share-keys
-  [{:keys [status after-key-share], :as state}
+  [{:keys [status after-key-share game-id], :as state}
    {{:keys [share-keys]} :data,
     player-id :player-id,
     :as       event}]
@@ -309,27 +313,27 @@
     (cond
       (seq (misc/list-missing-key-idents new-state))
       (do
-        (log/infof "🔑Wait more keys")
+        (log/log "🔑" game-id "Wait more keys")
         (-> new-state
             (misc/dispatch-key-share-timeout)))
 
       (= :settle after-key-share)
       (do
-        (log/infof "🔑Settle showdown")
+        (log/log "🔑" game-id "Key share complete, settle: SHOWDOWN")
         (-> new-state
             (assoc :street :street/showdown)
             (misc/settle :showdown)))
 
       (= :init-street after-key-share)
       (do
-        (log/infof "🔑Next street")
+        (log/log "🔑" game-id "Key share complete, go next street")
         (-> new-state
             (assoc :status :game-status/play)
             (misc/next-state)))
 
       (= :runner after-key-share)
       (do
-        (log/infof "🔑Settle runner")
+        (log/log "🔑" game-id "Key share complete, settle: RUNNER")
         (-> new-state
             (assoc :street :street/showdown)
             (misc/settle :runner)))
@@ -342,7 +346,7 @@
 ;; Players who did not provide their keys, will be marked as dropout.
 ;; If it's the first time for key sharing, cancel current game
 (defmethod handle-event :system/key-share-timeout
-  [{:keys [status street after-key-share], :as state}
+  [{:keys [status street after-key-share game-id], :as state}
    {{:keys [share-keys]} :data,
     player-id :player-id,
     :as       event}]
@@ -351,7 +355,7 @@
     (misc/invalid-game-status! state event))
 
   (let [missing-key-idents (misc/list-missing-key-idents state)]
-    (log/debugf "🔒️Missing key idents: %s" missing-key-idents)
+    (log/log "🔒️" game-id "Key share timeout, missing: %s" missing-key-idents)
     (let [timeout-player-ids (map first missing-key-idents)]
       (-> state
           (misc/mark-dropout-players timeout-player-ids)
@@ -362,12 +366,14 @@
 ;; Players who did not complete their task, will be marked as dropout.
 ;; The game will turn back to init state, since it failed to start in case.
 (defmethod handle-event :system/shuffle-timeout
-  [{:keys [status shuffle-player-id], :as state}
+  [{:keys [status shuffle-player-id game-id], :as state}
    {player-id :player-id,
     :as       event}]
 
   (when-not (= :game-status/shuffle status)
     (misc/invalid-game-status! state event))
+
+  (log/log "🔒️" game-id "Player[%s] shuffle timeout" shuffle-player-id)
 
   (-> state
       (misc/mark-dropout-players [shuffle-player-id])
@@ -378,12 +384,14 @@
 ;; Players who did not complete their task, will be marked as dropout.
 ;; The game will turn back to init state, since it failed to start in case.
 (defmethod handle-event :system/encrypt-timeout
-  [{:keys [status encrypt-player-id], :as state}
+  [{:keys [status encrypt-player-id game-id], :as state}
    {player-id :player-id,
     :as       event}]
 
   (when-not (= :game-status/encrypt status)
     (misc/invalid-game-status! state event))
+
+  (log/log "🔒️" game-id "Player[%s] encrypt timeout" encrypt-player-id)
 
   (-> state
       (misc/mark-dropout-players [encrypt-player-id])
@@ -391,12 +399,14 @@
 
 ;; system/player-action-timeout
 (defmethod handle-event :system/player-action-timeout
-  [{:keys [status action-player-id], :as state}
+  [{:keys [status action-player-id game-id], :as state}
    {{:keys [share-keys]} :data,
     :as event}]
 
   (when-not (= :game-status/play status)
     (misc/invalid-game-status! state event))
+
+  (log/log "🔒️" game-id "Player[%s] action timeout" action-player-id)
 
   (-> state
       (assoc-in [:player-map action-player-id :status] :player-status/fold)
@@ -407,7 +417,7 @@
 ;; client/ready
 ;; A event received when a client is ready to start
 (defmethod handle-event :client/ready
-  [{:keys [status player-map winner-id rsa-pub-map sig-map], :as state}
+  [{:keys [status player-map winner-id rsa-pub-map sig-map game-id], :as state}
    {player-id :player-id,
     {:keys [rsa-pub sig]} :data,
     :as       event}]
@@ -421,10 +431,6 @@
   (when (and (get rsa-pub-map player-id)
              (or (not= (get rsa-pub-map player-id) rsa-pub)
                  (not= (get sig-map player-id) sig)))
-    ;; (println rsa-pub-map)
-    ;; (println rsa-pub)
-    ;; (println sig-map)
-    ;; (println sig)
     (misc/cant-update-rsa-pub! state event))
 
   (when (or (not player-id)
@@ -436,7 +442,7 @@
 
   (when winner-id (misc/sng-finished! state event))
 
-  (log/infof "✅Player ready: %s" player-id)
+  (log/log "✅" game-id "Player[%s] send ready" player-id)
 
   (-> state
       (assoc-in [:player-map player-id :online-status] :normal)
@@ -448,7 +454,7 @@
 ;; A event received when a client dropout its connection
 ;; All client whiout this event will be kicked when game start
 (defmethod handle-event :system/dropout
-  [{:keys [status player-map game-type size], :as state}
+  [{:keys [player-map game-id], :as state}
    {player-id :player-id,
     :as       event}]
 
@@ -456,7 +462,7 @@
             (not (get player-map player-id)))
     (misc/invalid-player-id! state event))
 
-  (log/infof "💔️Player dropout: %s" player-id)
+  (log/log "💔️" game-id "Player[%s] drop off")
 
   (let [player-map (assoc-in player-map [player-id :online-status] :dropout)]
     (-> state
@@ -467,7 +473,7 @@
 ;; A event received when a client established
 ;; This command only work during the game.
 (defmethod handle-event :system/alive
-  [{:keys [status player-map], :as state}
+  [{:keys [status player-map game-id], :as state}
    {player-id :player-id,
     :as       event}]
 
@@ -478,7 +484,7 @@
   (when (#{:game-status/init} status)
     (misc/invalid-game-status! state event))
 
-  (log/infof "❤️Player alive: %s" player-id)
+  (log/log game-id "Player[%s] alive by reconnect" player-id)
 
   (let [player-map (assoc-in player-map [player-id :online-status] :normal)]
     (-> state
@@ -493,7 +499,7 @@
 ;; 2. Game is not running
 ;; Send a claim transaction for player
 (defmethod handle-event :client/leave
-  [{:keys [status action-player-id game-type start-time state-id player-map], :as state}
+  [{:keys [status action-player-id game-type start-time game-id player-map], :as state}
    {{:keys [released-keys]} :data,
     player-id :player-id,
     :as       event}]
@@ -522,16 +528,18 @@
 
       ;; Game is not running, can leave immetdiately
       (#{:game-status/init :game-status/settle :game-status/showdown} status)
-      (do (log/infof "⏪️Player leave: %s" player-id)
+      (do (log/log "⏪️" game-id "Player[%s] leave" player-id)
           (-> new-state
               (misc/dispatch-reset)))
 
       ;; The last player will win immediately
       (= 1 (count remain-players))
       (do
-        (log/infof "⏪️Player leave: %s. The left player win: %s"
-                   player-id
-                   (:player-id (first remain-players)))
+        (log/log "⏪️"
+                 game-id
+                 "Player[%s] leave, the left Player[%s] win"
+                 player-id
+                 (first remain-players))
         (misc/single-player-win new-state (:player-id (first remain-players))))
 
       ;; Can't leave during key-share
@@ -541,7 +549,7 @@
       ;; Game is running, calculate next state
       :else
       (do
-        (log/infof "⏪️player leave: %s. Game continue." player-id)
+        (log/log "⏪️" game-id "Player[%s] leave, game continue" player-id)
         (cond-> (-> new-state
                     (update :released-keys-map assoc player-id released-keys))
 

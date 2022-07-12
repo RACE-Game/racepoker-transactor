@@ -116,7 +116,7 @@
                     (conj {:type :system/submit-start-tournament,
                            :data {}}))]
 
-    (log/infof "🌠Start tournament, creating %s tables" num-games)
+    (log/log "🌠" tournament-id "Start tournament, creating %s tables" num-games)
     [new-state evts]))
 
 (defmulti apply-event
@@ -203,8 +203,8 @@
     (update ctx :state assoc :ranks new-ranks)))
 
 (defn resit-players
-  [{:keys [state], :as ctx}]
-  (let [{:keys [games size updated-game-id]} state
+  [{:keys [state updated-game-id], :as ctx}]
+  (let [{:keys [games size tournament-id]} state
         sorted-games (sort-by count-game-players games)
         resit-game (first sorted-games)
 
@@ -230,7 +230,7 @@
                          (assoc games idx new-game)
                          (inc idx)
                          resit-map))))))]
-    (log/infof "🌠Resit players: %s" resit-map)
+    (log/log "🌠" tournament-id "Re-sit players: %s" (prn-str resit-map))
     (if (seq resit-map)
       (-> ctx
           (update :state assoc :games new-games)
@@ -243,9 +243,7 @@
     (cond
       ;; Final table
       (= 1 (count games))
-      (do
-        (log/infof "🌠Playing on final table")
-        ctx)
+      ctx
 
       ;; Try merge into normal tables
       :else
@@ -253,9 +251,9 @@
 
 (defn maybe-settle
   [{:keys [state], :as ctx}]
-  (let [{:keys [ranks]} state
-        alive-players   (filter #(> (:chips %) (js/BigInt 0)) ranks)]
-    (log/infof "🐻Alive users: %s" (count alive-players))
+  (let [{:keys [ranks tournament-id]} state
+        alive-players (filter #(> (:chips %) (js/BigInt 0)) ranks)]
+    (log/log "🐻" tournament-id "Alive players: %s" (count alive-players))
     (if (= 1 (count alive-players))
       (-> ctx
           (update :state assoc :status :completed)
@@ -311,25 +309,26 @@
 
          ;; Trigger start event after timeout
          (let [secs (- start-time current-time)]
-           (log/infof "🌠Schedule tournament starting after %s seconds" secs)
+           (log/log "🌠" tournament-id "Schedule tournament starting after %s seconds" secs)
            (a/<! (a/timeout (* 1000 secs)))
            (a/>! input {:type :system/start-tournament})))
        (a/<! (a/timeout 60000))
        (a/>! input {:type :system/start-tournament-games}))
       (do
-        (log/error "🌠Tournament already completed")
+        (log/log "🌠" tournament-id "Tournament already completed")
         (a/close! input))))
 
   (a/go-loop [state init-state]
     (if-let [evt (a/<! input)]
       (let [[new-state evts] (apply-event state evt)]
-        (log/infof "🌠Tournament reconciler received event: %s" (:type evt))
-        (log/infof "🌠Tournament reconciler emits event: %s" (mapv (comp :type :data) evts))
+        (log/log "🌠" tournament-id "Tournament reconciler received event: %s" (:type evt))
+        (log/log "🌠" tournament-id
+                 "Tournament reconciler emits event: %s" (mapv (comp :type :data) evts))
         (a/<! (a/onto-chan! output evts false))
         (when-not (= :completed (:status new-state))
           (recur new-state)))
       (do
-        (log/infof "💤️Reconciler quit for tournament[%s]" tournament-id)
+        (log/log "💤️" tournament-id "Reconciler quit")
         (a/close! output)))))
 
 (defrecord TournamentReconciler [input output game-map ranks])
@@ -344,8 +343,8 @@
    #{:system/tournament-game-settle
      :system/sync-tournament-state})
  event-p/IComponent
- (-start [this opts]
-   (log/infof "🏁Start reconciler for tournament[%s]" (:tournament-id opts))
+ (-start [this {:keys [tournament-id], :as opts}]
+   (log/log "🎉" tournament-id "Start tournament reconciler")
    (start-reconciler this opts)))
 
 (defn make-tournament-reconciler

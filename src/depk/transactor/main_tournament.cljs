@@ -16,7 +16,7 @@
          _ (u/register-global-error-handler! (str "Tournament " tournament-id))
          _ (use-env env)
          _ (mount/start #'depk.transactor.state.config/config)
-         _ (log/infof "👷Starting worker thread: %s" tournament-id)
+         _ (log/log "👷" tournament-id "Starting worker thread")
          ;; Function passed to broadcaster, to collect SSE
          post-msg-fn (fn [data]
                        (let [s (u/transit-write data)]

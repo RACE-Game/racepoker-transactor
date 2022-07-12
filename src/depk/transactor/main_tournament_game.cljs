@@ -14,8 +14,7 @@
    (let [params      (u/transit-read (aget workerData "params"))
          {:keys [game-id tournament-id players size start-time env]} params
          _ (u/register-global-error-handler! (str "Tournament game " tournament-id "#" game-id))
-         _ (log/infof "👷Starting tournament game worker thread: %s # %s" tournament-id game-id)
-         _ (log/infof "👷Worker params: %s" params)
+         _ (log/log "👷" game-id "Start tournament game worker thread: %s" (prn-str params))
          _ (use-env env)
          _ (mount/start #'depk.transactor.state.config/config)
          ;; Function passed to broadcaster, to collect SSE
