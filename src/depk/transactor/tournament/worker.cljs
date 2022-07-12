@@ -48,7 +48,7 @@
 
 
             ;; Update the pseudo game-account-state
-            (:system/next-game :system/resit-table)
+            (:system/next-game :system/resit-table :system/sync-state)
             (let [{:keys [game-id]} data]
               (tournament-game/send-tournament-event
                @worker-manager

@@ -171,6 +171,8 @@
   3. For the updated table, if not being cancelled, notify the next game."
   [{:keys [state updated-game-id resit-map resit-game-id], :as ctx}]
   (let [updated-game (get-game state updated-game-id)
+        sync-state-game-ids (remove #{updated-game-id} (vals resit-map))
+        finish?      (= 1 (count (filter #(> (:chips %) (js/BigInt 0)) (:ranks state))))
         events       (cond-> [
                               ;; Refresh the state snapshot
                               {:type :system/tournament-broadcast,
@@ -181,14 +183,25 @@
                        (conj {:type :system/tournament-broadcast,
                               :data {:event {:type :system/next-game,
                                              :data {:game-id            updated-game-id,
-                                                    :game-account-state updated-game}}}})
+                                                    :game-account-state updated-game,
+                                                    :finish?            finish?}}}})
 
                        ;; Notify game to resit
                        (seq resit-map)
                        (conj {:type :system/tournament-broadcast,
                               :data {:event {:type :system/resit-table,
                                              :data {:game-id   resit-game-id,
-                                                    :resit-map resit-map}}}}))]
+                                                    :resit-map resit-map,
+                                                    :finish?   true}}}})
+
+                       ;; Tell other games new players are coming
+                       sync-state-game-ids
+                       (into (map (fn [gid]
+                                    {:type :system/tournament-broadcast,
+                                     :data {:event {:type :system/sync-state,
+                                                    :data {:game-account-state (get-game state gid),
+                                                           :game-id            gid}}}})
+                                  sync-state-game-ids)))]
     (update ctx :events into events)))
 
 (defn update-ranks
@@ -323,7 +336,7 @@
       (let [[new-state evts] (apply-event state evt)]
         (log/log "🌠" tournament-id "Tournament reconciler received event: %s" (:type evt))
         (log/log "🌠" tournament-id
-                 "Tournament reconciler emits event: %s" (mapv (comp :type :data) evts))
+                 "Tournament reconciler emits event: %s" (mapv (comp :type :event :data) evts))
         (a/<! (a/onto-chan! output evts false))
         (when-not (= :completed (:status new-state))
           (recur new-state)))

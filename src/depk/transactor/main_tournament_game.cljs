@@ -27,4 +27,6 @@
      (.on parentPort
           "message"
           (fn [data]
-            (handle/send-event handle (u/transit-read data)))))))
+            (if data
+              (handle/send-event handle (u/transit-read data))
+              (handle/shutdown handle)))))))

@@ -28,3 +28,8 @@
   [worker-manager game-id event]
   (let [worker (manager/find-worker worker-manager game-id)]
     (worker/send-event worker event)))
+
+(defn shutdown
+  [worker-manager game-id]
+  (let [worker (manager/find-worker worker-manager game-id)]
+    (worker/shutdown worker)))

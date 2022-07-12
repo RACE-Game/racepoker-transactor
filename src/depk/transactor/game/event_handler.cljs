@@ -43,19 +43,26 @@
 
 (defmethod handle-event :system/next-game
   [{:keys [status], :as state}
-   {{:keys [game-account-state]} :data, :as event}]
-
-  (if (#{:game-status/showdown :game-status/settle} status)
-    ;; Reset status to init, then dispatch a reset.
-    (-> state
-        (assoc :halt? false)
-        (assoc :status :game-status/init)
-        (misc/merge-sync-state game-account-state)
-        (misc/dispatch-reset))
-    ;; Just merge game-account-state
-    (-> state
-        (misc/merge-sync-state game-account-state)
-        (misc/reserve-timeout))))
+   {{:keys [game-account-state finish?]} :data, :as event}]
+  (-> state
+      (assoc :halt? false)
+      (assoc :status :game-status/init)
+      ;; TODO improve?
+      (misc/merge-sync-state game-account-state)
+      (misc/remove-eliminated-players)
+      (misc/reset-sng-state)
+      (misc/submit-non-alive-players)
+      (misc/remove-non-alive-players)
+      (misc/add-joined-player)
+      (misc/reset-player-map-status)
+      (misc/increase-blinds)            ; For SNG & Tournament
+      (misc/dispatch-start-game)
+      (misc/reset-game-state)
+      (cond->
+        finish?
+        (assoc :player-map  {}
+               :rsa-pub-map {}
+               :sig-map     {}))))
 
 (defmethod handle-event :system/resit-table
   [{:keys [game-id], :as state}
@@ -63,7 +70,11 @@
   (log/log "🪑" game-id "Receive re-sit notification: %s" (prn-str resit-map))
   (-> state
       (assoc :resit-map resit-map)
-      (assoc :status :game-status/init)))
+      (assoc :status :game-status/init)
+      ;; Remove all players
+      (assoc :player-map  {}
+             :rsa-pub-map {}
+             :sig-map     {})))
 
 ;; system/reset
 ;; receiving this event for reset states
@@ -77,8 +88,8 @@
       (misc/add-joined-player)
       (misc/reset-player-map-status)
       (misc/increase-blinds)            ; For SNG & Tournament
-      (misc/reset-game-state)
-      (misc/dispatch-start-game)))
+      (misc/dispatch-start-game)
+      (misc/reset-game-state)))
 
 ;; system/start-game
 ;; Receiving this event to trigger game start.
@@ -462,7 +473,7 @@
             (not (get player-map player-id)))
     (misc/invalid-player-id! state event))
 
-  (log/log "💔️" game-id "Player[%s] drop off")
+  (log/log "💔️" game-id "Player[%s] drop off" player-id)
 
   (let [player-map (assoc-in player-map [player-id :online-status] :dropout)]
     (-> state
@@ -484,7 +495,7 @@
   (when (#{:game-status/init} status)
     (misc/invalid-game-status! state event))
 
-  (log/log game-id "Player[%s] alive by reconnect" player-id)
+  (log/log "❤️" game-id "Player[%s] alive by reconnect" player-id)
 
   (let [player-map (assoc-in player-map [player-id :online-status] :normal)]
     (-> state

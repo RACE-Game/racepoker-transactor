@@ -20,7 +20,7 @@
   (log/log "🎉" game-id "Create game handle")
   (a/go
    (let [game-account-state {:players         players,
-                             :start-time      start-time,
+                             :start-time      (+ 60000 start-time),
                              :game-type       :tournament,
                              :buyin-serial    1,
                              :settle-serial   1,
@@ -63,3 +63,7 @@
 (defn send-event
   [game-handle event]
   (event/send (:event-bus game-handle) event))
+
+(defn shutdown
+  [game-handle]
+  (event/shutdown (:event-bus game-handle)))

@@ -4,9 +4,11 @@
 
 (goog-define disable-log false)
 
+(def log-ignore-tags #{"➡️" "🔈"})
+
 (defn log
-  [icon id fmt & args]
-  (when-not disable-log
+  [tag id fmt & args]
+  (when-not (or disable-log (log-ignore-tags tag))
     (let [msg (apply format
                      (str "%s [%s] %s " fmt)
                      (.toLocaleString (js/Date.))
@@ -14,6 +16,6 @@
                        (let [l (count id)]
                          (subs id (- l 6) l))
                        "GLOBAL")
-                     icon
+                     tag
                      args)]
       (println msg))))

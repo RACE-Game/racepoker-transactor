@@ -424,6 +424,7 @@
   (-> state
       (merge
        {:status             :game-status/init,
+        :joined-players     nil
         :released-keys-map  nil,
         :street             nil,
         :card-ciphers       [],
@@ -485,12 +486,22 @@
              (and all-ready?
                   (= (count player-map) size))))))
 
+(defn wait-longer-to-start?
+  [{:keys [joined-players]}]
+  (seq (filter some? joined-players)))
+
 (defn dispatch-start-game
   [state & [start-delay]]
   (-> state
       (assoc :dispatch-event
              [(cond
                 start-delay start-delay
+
+                (wait-longer-to-start? state)
+                (do
+                  (log/log "⏳" (:game-id state) "Wait %s ms to start" c/long-start-game-delay)
+                  c/long-start-game-delay)
+
                 (can-quick-start? state) c/continue-start-game-delay
                 :else c/default-start-game-delay)
               (m/make-event :system/start-game state {})])))
@@ -672,7 +683,7 @@
                                ;; It's possible to have no reminder player id
                                ;; In this case, we use the first player id
                                (ffirst player-map))
-        _ (log/log "🍀" game-id "Player[%s] takes the undividable chips" reminder-player-id)
+        _ (log/log "🍀" game-id "Player[%s] will take the undividable chips" reminder-player-id)
         prize-map          (update prize-map
                                    reminder-player-id
                                    (fnil +
@@ -1264,8 +1275,8 @@
 
 (defn next-state
   [{:keys [game-id], :as state}]
-  (let [[c v :as x] (next-state-case state)]
-    (log/log "💡" game-id "Next state: %s %s" c v)
+  (let [[c v] (next-state-case state)]
+    (log/log "💡" game-id "Next state: %s %s" c (or v ""))
     (case c
       :terminate         (terminate state v)
       :blind-bets        (blind-bets state)
@@ -1291,8 +1302,7 @@
       (-> state
           (assoc :player-map
                  (merge (m/players->player-map joined-players)
-                        player-map))
-          (assoc :joined-players nil))
+                        player-map)))
       state)))
 
 (defn merge-sync-state
@@ -1306,7 +1316,7 @@
                                        (when (< old-buyin-serial (:buyin-serial p))
                                          p))))]
 
-    (log/log "😀" game-id "Joined players: %s" (map :pubkey joined-players))
+    (log/log "😀" game-id "Players in new state: %s" (map :pubkey joined-players))
 
     (-> state
         (assoc :game-account-state game-account-state)

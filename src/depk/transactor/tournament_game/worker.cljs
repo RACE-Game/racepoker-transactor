@@ -77,8 +77,7 @@
 
 (defn shutdown
   [worker]
-  (.postMessage ^js (:worker worker)
-                #js {:type "shutdown"}))
+  (.postMessage ^js (:worker worker) nil))
 
 (defn get-snapshot
   [worker]
