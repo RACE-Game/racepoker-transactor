@@ -43,7 +43,7 @@
 
 (defmethod handle-event :system/next-game
   [{:keys [status], :as state}
-   {{:keys [game-account-state finish?]} :data, :as event}]
+   {{:keys [game-account-state finish? timestamp]} :data, :as event}]
   (-> state
       (assoc :halt? false)
       (assoc :status :game-status/init)
@@ -55,7 +55,7 @@
       (misc/remove-non-alive-players)
       (misc/add-joined-player)
       (misc/reset-player-map-status)
-      (misc/increase-blinds)            ; For SNG & Tournament
+      (misc/increase-blinds timestamp)            ; For SNG & Tournament
       (misc/dispatch-start-game)
       (misc/reset-game-state)
       (cond->
@@ -79,7 +79,8 @@
 ;; system/reset
 ;; receiving this event for reset states
 (defmethod handle-event :system/reset
-  [{:keys [player-map], :as state} event]
+  [{:keys [player-map], :as state}
+   {:keys [timestamp], :as event}]
   (-> state
       (misc/remove-eliminated-players)
       (misc/reset-sng-state)
@@ -87,7 +88,7 @@
       (misc/remove-non-alive-players)
       (misc/add-joined-player)
       (misc/reset-player-map-status)
-      (misc/increase-blinds)            ; For SNG & Tournament
+      (misc/increase-blinds timestamp)            ; For SNG & Tournament
       (misc/dispatch-start-game)
       (misc/reset-game-state)))
 
@@ -100,7 +101,7 @@
 ;; - ask the first player (BTN) to shuffle the cards.
 (defmethod handle-event :system/start-game
   [{:keys [status player-map game-type size start-time game-account-state halt? game-id], :as state}
-   event]
+   {:keys [timestamp], :as event}]
 
   (when-not (= :game-status/init status)
     (misc/invalid-game-status! state event))
@@ -208,7 +209,7 @@
                           (encrypt/ciphers->hex))
            start-time (if (and (nil? start-time)
                                (#{:sng :bonus} game-type))
-                        (.getTime (js/Date.))
+                        timestamp
                         start-time)]
        (log/log "🔥" game-id "Start game, BTN position: %s" next-btn)
        (-> state

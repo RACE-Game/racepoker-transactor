@@ -398,10 +398,10 @@
     (assoc state :player-map new-player-map)))
 
 (defn increase-blinds
-  [{:keys [base-sb base-bb game-type start-time game-id], :as state}]
+  [{:keys [base-sb base-bb game-type start-time game-id], :as state} timestamp]
   (if (and (#{:sng :tournament} game-type)
            start-time)
-    (let [cnt    (int (/ (- (.getTime (js/Date.)) start-time)
+    (let [cnt    (int (/ (- timestamp start-time)
                          c/increase-blinds-interval))
           blinds (nth c/blinds-structure cnt (last c/blinds-structure))
           sb     (/ (* (js/BigInt (first blinds)) base-sb) (js/BigInt 50))

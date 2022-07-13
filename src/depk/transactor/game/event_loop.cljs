@@ -157,7 +157,10 @@
             records []]
     (if-let [event (<! (take-event input state))]
       (if (event-list (:type event))
-        (let [old-state state
+        (let [
+              ;; Set current time as timestamp
+              event     (assoc event :timestamp (.getTime (js/Date.)))
+              old-state state
               {:keys [result state api-requests dispatch-event error]}
               (<! (handle-event state event))]
 
