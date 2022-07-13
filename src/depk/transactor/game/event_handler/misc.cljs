@@ -401,14 +401,14 @@
   [{:keys [base-sb base-bb game-type start-time game-id], :as state}]
   (if (and (#{:sng :tournament} game-type)
            start-time)
-    (let [cnt (js/BigInt
-               (inc (int (/ (- (.getTime (js/Date.)) start-time)
-                            c/increase-blinds-interval))))
-          sb  (* base-sb cnt)
-          bb  (* base-bb cnt)]
+    (let [cnt    (int (/ (- (.getTime (js/Date.)) start-time)
+                         c/increase-blinds-interval))
+          blinds (nth c/blinds-structure cnt (last c/blinds-structure))
+          sb     (/ (* (js/BigInt (first blinds)) base-sb) (js/BigInt 50))
+          bb     (/ (* (js/BigInt (second blinds)) base-sb) (js/BigInt 50))]
       (log/log "🌶️"
                game-id
-               "Maintain blinds, start-time: %s count: % sb: %s bb: %s"
+               "Maintain blinds, start-time: %s count: %s sb: %s bb: %s"
                start-time
                cnt
                sb
@@ -424,7 +424,7 @@
   (-> state
       (merge
        {:status             :game-status/init,
-        :joined-players     nil
+        :joined-players     nil,
         :released-keys-map  nil,
         :street             nil,
         :card-ciphers       [],

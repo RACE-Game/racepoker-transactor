@@ -229,7 +229,7 @@
                                   (into {} (update p :pubkey str))))))]
     (-> game-account-state
         (update :players parse-players)
-        (select-keys [:players :buyin-serial :settle-serial]))))
+        (select-keys [:name :game-type :players :buyin-serial :settle-serial]))))
 
 (defn parse-raw-mint-info
   [mint-info]

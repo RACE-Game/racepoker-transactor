@@ -35,7 +35,7 @@
                                    :chips  init-chips}))))]
     (-> tournament-account-state
         (update :ranks parse-players)
-        (select-keys [:ranks :buyin-serial :settle-serial :start-time :status]))))
+        (select-keys [:name :ranks :buyin-serial :settle-serial :start-time :status]))))
 
 (defn make-tournament-state
   [tournament-id tournament-account-state]
