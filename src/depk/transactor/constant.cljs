@@ -15,6 +15,10 @@
 (def reset-timeout-delay 1000)
 (def sng-next-game-timeout-delay 30000)
 (def max-drop-count 2)
+(def tournament-start-delay
+  (if goog.DEBUG
+    (* 5 1000)
+    (* 60 1000)))
 
 (def increase-blinds-interval (* 5 60 1000))
 (def shutdown-game-delay 5000)

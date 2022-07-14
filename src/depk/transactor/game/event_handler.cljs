@@ -35,47 +35,6 @@
       (misc/merge-sync-state game-account-state)
       (misc/reserve-timeout)))
 
-(defmethod handle-event :system/start-tournament-game
-  [state event]
-  (-> state
-      (assoc :halt? false)
-      (misc/reserve-timeout)))
-
-(defmethod handle-event :system/next-game
-  [{:keys [status], :as state}
-   {{:keys [game-account-state finish? timestamp]} :data, :as event}]
-  (-> state
-      (assoc :halt? false)
-      (assoc :status :game-status/init)
-      ;; TODO improve?
-      (misc/merge-sync-state game-account-state)
-      (misc/remove-eliminated-players)
-      (misc/reset-sng-state)
-      (misc/submit-non-alive-players)
-      (misc/remove-non-alive-players)
-      (misc/add-joined-player)
-      (misc/reset-player-map-status)
-      (misc/increase-blinds timestamp)            ; For SNG & Tournament
-      (misc/dispatch-start-game)
-      (misc/reset-game-state)
-      (cond->
-        finish?
-        (assoc :player-map  {}
-               :rsa-pub-map {}
-               :sig-map     {}))))
-
-(defmethod handle-event :system/resit-table
-  [{:keys [game-id], :as state}
-   {{:keys [resit-map]} :data, :as event}]
-  (log/log "🪑" game-id "Receive re-sit notification: %s" (prn-str resit-map))
-  (-> state
-      (assoc :resit-map resit-map)
-      (assoc :status :game-status/init)
-      ;; Remove all players
-      (assoc :player-map  {}
-             :rsa-pub-map {}
-             :sig-map     {})))
-
 ;; system/reset
 ;; receiving this event for reset states
 (defmethod handle-event :system/reset
@@ -742,3 +701,59 @@
                          :amount    amount})
           (assoc :overwrite-this-event (if allin? :player/allin :player/raise))
           (misc/next-state)))))
+
+;;; Tournament specific
+
+(defmethod handle-event :system/start-tournament-game
+  [state event]
+  (-> state
+      (assoc :halt? false)
+      (misc/reserve-timeout)))
+
+;; :system/next-game & :system/resit-table
+;; are the replacements for reset in TOURNAMENT
+
+(defmethod handle-event :system/next-game
+  [{:keys [status], :as state}
+   {{:keys [game-account-state finish?]} :data,
+    timestamp :timestamp,
+    :as       event}]
+  (-> state
+      (assoc :halt? false)
+      (assoc :status :game-status/init)
+      (misc/merge-sync-state game-account-state)
+      (misc/remove-eliminated-players)
+      (misc/submit-non-alive-players)
+      (misc/remove-non-alive-players)
+      (misc/add-joined-player)
+      (misc/reset-player-map-status)
+      (misc/increase-blinds timestamp)            ; For SNG & Tournament
+      (misc/dispatch-start-game)
+      (misc/reset-game-state)
+      (cond->
+        finish?
+        (assoc :player-map  {}
+               :rsa-pub-map {}
+               :sig-map     {}
+               :halt?       true))))
+
+(defmethod handle-event :system/resit-table
+  [{:keys [game-id], :as state}
+   {{:keys [resit-map finish?]} :data,
+    timestamp :timestamp,
+    :as       event}]
+  (log/log "🪑" game-id "Receive re-sit notification: %s" (prn-str resit-map))
+  (-> state
+      (assoc :resit-map resit-map)
+      (misc/remove-eliminated-players)
+      (misc/submit-non-alive-players)
+      (misc/remove-non-alive-players)
+      (misc/add-joined-player)
+      (misc/reset-player-map-status)
+      (misc/increase-blinds timestamp)            ; For SNG & Tournament
+      (misc/reset-game-state)
+      (misc/remove-players (keys resit-map))
+      (misc/dispatch-start-game)
+      (cond->
+        finish?
+        (assoc :halt? true))))

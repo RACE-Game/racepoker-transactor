@@ -152,6 +152,14 @@
 
 (def kinds #{:a :2 :3 :4 :5 :6 :7 :8 :9 :t :j :q :k})
 
+(defn remove-players
+  [state player-ids]
+  (let [remove-by-pids (fn [m] (apply dissoc m player-ids))]
+    (-> state
+        (update :player-map remove-by-pids)
+        (update :rsa-pub-map remove-by-pids)
+        (update :sig-map remove-by-pids))))
+
 (defn remove-eliminated-players
   "Remove all players who have no chips"
   [{:keys [player-map game-type ranking winner-id game-id], :as state}]
@@ -160,15 +168,12 @@
                                 (sort-by :position >)
                                 (filter #(= (js/BigInt 0) (:chips %))))
 
-        eliminated-pids    (mapv :player-id eliminated-players)
-
-        remove-by-pids     (fn [m]
-                             (apply dissoc m eliminated-pids))
+        eliminated-pids (mapv :player-id eliminated-players)
 
         ;; Build the final ranking with winner ids
-        ranking            (when (and (#{:sng :bonus} game-type)
-                                      (not winner-id))
-                             (into (or ranking ()) eliminated-pids))]
+        ranking         (when (and (#{:sng :bonus} game-type)
+                                   (not winner-id))
+                          (into (or ranking ()) eliminated-pids))]
 
     (log/log "🧹"
              game-id
@@ -176,9 +181,7 @@
              eliminated-pids
              ranking)
     (-> state
-        (update :player-map remove-by-pids)
-        (update :rsa-pub-map remove-by-pids)
-        (update :sig-map remove-by-pids)
+        (remove-players eliminated-pids)
         (assoc :ranking ranking))))
 
 (defn reset-sng-state
@@ -216,17 +219,12 @@
   (if (or (= :cash game-type)
           (and (#{:bonus :sng} game-type)
                (nil? start-time)))
-    (let [dropout-pids   (->> player-map
-                              vals
-                              (remove #(= :normal (:online-status %)))
-                              (map :player-id))
-          remove-by-pids (fn [m]
-                           (apply dissoc m dropout-pids))]
+    (let [dropout-pids (->> player-map
+                            vals
+                            (remove #(= :normal (:online-status %)))
+                            (map :player-id))]
       (log/log "🧹" game-id "Remove non-alive players: %s" dropout-pids)
-      (-> state
-          (update :player-map remove-by-pids)
-          (update :rsa-pub-map remove-by-pids)
-          (update :sig-map remove-by-pids)))
+      (remove-players state dropout-pids))
     state))
 
 (defn- build-settle-map
@@ -491,7 +489,7 @@
   (seq (filter some? joined-players)))
 
 (defn dispatch-start-game
-  [state & [start-delay]]
+  [{:keys [game-type player-map], :as state} & [start-delay]]
   (-> state
       (assoc :dispatch-event
              [(cond

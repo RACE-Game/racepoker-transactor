@@ -2,6 +2,7 @@
   "Game handle is used to control a set of components of a game."
   (:require
    [cljs.core.async :as a]
+   [depk.transactor.constant :as c]
    [depk.transactor.tournament-game.submitter :as submitter]
    [depk.transactor.game.models :as m]
    [depk.transactor.event :as event]
@@ -20,7 +21,7 @@
   (log/log "🎉" game-id "Create game handle")
   (a/go
    (let [game-account-state {:players         players,
-                             :start-time      (+ 60000 start-time),
+                             :start-time      (+ c/tournament-start-delay start-time),
                              :game-type       :tournament,
                              :buyin-serial    1,
                              :settle-serial   1,

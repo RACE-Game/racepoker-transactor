@@ -15,10 +15,11 @@
   When there's only one player remainning.
   "
   (:require
-   [cljs.core.async      :as a]
+   [cljs.core.async          :as a]
+   [depk.transactor.constant :as c]
    [depk.transactor.event.protocol :as event-p]
-   [depk.transactor.log  :as log]
-   [depk.transactor.util :as u]))
+   [depk.transactor.log      :as log]
+   [depk.transactor.util     :as u]))
 
 (def init-chips (js/BigInt 10000))
 
@@ -48,6 +49,13 @@
    :buyin-serial  0,
    :start-time    (* start-time 1000),
    :mint-pubkey   "11111111111111111111111111111111"})
+
+(defn- pop-game-player
+  "Pop one player from game, return [player, new-game]."
+  [{:keys [players], :as game}]
+  (let [idx (count (take-while nil? players))]
+    [(nth players idx)
+     (update game :players assoc idx nil)]))
 
 (defn- sit-in-game
   "Let player sit in game, return the new game."
@@ -169,9 +177,9 @@
   1. Always refresh the state snapshot.
   2. For tables cancelled, notify the resit.
   3. For the updated table, if not being cancelled, notify the next game."
-  [{:keys [state updated-game-id resit-map resit-game-id], :as ctx}]
+  [{:keys [state updated-game-id game-resit-map], :as ctx}]
   (let [updated-game (get-game state updated-game-id)
-        sync-state-game-ids (remove #{updated-game-id} (vals resit-map))
+        sync-state-game-ids (remove #{updated-game-id} (mapcat vals (vals game-resit-map)))
         finish?      (= 1 (count (filter #(> (:chips %) (js/BigInt 0)) (:ranks state))))
         events       (cond-> [
                               ;; Refresh the state snapshot
@@ -187,12 +195,16 @@
                                                     :finish?            finish?}}}})
 
                        ;; Notify game to resit
-                       (seq resit-map)
-                       (conj {:type :system/tournament-broadcast,
-                              :data {:event {:type :system/resit-table,
-                                             :data {:game-id   resit-game-id,
-                                                    :resit-map resit-map,
-                                                    :finish?   true}}}})
+                       (seq game-resit-map)
+                       (into (map (fn [[game-id resit-map]]
+                                    (let [game    (get-game state game-id)
+                                          finish? (= 0 (count-game-players game))]
+                                      {:type :system/tournament-broadcast,
+                                       :data {:event {:type :system/resit-table,
+                                                      :data {:game-id   game-id,
+                                                             :resit-map resit-map,
+                                                             :finish?   finish?}}}}))
+                                  game-resit-map))
 
                        ;; Tell other games new players are coming
                        sync-state-game-ids
@@ -218,49 +230,66 @@
 (defn resit-players
   [{:keys [state updated-game-id], :as ctx}]
   (let [{:keys [games size tournament-id]} state
-        sorted-games (sort-by count-game-players games)
-        resit-game (first sorted-games)
+        sorted-games    (sort-by count-game-players games)
+        game-with-least (first sorted-games)
+        game-with-most  (last sorted-games)
+        ;; curr-game    (first sorted-games)
+        ;; other-games  (vec (next sorted-games))
 
-        [resit-map new-games]
-        (when (or (= 1 (count-game-players resit-game))
-                  (= (:game-id resit-game) updated-game-id))
+        [game-resit-map new-games]
+        (cond
+          ;; No-op with final table
+          (= 1 (count games))
+          nil
+
+          ;; Updated game is the game with least players
+          ;; If there's enough seats at another tables, current table will be closed.
+          (and (= updated-game-id (:game-id game-with-least))
+               (<= (count-game-players game-with-least)
+                   (transduce (map (fn [g] (- size (count-game-players g))))
+                              +
+                              0
+                              (next sorted-games))))
           (loop [ps        (filter some? (:players (first sorted-games)))
                  games     (vec (next sorted-games))
                  idx       0
                  resit-map {}]
             (if-not (seq ps)
-              [resit-map games]
-              (if (= idx (count games))
-                [nil nil]
-                (let [game      (nth games idx)
-                      cnt       (- size (count-game-players game))
-                      [ps-to-sit ps-rest] (split-at cnt ps)
-                      new-game  (reduce sit-in-game game ps-to-sit)
-                      resit-map (reduce #(assoc %1 (:pubkey %2) (:game-id new-game))
-                                        resit-map
-                                        ps-to-sit)]
-                  (recur ps-rest
-                         (assoc games idx new-game)
-                         (inc idx)
-                         resit-map))))))]
-    (log/log "🌠" tournament-id "Re-sit players: %s" (prn-str resit-map))
-    (if (seq resit-map)
+              [{(:game-id game-with-least) resit-map} games]
+              (let [game      (nth games idx)
+                    cnt       (- size (count-game-players game))
+                    [ps-to-sit ps-rest] (split-at cnt ps)
+                    new-game  (reduce sit-in-game game ps-to-sit)
+                    resit-map (reduce #(assoc %1 (:pubkey %2) (:game-id new-game))
+                                      resit-map
+                                      ps-to-sit)]
+                (recur ps-rest
+                       (assoc games idx new-game)
+                       (inc idx)
+                       resit-map))))
+
+          ;; Updated game is the game with most players
+          ;; Will try to balance the players with table with least players by moving 1 player.
+          (and (= updated-game-id (:game-id game-with-most))
+               (>= (count-game-players game-with-most) (inc (count-game-players game-with-least))))
+          (let [[p-to-sit new-game-with-most] (pop-game-player game-with-most)
+                new-game-with-least (sit-in-game game-with-least p-to-sit)
+                new-games (-> games
+                              (assoc 0 new-game-with-least)
+                              (assoc (dec (count games)) new-game-with-most))]
+            [{(:game-id game-with-most) {(:pubkey p-to-sit) (:game-id game-with-least)}}
+             new-games]))
+
+        resit-map       (first (vals game-resit-map))]
+
+    (log/log "🌠" tournament-id "Resit: %s" resit-map)
+
+    (if (seq game-resit-map)
       (-> ctx
           (update :state assoc :games new-games)
-          (assoc :resit-map resit-map :resit-game-id (:game-id (first sorted-games))))
+          (update-in [:state :resit-map] merge resit-map)
+          (assoc :game-resit-map game-resit-map))
       ctx)))
-
-(defn maybe-resit
-  [{:keys [state], :as ctx}]
-  (let [{:keys [games]} state]
-    (cond
-      ;; Final table
-      (= 1 (count games))
-      ctx
-
-      ;; Try merge into normal tables
-      :else
-      (resit-players ctx))))
 
 (defn maybe-settle
   [{:keys [state], :as ctx}]
@@ -305,7 +334,7 @@
                 (update-games game-id settle-map)
                 (update-ranks settle-map)
                 (maybe-settle)
-                (maybe-resit)
+                (resit-players)
                 (make-notify-events))
         {:keys [state events]} ctx]
     [state events]))
@@ -325,7 +354,7 @@
            (log/log "🌠" tournament-id "Schedule tournament starting after %s seconds" secs)
            (a/<! (a/timeout (* 1000 secs)))
            (a/>! input {:type :system/start-tournament})))
-       (a/<! (a/timeout 60000))
+       (a/<! (a/timeout c/tournament-start-delay))
        (a/>! input {:type :system/start-tournament-games}))
       (do
         (log/log "🌠" tournament-id "Tournament already completed")
