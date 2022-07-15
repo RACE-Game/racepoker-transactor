@@ -21,7 +21,7 @@
     (* 5 1000)
     (* 60 1000)))
 
-(def increase-blinds-interval (* 5 60 100000000))
+(def increase-blinds-interval (* 5 60 1000))
 (def shutdown-game-delay 5000)
 
 (def level-info-map
