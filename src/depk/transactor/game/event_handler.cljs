@@ -148,15 +148,35 @@
          (= (count player-map) 1))
     (do
       (log/log "🛑" game-id "Can not start, one player left(Tournament)")
+      ;; A single player waiting for an empty seat
+      ;; No-op
       (-> state
+          (misc/submit-game-result)
           (misc/dispatch-reset)))
 
     (and (= :tournament game-type)
          (every? #(not= :normal (:online-status %)) (vals player-map)))
     (do
-      (log/log "🛑" game-id "Can not start, no one is ready(Tournament)")
+      (log/log "🛑" game-id "Can not start, no player ready.")
+      ;; A single player waiting for an empty seat
+      ;; No-op
       (-> state
+          (misc/submit-game-result)
           (misc/dispatch-reset)))
+
+    (and (= :tournament game-type)
+         (< (count (filter #(= :normal (:online-status %)) (vals player-map)))
+            2))
+    (let [winner-id (->> player-map
+                         vals
+                         (filter #(= :normal (:online-status %)))
+                         first
+                         :player-id)]
+      (log/log "🔷" game-id
+               "Only Player[%s] is ready, blinds out other players"
+               winner-id)
+      (-> state
+          (misc/blinds-out winner-id)))
 
     :else
     ;; Enough players and all players are ready
@@ -269,12 +289,8 @@
     player-id :player-id,
     :as       event}]
 
-  (when-not (= :game-status/key-share status)
-    (misc/invalid-game-status! state event))
-
   (doseq [[key-ident _] share-keys]
     (when-not (misc/valid-key-ident? state key-ident player-id)
-      (println key-ident)
       (misc/invalid-share-key! state event)))
 
   (when-not (seq share-keys)
@@ -282,11 +298,15 @@
 
   (let [new-state (update state :share-key-map merge share-keys)]
     (cond
+      (not= :game-status/key-share status)
+      (-> new-state
+          (misc/reserve-timeout))
+
       (seq (misc/list-missing-key-idents new-state))
       (do
         (log/log "🔑" game-id "Wait more keys")
         (-> new-state
-            (misc/dispatch-key-share-timeout)))
+            (misc/reserve-timeout)))
 
       (= :settle after-key-share)
       (do
@@ -420,6 +440,42 @@
       (assoc-in [:rsa-pub-map player-id] rsa-pub)
       (assoc-in [:sig-map player-id] sig)
       (misc/dispatch-start-game)))
+
+(defmethod handle-event :client/fix-keys
+  [{:keys [player-map rsa-pub-map sig-map game-id winner-id], :as state}
+   {player-id :player-id,
+    {:keys [rsa-pub sig]} :data,
+    :as       event}]
+
+  (when-not rsa-pub
+    (misc/invalid-rsa-pub! state event))
+
+  (when-not sig
+    (misc/invalid-sig! state event))
+
+  (when (or (not player-id)
+            (not (get player-map player-id)))
+    (misc/invalid-player-id! state event))
+
+  (when (= :player-status/fold (get-in player-map [player-id :status]))
+    (misc/invalid-player-status! state event))
+
+  (let [saved-rsa-pub (get rsa-pub-map player-id)
+        saved-sig     (get sig-map player-id)]
+    (when (or (and saved-rsa-pub (not= saved-rsa-pub rsa-pub))
+              (and saved-sig (not= saved-sig sig)))
+      (misc/cant-update-rsa-pub! state event)))
+
+  (when winner-id (misc/sng-finished! state event))
+
+  (log/log "💚" game-id "Player[%s] fix public keys" player-id)
+
+  (-> state
+      (assoc-in [:player-map player-id :online-status] :normal)
+      (assoc-in [:rsa-pub-map player-id] rsa-pub)
+      (assoc-in [:sig-map player-id] sig)
+      (misc/update-require-key-idents)
+      (misc/reserve-timeout)))
 
 ;; system/dropout
 ;; A event received when a client dropout its connection

@@ -62,6 +62,23 @@
                                       player-id))
      (throw (ex-info "game not exist" {:game-id game-id})))))
 
+(defn fix-keys
+  [game-manager game-id player-id rsa-pub sig]
+  {:pre [(string? player-id)
+         (string? game-id)
+         (string? rsa-pub)
+         (string? sig)]}
+  (go-try
+   (log/log "➡️" game-id "Player[%s] fix keys" player-id)
+   (if-let [game-worker (manager/find-worker game-manager game-id)]
+     (worker/send-event game-worker
+                        (m/make-event :client/fix-keys
+                                      (worker/get-snapshot game-worker)
+                                      {:rsa-pub rsa-pub,
+                                       :sig     sig}
+                                      player-id))
+     (throw (ex-info "game not exist" {:game-id game-id})))))
+
 ;; Alive, reconnect
 (defn alive
   [game-manager game-id player-id]

@@ -271,7 +271,7 @@
           ;; Updated game is the game with most players
           ;; Will try to balance the players with table with least players by moving 1 player.
           (and (= updated-game-id (:game-id game-with-most))
-               (>= (count-game-players game-with-most) (inc (count-game-players game-with-least))))
+               (> (count-game-players game-with-most) (inc (count-game-players game-with-least))))
           (let [[p-to-sit new-game-with-most] (pop-game-player game-with-most)
                 new-game-with-least (sit-in-game game-with-least p-to-sit)
                 new-games (-> games

@@ -39,9 +39,14 @@
 
 (defn invalid-player-id!
   [state event]
-  (throw (ex-info (gstr/format "Invalid player id, current: %s, in event: %s"
-                               (:shuffle-player-id state)
+  (throw (ex-info (gstr/format "Invalid player id, current: %s"
                                (:player-id event))
+                  {:state state,
+                   :event event})))
+
+(defn invalid-player-status!
+  [state event]
+  (throw (ex-info "Invalid player status"
                   {:state state,
                    :event event})))
 
@@ -217,7 +222,7 @@
   "Remove all players who doesn't have live online status."
   [{:keys [player-map game-type start-time game-id], :as state}]
   (if (or (= :cash game-type)
-          (and (#{:bonus :sng} game-type)
+          (and (= :sng game-type)
                (nil? start-time)))
     (let [dropout-pids (->> player-map
                             vals
@@ -454,12 +459,13 @@
          (into {}))))
 
 (defn dispatch-reset
-  [state]
+  [state & [ms]]
   (assoc state
          :dispatch-event
-         [(if (:winner-id state)
-            c/sng-next-game-timeout-delay
-            c/reset-timeout-delay)
+         [(cond
+            ms ms
+            (:winner-id state) c/sng-next-game-timeout-delay
+            :else c/reset-timeout-delay)
           (m/make-event :system/reset state {})]))
 
 (defn next-btn
@@ -552,6 +558,11 @@
        (not (contains? (:share-key-map state) key-ident))
        (= (first key-ident) player-id)))
 
+(defn key-ident-public-or-has-dest?
+  [rsa-pub-map [_ _ _ dest-player-id]]
+  (or (nil? dest-player-id)
+      (contains? rsa-pub-map dest-player-id)))
+
 (defn list-missing-key-idents
   "Return a list of key idents those still not provided yet."
   [state]
@@ -643,8 +654,9 @@
 
 (defn update-require-key-idents
   "Update require-key-idents in state."
-  [state]
-  (let [require-key-idents (list-require-key-idents state)
+  [{:keys [rsa-pub-map], :as state}]
+  (let [require-key-idents (->> (list-require-key-idents state)
+                                (filter #(key-ident-public-or-has-dest? rsa-pub-map %)))
         into-set (fnil into #{})]
     (update state :require-key-idents into-set require-key-idents)))
 
@@ -1053,7 +1065,7 @@
         (assoc :rake-map nil)
         (assoc :halt? true))))
 
-(defn- submit-game-result
+(defn submit-game-result
   "Add request to :api-requests, submit game result."
   [{:keys [game-type], :as state}]
   (case game-type
@@ -1323,3 +1335,32 @@
 (defn reserve-timeout
   [state]
   (assoc state :reserve-timeout true))
+
+(defn blinds-out
+  "Finish a game by transfering the blinds.
+
+  Used when no enough players to start."
+  [state winner-id]
+  (let [state          (-> state
+                           (assoc :btn (next-btn state))
+                           (update :game-no inc)
+                           (blind-bets))
+
+        {:keys [player-map bet-map]} state
+
+        [bet player _] (take-bet-from-player (get player-map winner-id)
+                                             (apply max (vals bet-map)))
+        player-map     (if (get bet-map winner-id)
+                         player-map
+                         (assoc player-map winner-id player))
+
+        player-map     (update-vals player-map
+                                    (fn [{:keys [online-status], :as p}]
+                                      (if (= :normal online-status)
+                                        (assoc p :status :player-status/acted)
+                                        (assoc p :status :player-status/fold))))
+        bet-map        (assoc bet-map winner-id bet)]
+    (-> state
+        (assoc :player-map player-map
+               :bet-map    bet-map)
+        (single-player-win winner-id))))
