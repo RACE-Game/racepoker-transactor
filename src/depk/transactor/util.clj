@@ -1,5 +1,4 @@
-(ns depk.transactor.util
-  (:require [depk.transactor.log]))
+(ns depk.transactor.util)
 
 (defmacro def-async-handler
   [name binding & body]
@@ -24,7 +23,7 @@
   `(cljs.core.async/go
     (try ~@body
          (catch js/Error e#
-           (depk.transactor.log/error e# (ex-message e#))
+           (.error js/console e#)
            (if-let [cause# (:cause e#)]
              cause#
              e#)))))
@@ -34,7 +33,7 @@
   `(cljs.core.async/go-loop ~binding
                             (try ~@body
                                  (catch js/Error e#
-                                   (depk.transactor.log/error (ex-message e#))
+                                   (.error js/console e#)
                                    e#))))
 
 (defmacro <!?

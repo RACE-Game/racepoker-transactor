@@ -144,6 +144,13 @@
     ;; ------------------------------------------------
     ;; Tournament fail case
     ;; ------------------------------------------------
+
+    (and (= :tournament game-type)
+         (= (count player-map) 0))
+    (do
+      (log/log "🛑" game-id "Tournament game closed")
+      state)
+
     (and (= :tournament game-type)
          (= (count player-map) 1))
     (do

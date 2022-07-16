@@ -162,7 +162,7 @@
               ;; Set current time as timestamp
               event     (assoc event :timestamp (.getTime (js/Date.)))
               old-state state
-              {:keys [result state api-requests dispatch-event error]}
+              {:keys [result state api-requests error]}
               (<! (handle-event state event))]
 
           ;; Log the event

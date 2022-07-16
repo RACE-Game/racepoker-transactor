@@ -21,6 +21,7 @@
   (log/log "🎉" game-id "Create game handle")
   (a/go
    (let [game-account-state {:players         players,
+                             ;; Wait 1 minute before the real start.
                              :start-time      (+ c/tournament-start-delay start-time),
                              :game-type       :tournament,
                              :buyin-serial    1,
