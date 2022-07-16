@@ -78,78 +78,21 @@
   (cond
 
     ;; ------------------------------------------------
-    ;; Common fail case
-    ;; ------------------------------------------------
-
-    halt?
-    (do
-      (log/log "🛑" game-id "Can not start, halted")
-      (-> state
-          (misc/dispatch-reset)))
-
-    ;; If the number of players is not enough for starting
-    ;; Require further alive event from the only client
-    (= (count player-map) 1)
-    (do
-      (log/log "🛑" game-id "Can not start, no enough players")
-      (-> state
-          (misc/dispatch-reset)))
-
-    ;; No players
-    ;; Reset game state, and do nothing
-    ;; Waiting a player to join
-    (zero? (count player-map))
-    (do
-      (log/log "🛑" game-id "Can not start, no player")
-      (-> state
-          (misc/dispatch-reset)))
-
-    ;; ------------------------------------------------
-    ;; SNG fail case
-    ;; ------------------------------------------------
-
-    ;; SNG type without full table
-    ;; Kick the non-ready players
-    (and (#{:sng} game-type)
-         (nil? start-time)              ; Nil start-time means the first start
-         (or (not (every? #(= :normal (:online-status %)) (vals player-map)))
-             (< (count player-map) size)))
-    (do
-      (log/log "🛑" game-id "Can not start, no enough ready players(SNG)")
-      (-> state
-          (misc/dispatch-reset)))
-
-    ;; At least one player is ready.
-    ;; Otherwise the SNG game can not start.
-    (and (#{:sng} game-type)
-         (every? #(not= :normal (:online-status %)) (vals player-map))
-         (= :in-progress (:status game-account-state)))
-    (do
-      (log/log "🛑" game-id "Can not start, no one is ready(SNG)")
-      (-> state
-          (misc/dispatch-reset)))
-
-    ;; ------------------------------------------------
-    ;; Cash fail case
-    ;; ------------------------------------------------
-
-    ;; In cash game, if any client is not ready, kick it
-    (and (= :cash game-type)
-         (not (every? #(= :normal (:online-status %)) (vals player-map))))
-    (do
-      (log/log "🛑" game-id "Can not start, some one is not ready(Cash)")
-      (-> state
-          (misc/dispatch-reset)))
-
-    ;; ------------------------------------------------
     ;; Tournament fail case
     ;; ------------------------------------------------
-
     (and (= :tournament game-type)
          (= (count player-map) 0))
     (do
       (log/log "🛑" game-id "Tournament game closed")
       state)
+
+    (and (= :tournament game-type)
+         halt?)
+    (do
+      (log/log "🛑" game-id "Can not start, halted")
+      (-> state
+          (misc/dispatch-reset)))
+
 
     (and (= :tournament game-type)
          (= (count player-map) 1))
@@ -184,6 +127,64 @@
                winner-id)
       (-> state
           (misc/blinds-out winner-id)))
+
+    ;; ------------------------------------------------
+    ;; SNG fail case
+    ;; ------------------------------------------------
+    (and (= :sng game-type)
+         (nil? start-time)              ; Nil start-time means the first start
+         (or (not (every? #(= :normal (:online-status %)) (vals player-map)))
+             (< (count player-map) size)))
+    ;; SNG type without full table
+    ;; Kick the non-ready players
+    (do
+      (log/log "🛑" game-id "Can not start, no enough ready players(SNG)")
+      (-> state
+          (misc/dispatch-reset)))
+
+    ;; At least one player is ready.
+    ;; Otherwise the SNG game can not start.
+    (and (= :sng game-type)
+         (every? #(not= :normal (:online-status %)) (vals player-map))
+         (= :in-progress (:status game-account-state)))
+    (do
+      (log/log "🛑" game-id "Can not start, no one is ready(SNG)")
+      (-> state
+          (misc/dispatch-reset)))
+
+    ;; ------------------------------------------------
+    ;; Common fail case
+    ;; ------------------------------------------------
+
+    ;; If the number of players is not enough for starting
+    ;; Require further alive event from the only client
+    (= (count player-map) 1)
+    (do
+      (log/log "🛑" game-id "Can not start, no enough players")
+      (-> state
+          (misc/dispatch-reset)))
+
+    ;; No players
+    ;; Reset game state, and do nothing
+    ;; Waiting a player to join
+    (zero? (count player-map))
+    (do
+      (log/log "🛑" game-id "Can not start, no player")
+      (-> state
+          (misc/dispatch-reset)))
+
+    ;; ------------------------------------------------
+    ;; Cash fail case
+    ;; ------------------------------------------------
+
+    ;; In cash game, if any client is not ready, kick it
+    (and (= :cash game-type)
+         (not (every? #(= :normal (:online-status %)) (vals player-map))))
+    (do
+      (log/log "🛑" game-id "Can not start, some one is not ready(Cash)")
+      (-> state
+          (misc/dispatch-reset)))
+
 
     :else
     ;; Enough players and all players are ready
