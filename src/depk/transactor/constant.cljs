@@ -1,16 +1,16 @@
 (ns depk.transactor.constant)
 
-(def version "27")
+(def version "28")
 
 (def max-player-num 9)
 
 (def continue-start-game-delay 100)
 (def default-start-game-delay 5000)
 (def long-start-game-delay 30000)
-(def key-share-timeout-delay 60000)
-(def shuffle-timeout-delay 15000)
-(def encrypt-timeout-delay 10000)
-(def player-action-timeout-delay 30000)
+(def key-share-timeout-delay 20000)     ; 20 secs
+(def shuffle-timeout-delay 15000)       ; 15 secs
+(def encrypt-timeout-delay 10000)       ; 10 secs
+(def player-action-timeout-delay 30000) ; 30 secs
 (def droupout-player-action-timeout-delay 5000)
 (def reset-timeout-delay 1000)
 (def sng-next-game-timeout-delay 30000)
