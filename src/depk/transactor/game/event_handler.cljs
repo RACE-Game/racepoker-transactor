@@ -72,8 +72,14 @@
            (count player-map)
            size)
 
-  (doseq [[id p] player-map]
-    (log/log "😀" game-id "-%s %s" id (name (:online-status p))))
+  (doseq [[id {:keys [online-status chips]}] player-map]
+    (log/log (if (= :normal online-status)
+               "😀"
+               "😴")
+             game-id
+             "-%s %s"
+             id
+             chips))
 
   (cond
 
@@ -83,13 +89,13 @@
     (and (= :tournament game-type)
          (= (count player-map) 0))
     (do
-      (log/log "🛑" game-id "Tournament game closed")
+      (log/log "🛑" game-id "Tournament game closed.(Tournament)")
       state)
 
     (and (= :tournament game-type)
          halt?)
     (do
-      (log/log "🛑" game-id "Can not start, halted")
+      (log/log "🛑" game-id "Can not start, halted.(Tournament)")
       (-> state
           (misc/dispatch-reset)))
 
@@ -97,7 +103,7 @@
     (and (= :tournament game-type)
          (= (count player-map) 1))
     (do
-      (log/log "🛑" game-id "Can not start, one player left(Tournament)")
+      (log/log "🛑" game-id "Can not start, one player left.(Tournament)")
       ;; A single player waiting for an empty seat
       ;; No-op
       (-> state
@@ -107,7 +113,7 @@
     (and (= :tournament game-type)
          (every? #(not= :normal (:online-status %)) (vals player-map)))
     (do
-      (log/log "🛑" game-id "Can not start, no player ready.")
+      (log/log "🛑" game-id "Can not start, no player ready.(Tournament)")
       ;; A single player waiting for an empty seat
       ;; No-op
       (-> state
@@ -123,7 +129,7 @@
                          first
                          :player-id)]
       (log/log "🔷" game-id
-               "Only Player[%s] is ready, blinds out other players"
+               "Only Player[%s] is ready, blinds out other players.(Tournament)"
                winner-id)
       (-> state
           (misc/blinds-out winner-id)))
@@ -138,7 +144,7 @@
     ;; SNG type without full table
     ;; Kick the non-ready players
     (do
-      (log/log "🛑" game-id "Can not start, no enough ready players(SNG)")
+      (log/log "🛑" game-id "Can not start, no enough ready players.(SNG)")
       (-> state
           (misc/dispatch-reset)))
 
@@ -148,7 +154,7 @@
          (every? #(not= :normal (:online-status %)) (vals player-map))
          (= :in-progress (:status game-account-state)))
     (do
-      (log/log "🛑" game-id "Can not start, no one is ready(SNG)")
+      (log/log "🛑" game-id "Can not start, no one is ready.(SNG)")
       (-> state
           (misc/dispatch-reset)))
 
@@ -181,10 +187,9 @@
     (and (= :cash game-type)
          (not (every? #(= :normal (:online-status %)) (vals player-map))))
     (do
-      (log/log "🛑" game-id "Can not start, some one is not ready(Cash)")
+      (log/log "🛑" game-id "Can not start, some one is not ready.(Cash)")
       (-> state
           (misc/dispatch-reset)))
-
 
     :else
     ;; Enough players and all players are ready

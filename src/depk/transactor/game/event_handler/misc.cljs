@@ -1346,20 +1346,20 @@
                            (update :game-no inc)
                            (blind-bets))
 
-        {:keys [player-map bet-map]} state
+        {:keys [player-map bet-map street-bet]} state
+        curr-bet       (get bet-map winner-id (js/BigInt 0))
 
         [bet player _] (take-bet-from-player (get player-map winner-id)
-                                             (apply max (vals bet-map)))
-        player-map     (if (get bet-map winner-id)
-                         player-map
-                         (assoc player-map winner-id player))
+                                             ;; Call the blind bets
+                                             (- street-bet curr-bet))
 
+        player-map     (assoc player-map winner-id player)
         player-map     (update-vals player-map
                                     (fn [{:keys [online-status], :as p}]
                                       (if (= :normal online-status)
                                         (assoc p :status :player-status/acted)
                                         (assoc p :status :player-status/fold))))
-        bet-map        (assoc bet-map winner-id bet)]
+        bet-map        (assoc bet-map winner-id (+ curr-bet bet))]
     (-> state
         (assoc :player-map player-map
                :bet-map    bet-map)

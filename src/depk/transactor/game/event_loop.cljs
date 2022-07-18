@@ -140,9 +140,12 @@
    (let [{:keys [timeout-event]} state
          [to to-evt] timeout-event
          ms (- (or to 0) (.getTime (js/Date.)))]
+
      (if (pos? ms)
        (let [to-ch      (a/timeout ms)
+             _ (log/log "⌛" (:game-id state) "Timeout %sms event %s" ms (name (:type to-evt)))
              [val port] (a/alts! [to-ch input])]
+
          (if (= port to-ch)
            ;; Fix the dispatch-id of timeout event
            (assoc to-evt :dispatch-id (:state-id state))
@@ -158,8 +161,7 @@
             records []]
     (if-let [event (<! (take-event input state))]
       (if (event-list (:type event))
-        (let [
-              ;; Set current time as timestamp
+        (let [;; Set current time as timestamp
               event     (assoc event :timestamp (.getTime (js/Date.)))
               old-state state
               {:keys [result state api-requests error]}

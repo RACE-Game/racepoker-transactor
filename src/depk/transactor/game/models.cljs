@@ -215,7 +215,7 @@
               (make-player-state player-id
                                  (:chips p)
                                  idx
-                                 :player-status/wait
+                                 :player-status/fold
                                  :dropout)))))
        (map (juxt :player-id identity))
        (into {})))
