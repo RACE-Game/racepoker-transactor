@@ -207,7 +207,9 @@
        (-> state
            (assoc :start-time start-time)
            (assoc :btn next-btn)
-           (update :game-no inc)
+           ;; Set a new secret-id
+           ;; This will expire old shuffle-key & encrypt-key
+           (update :secret-id inc)
            (misc/set-operation-player-ids)
            (misc/with-next-op-player-id-as :shuffle-player-id)
            (assoc :prepare-cards [{:data      data,

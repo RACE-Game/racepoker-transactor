@@ -1203,6 +1203,7 @@
          :street-bet       nil)
         (update-require-key-idents)
         (take-released-keys)
+        (dispatch-key-share-timeout)
         (add-log log))))
 
 (defn next-street
@@ -1343,7 +1344,6 @@
   [state winner-id]
   (let [state          (-> state
                            (assoc :btn (next-btn state))
-                           (update :game-no inc)
                            (blind-bets))
 
         {:keys [player-map bet-map street-bet]} state

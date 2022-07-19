@@ -15,7 +15,7 @@
                 (let [resp# (do ~@body)]
                   (callback# resp#))
                 (catch js/Error e#
-                  (.error js/console e#)
+                  (depk.transactor.log/log "💥" nil (ex-message e#))
                   (callback# {:status 500, :body {:error (ex-message e#)}}))))))))))
 
 (defmacro go-try
@@ -23,7 +23,7 @@
   `(cljs.core.async/go
     (try ~@body
          (catch js/Error e#
-           (.error js/console e#)
+           (depk.transactor.log/log "💥" nil (ex-message e#))
            (if-let [cause# (:cause e#)]
              cause#
              e#)))))
@@ -33,7 +33,7 @@
   `(cljs.core.async/go-loop ~binding
                             (try ~@body
                                  (catch js/Error e#
-                                   (.error js/console e#)
+                                   (depk.transactor.log/log "💥" nil (ex-message e#))
                                    e#))))
 
 (defmacro <!?

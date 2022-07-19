@@ -74,8 +74,8 @@
    ;; game type: cash-game, sng
    game-type
    game-id
-   ;; a serial number, read from blockchain
-   game-no
+   ;; ID for encryption data
+   secret-id
    sb
    bb
    ante
@@ -258,6 +258,8 @@
               :base-sb            (:sb game-account-state),
               :base-bb            (:bb game-account-state),
               :base-ante          (:ante game-account-state),
+              ;; Give a initial value for secret-id
+              :secret-id          (* 1000 (:settle-serial game-account-state)),
               :rake               (+ (js/BigInt (:transactor-rake game-account-state))
                                      (js/BigInt (:owner-rake game-account-state))),
               :game-account-state (parse-raw-game-account-state game-account-state),
@@ -272,7 +274,6 @@
                                     (:start-time game-account-state)),
               :state-id           state-id,
               :status             :game-status/init,
-              :game-no            0,
               :game-type          (:game-type game-account-state),
               :size               (:size game-account-state),
               :mint-info          (parse-raw-mint-info mint-info),

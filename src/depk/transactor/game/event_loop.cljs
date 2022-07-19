@@ -113,18 +113,7 @@
 (defn collect-and-dispatch-game-history
   "Collect and (maybe) dispatch game history to output channel,
   return the new records."
-  [old-state new-state event records output]
-  ;; (if (= (:game-no old-state) (:game-no new-state))
-  ;;   (conj records [event new-state])
-  ;;   (do
-  ;;     (when (:game-no old-state)
-  ;;       (put! output
-  ;;             {:type :system/save-game-history,
-  ;;              :data {:game-id (:game-id old-state),
-  ;;                     :game-no (:game-no old-state),
-  ;;                     :records records}}))
-  ;;     []))
-)
+  [old-state new-state event records output])
 
 (defn dispatch-broadcast-state
   [game-id event state output]
