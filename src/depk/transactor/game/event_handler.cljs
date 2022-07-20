@@ -362,10 +362,14 @@
 
   (let [missing-key-idents (misc/list-missing-key-idents state)]
     (log/log "🔒️" game-id "Key share timeout, missing: %s" missing-key-idents)
-    (let [timeout-player-ids (map first missing-key-idents)]
+    (when-not (seq missing-key-idents)
+      (throw (misc/no-missing-key-idents! state event)))
+
+    (let [timeout-player-ids (->> (map first missing-key-idents)
+                                  (into #{}))]
       (-> state
           (misc/mark-dropout-players timeout-player-ids)
-          (misc/next-state)))))
+          (misc/terminate timeout-player-ids)))))
 
 ;; system/shuffle-timeout
 ;; Receiving this event when shuffling is timeout
@@ -457,10 +461,13 @@
       (misc/dispatch-start-game)))
 
 (defmethod handle-event :client/fix-keys
-  [{:keys [player-map rsa-pub-map sig-map game-id winner-id], :as state}
+  [{:keys [player-map rsa-pub-map sig-map game-id winner-id status], :as state}
    {player-id :player-id,
     {:keys [rsa-pub sig]} :data,
     :as       event}]
+
+  (when-not (= :game-status/play status)
+    (misc/invalid-game-status! state event))
 
   (when-not rsa-pub
     (misc/invalid-rsa-pub! state event))

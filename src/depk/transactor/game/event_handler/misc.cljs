@@ -151,6 +151,12 @@
   (throw (ex-info "Invalid next state case"
                   {:state state})))
 
+(defn no-missing-key-idents!
+  [state event]
+  (throw (ex-info "No missing key idents"
+                  {:state state,
+                   :event event})))
+
 ;; helpers
 
 (def suits #{:d :s :h :c})
@@ -1218,41 +1224,33 @@
   "Ask next player for action or goto next stage when no player can act."
   [{:keys [street-bet street bet-map action-player-id player-map status btn], :as state}]
   (let [;; a list of player ids who did not provide their keys
-        non-compliant-player-ids (->> (list-missing-key-idents state)
-                                      (map first)
-                                      (into #{}))
 
-        remain-players           (->> player-map
-                                      vals
-                                      (filter (comp #{:player-status/allin :player-status/acted
-                                                      :player-status/wait :player-status/in-action}
-                                                    :status)))
+        remain-players     (->> player-map
+                                vals
+                                (filter (comp #{:player-status/allin :player-status/acted
+                                                :player-status/wait :player-status/in-action}
+                                              :status)))
 
-        players-to-act           (->>
-                                  (list-players-in-order state
-                                                         (get-in player-map
-                                                                 [action-player-id :position]
-                                                                 btn)
-                                                         #{:player-status/acted
-                                                           :player-status/wait}))
+        players-to-act     (->>
+                            (list-players-in-order state
+                                                   (get-in player-map
+                                                           [action-player-id :position]
+                                                           btn)
+                                                   #{:player-status/acted
+                                                     :player-status/wait}))
 
         ;; next action player is who haven't bet or bet less than street-bet
-        next-action-player       (->> players-to-act
-                                      (filter #(or (< (get bet-map (:player-id %) 0) street-bet)
-                                                   (= :player-status/wait (:status %))))
-                                      first)
+        next-action-player (->> players-to-act
+                                (filter #(or (< (get bet-map (:player-id %) 0) street-bet)
+                                             (= :player-status/wait (:status %))))
+                                first)
 
-        new-street               (next-street street)
+        new-street         (next-street street)
 
-        allin-players            (->> remain-players
-                                      (filter (comp #{:player-status/allin} :status)))]
+        allin-players      (->> remain-players
+                                (filter (comp #{:player-status/allin} :status)))]
 
     (cond
-      ;; missing keys, game has to be terminated
-      ;; currently, terminate means a draw game for non-fold players
-      (seq non-compliant-player-ids)
-      [:terminate non-compliant-player-ids]
-
       ;; no bets yet, blind bets
       (and (= :street/preflop street)
            (nil? bet-map))
@@ -1289,7 +1287,7 @@
   (let [[c v] (next-state-case state)]
     (log/log "💡" game-id "Next state: %s %s" c (or v ""))
     (case c
-      :terminate         (terminate state v)
+      ;; :terminate         (terminate state v)
       :blind-bets        (blind-bets state)
       :single-player-win (single-player-win state v)
       :ask-player-for-action (ask-player-for-action state v)
