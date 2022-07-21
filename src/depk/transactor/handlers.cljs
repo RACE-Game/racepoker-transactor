@@ -100,8 +100,8 @@
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
   (a/go
    (let [[game-id player-id]  uid
-         {:keys [share-keys]} ?data]
-     (a/<! (game/share-keys @worker-manager game-id player-id share-keys))
+         {:keys [share-keys secret-id]} ?data]
+     (a/<! (game/share-keys @worker-manager game-id player-id share-keys secret-id))
      (?reply-fn {:result :ok}))))
 
 (defmethod event-msg-handler :player/call
@@ -170,8 +170,7 @@
 
 (defmethod event-msg-handler :tournament/join
   [{:as ev-msg, :keys [connected-uids event id uid ?data ring-req ?reply-fn send-fn]}]
-  (a/go
-  ))
+  (a/go))
 
 ;;; HTTP handlers
 

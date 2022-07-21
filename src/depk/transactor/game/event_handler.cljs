@@ -300,9 +300,12 @@
 ;; receiving this event when player share its keys.
 (defmethod handle-event :client/share-keys
   [{:keys [status after-key-share game-id], :as state}
-   {{:keys [share-keys]} :data,
+   {{:keys [share-keys secret-id]} :data,
     player-id :player-id,
     :as       event}]
+
+  (when (not= secret-id (:secret-id state))
+    (misc/invalid-secret-id! state event))
 
   (doseq [[key-ident _] share-keys]
     (when-not (misc/valid-key-ident? state key-ident player-id)

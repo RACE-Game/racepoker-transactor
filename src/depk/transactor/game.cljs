@@ -140,17 +140,19 @@
      (throw (ex-info "game not exist" {:game-id game-id})))))
 
 (defn share-keys
-  [game-manager game-id player-id share-keys]
+  [game-manager game-id player-id share-keys secret-id]
   {:pre [(string? game-id)
          (string? player-id)
-         (map? share-keys)]}
+         (map? share-keys)
+         (int? secret-id)]}
   (go-try
    (log/log "➡️" game-id "Player[%s] share keys" player-id)
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :client/share-keys
                                       (worker/get-snapshot game-worker)
-                                      {:share-keys share-keys}
+                                      {:share-keys share-keys,
+                                       :secret-id  secret-id}
                                       player-id))
      (error-game-not-exist! game-id))))
 

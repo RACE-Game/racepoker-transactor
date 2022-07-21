@@ -157,6 +157,12 @@
                   {:state state,
                    :event event})))
 
+(defn invalid-secret-id!
+  [state event]
+  (throw (ex-info "Invalid secret ID"
+                  {:state state,
+                   :event event})))
+
 ;; helpers
 
 (def suits #{:d :s :h :c})
