@@ -230,7 +230,7 @@
 (defn resit-players
   [{:keys [state updated-game-id], :as ctx}]
   (let [{:keys [games size tournament-id]} state
-        sorted-games    (sort-by count-game-players games)
+        sorted-games    (vec (sort-by count-game-players games))
         game-with-least (first sorted-games)
         game-with-most  (last sorted-games)
         ;; curr-game    (first sorted-games)
@@ -274,7 +274,7 @@
                (> (count-game-players game-with-most) (inc (count-game-players game-with-least))))
           (let [[p-to-sit new-game-with-most] (pop-game-player game-with-most)
                 new-game-with-least (sit-in-game game-with-least p-to-sit)
-                new-games (-> games
+                new-games (-> sorted-games
                               (assoc 0 new-game-with-least)
                               (assoc (dec (count games)) new-game-with-most))]
             [{(:game-id game-with-most) {(:pubkey p-to-sit) (:game-id game-with-least)}}
