@@ -1,12 +1,13 @@
 (ns depk.transactor.tournament.worker
   "Dedicated worker for tournament process."
   (:require
-   ["worker_threads"             :refer [Worker]]
+   ["worker_threads" :refer [Worker]]
+   [cljs.core.async :as a]
    [depk.transactor.tournament-game :as tournament-game]
    [depk.transactor.state.worker-manager :refer [worker-manager]]
    [depk.transactor.state.config :refer [env]]
-   [depk.transactor.log          :as log]
-   [depk.transactor.util         :as u]))
+   [depk.transactor.log :as log]
+   [depk.transactor.util :as u]))
 
 (defn send-event
   [worker event]
@@ -14,38 +15,35 @@
     (.postMessage ^js (:worker worker) event)))
 
 (defn make-worker-message-handler
-  [snapshot worker opts]
-  (fn [data]
-    (let [{:keys [tournament-id event serialized-state]} (u/transit-read data)]
-      (when serialized-state
-        (reset! snapshot {:serialized-state serialized-state}))
-
+  [snapshot worker {:keys [tournament-id]}]
+  (let [input (a/chan 24)]
+    (a/go-loop [event (a/<! input)]
       (when event
         (let [{:keys [type data]} event]
           (case type
             ;; Start new tournament, create tables
             :system/start-tournament
             (let [{:keys [games]} data]
-              (doseq [{:keys [game-id players size start-time]} games]
-                (tournament-game/start-tournament-game
-                 @worker-manager
-                 {:tournament-id tournament-id,
-                  :game-id       game-id,
-                  :players       players,
-                  :size          size,
-                  :start-time    start-time,
-                  :report-fn     (fn [event]
-                                   (send-event {:worker worker} event))})))
+              (doseq [{:keys [game-id players size]} games]
+                ;; Wait till the game is started
+                (a/<! (tournament-game/start-tournament-game
+                       @worker-manager
+                       {:tournament-id tournament-id,
+                        :game-id       game-id,
+                        :players       players,
+                        :size          size,
+                        :report-fn     (fn [event]
+                                         (send-event {:worker worker} event))}))))
 
             ;; Start tournament games
             :system/start-tournament-games
-            (let [{:keys [games]} data]
+            (let [{:keys [games start-time]} data]
               (doseq [{:keys [game-id]} games]
                 (tournament-game/send-tournament-event
                  @worker-manager
                  game-id
-                 {:type :system/start-tournament-game})))
-
+                 {:type :system/start-tournament-game,
+                  :data {:start-time start-time}})))
 
             ;; Update the pseudo game-account-state
             (:system/next-game :system/resit-table :system/sync-state)
@@ -53,7 +51,15 @@
               (tournament-game/send-tournament-event
                @worker-manager
                game-id
-               event))))))))
+               event))))
+        (recur (a/<! input))))
+
+    (fn [data]
+      (let [{:keys [event serialized-state]} (u/transit-read data)]
+        (when serialized-state
+          (reset! snapshot {:serialized-state serialized-state}))
+        (when event
+          (a/put! input event))))))
 
 (defn on-worker-error
   [tournament-id x]

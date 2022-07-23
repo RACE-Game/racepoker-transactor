@@ -8,26 +8,40 @@
 
 (defn start
   [{:keys [chain-api output]} {:keys [tournament-id init-state]}]
-  (a/go-loop [buyin-serial -1]
+  (a/go-loop [buyin-serial  -1
+              settle-serial -1]
     (let [state (a/<! (p/-fetch-tournament-account chain-api
                                                    tournament-id
                                                    {:commitment "finalized"}))]
-      (when (and state (= :registering (:status state)))
-        (when (< buyin-serial (:buyin-serial state))
-          (log/log "👀️"
-                   tournament-id
-                   "Synchronizer got new tournament state, %s -> %s"
-                   buyin-serial
-                   (:buyin-serial state))
-          (a/>! output
-                {:type :system/sync-tournament-state,
-                 :data {:state (m/make-tournament-state tournament-id state)}}))
+      (cond
+        ;; Retry
+        (not state)
+        (recur buyin-serial settle-serial)
 
-        (if (#{:playing :completed} (:status state))
-          (log/log "💤️" tournament-id "Synchronizer quit")
-          (do
-            (a/<! (a/timeout 10000))
-            (recur (max buyin-serial (:buyin-serial state)))))))))
+        ;;
+        (#{:playing :registering} (:status state))
+        (do
+          (when (or (< buyin-serial (:buyin-serial state))
+                    (< settle-serial (:settle-serial state)))
+            (log/log "👀️"
+                     tournament-id
+                     "Synchronizer got new tournament state, %s -> %s | %s -> %s"
+                     buyin-serial
+                     (:buyin-serial state)
+                     settle-serial
+                     (:settle-serial state))
+            (a/>! output
+                  {:type :system/sync-tournament-state,
+                   :data {:state (m/make-tournament-state tournament-id state)}}))
+          (a/<! (a/timeout 5000))
+          (recur (max buyin-serial (:buyin-serial state))
+                 (max settle-serial (:settle-serial state))))
+
+
+        ;; Tournament is finished
+        :else
+        (do (a/<! (a/timeout 5000))
+            (log/log "💤️" tournament-id "Synchronizer quit"))))))
 
 (defrecord TournamentSynchronizer [chain-api output])
 

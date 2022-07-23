@@ -786,9 +786,13 @@
 ;;; Tournament specific
 
 (defmethod handle-event :system/start-tournament-game
-  [state event]
+  [{:keys [game-id], :as state}
+   {{:keys [start-time]} :data,
+    :as _event}]
+  (log/log "🏁" game-id "Start game")
   (-> state
-      (assoc :halt? false)
+      (assoc :halt?      false
+             :start-time start-time)
       (misc/reserve-timeout)))
 
 ;; :system/next-game & :system/resit-table
@@ -798,7 +802,7 @@
   [{:keys [status], :as state}
    {{:keys [game-account-state finish?]} :data,
     timestamp :timestamp,
-    :as       event}]
+    :as       _event}]
   (-> state
       (assoc :halt? false)
       (assoc :status :game-status/init)
@@ -822,7 +826,7 @@
   [{:keys [game-id], :as state}
    {{:keys [resit-map finish?]} :data,
     timestamp :timestamp,
-    :as       event}]
+    :as       _event}]
   (log/log "🪑" game-id "Receive re-sit notification: %s" (prn-str resit-map))
   (-> state
       (assoc :resit-map resit-map)

@@ -17,12 +17,12 @@
    event-loop])
 
 (defn make-game-handle
-  [game-id players size start-time post-msg-fn]
+  [game-id players size post-msg-fn]
   (log/log "🎉" game-id "Create game handle")
   (a/go
    (let [game-account-state {:players         players,
                              ;; Wait 1 minute before the real start.
-                             :start-time      (+ c/tournament-start-delay start-time),
+                             :start-time      nil,
                              :game-type       :tournament,
                              :buyin-serial    1,
                              :settle-serial   1,

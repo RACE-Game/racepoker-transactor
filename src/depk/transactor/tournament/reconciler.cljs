@@ -21,6 +21,52 @@
    [depk.transactor.log      :as log]
    [depk.transactor.util     :as u]))
 
+;;; Event broadcasts
+
+(defn broadcast-state
+  [state]
+  {:type :system/tournament-broadcast,
+   :data {:state state}})
+
+(defn broadcast-start-tournament-games
+  [state]
+  {:type :system/tournament-broadcast,
+   :data {:event {:type :system/start-tournament-games,
+                  :data {:start-time (.getTime (js/Date.)),
+                         :games      (:games state)}}}})
+
+(defn broadcast-next-game
+  [game-id game-account-state finish?]
+  {:type :system/tournament-broadcast,
+   :data {:event {:type :system/next-game,
+                  :data {:game-id            game-id,
+                         :game-account-state game-account-state,
+                         :finish?            finish?}}}})
+
+(defn broadcast-resit-table
+  [game-id resit-map finish?]
+  {:type :system/tournament-broadcast,
+   :data {:event {:type :system/resit-table,
+                  :data {:game-id   game-id,
+                         :resit-map resit-map,
+                         :finish?   finish?}}}})
+
+(defn broadcast-sync-state
+  [game-id game-account-state]
+  {:type :system/tournament-broadcast,
+   :data {:event {:type :system/sync-state,
+                  :data {:game-id            game-id,
+                         :game-account-state game-account-state}}}})
+
+(defn broadcast-start-tournament
+  [state]
+  {:type :system/tournament-broadcast,
+   :data {:state state,
+          :event {:type :system/start-tournament,
+                  :data {:games (:games state)}}}})
+
+;;; Helpers
+
 (def init-chips (js/BigInt 10000))
 
 (let [n (atom 0)]
@@ -41,13 +87,12 @@
 
 (defn make-pseudo-game-account-state
   "We create a pseudo account state to adapt the tournament game model to on-chain game model."
-  [tournament-id start-time size]
+  [tournament-id size]
   {:players       [nil nil nil nil nil nil nil nil nil],
    :game-id       (str tournament-id "#" (gen-serial-number)),
    :size          size,
    :settle-serial 0,
    :buyin-serial  0,
-   :start-time    (* start-time 1000),
    :mint-pubkey   "11111111111111111111111111111111"})
 
 (defn- pop-game-player
@@ -70,12 +115,11 @@
 
 (defn- assign-players-to-games
   "Assign players to games"
-  [tournament-id num-games ranks start-time size]
+  [tournament-id num-games ranks size]
   (let [init (vec
               (repeatedly num-games
                           (partial make-pseudo-game-account-state
                                    tournament-id
-                                   start-time
                                    size)))]
     (loop [ret      init
            idx      0
@@ -96,40 +140,6 @@
              new-idx))
          rs)
         ret))))
-
-(defn start-tournament
-  "Start the tournament.
-
-  Return [new-state, new-event]
-  Create the tables for all players."
-  [tournament-id state]
-  (let [{:keys [ranks num-players status start-time size]} state
-        ranks     (filter some? ranks)
-        ;; calculate the number of tables
-        num-games (quot (+ (dec size) num-players) size)
-
-        ;; assign players to games
-        games     (assign-players-to-games tournament-id num-games ranks start-time size)
-        new-state (assoc state
-                         :games    games
-                         :started? true
-                         :status   :playing)
-        evts      (cond->
-                    [{:type :system/tournament-broadcast,
-                      :data {:state new-state,
-                             :event {:type :system/start-tournament,
-                                     :data {:games games}}}}]
-
-                    (= :registering status)
-                    (conj {:type :system/submit-start-tournament,
-                           :data {}}))]
-
-    (log/log "🌠" tournament-id "Start tournament, creating %s tables" num-games)
-    [new-state evts]))
-
-(defmulti apply-event
-  (fn [_state event]
-    (:type event)))
 
 ;; Tournament game settlement
 
@@ -183,36 +193,24 @@
         finish?      (= 1 (count (filter #(> (:chips %) (js/BigInt 0)) (:ranks state))))
         events       (cond-> [
                               ;; Refresh the state snapshot
-                              {:type :system/tournament-broadcast,
-                               :data {:state state}}]
+                              (broadcast-state state)]
 
                        ;; Notify game to continue
                        updated-game
-                       (conj {:type :system/tournament-broadcast,
-                              :data {:event {:type :system/next-game,
-                                             :data {:game-id            updated-game-id,
-                                                    :game-account-state updated-game,
-                                                    :finish?            finish?}}}})
+                       (conj (broadcast-next-game updated-game-id updated-game finish?))
 
                        ;; Notify game to resit
                        (seq game-resit-map)
                        (into (map (fn [[game-id resit-map]]
                                     (let [game    (get-game state game-id)
                                           finish? (= 0 (count-game-players game))]
-                                      {:type :system/tournament-broadcast,
-                                       :data {:event {:type :system/resit-table,
-                                                      :data {:game-id   game-id,
-                                                             :resit-map resit-map,
-                                                             :finish?   finish?}}}}))
+                                      (broadcast-resit-table game-id resit-map finish?)))
                                   game-resit-map))
 
                        ;; Tell other games new players are coming
                        sync-state-game-ids
                        (into (map (fn [gid]
-                                    {:type :system/tournament-broadcast,
-                                     :data {:event {:type :system/sync-state,
-                                                    :data {:game-account-state (get-game state gid),
-                                                           :game-id            gid}}}})
+                                    (broadcast-sync-state gid (get-game state gid)))
                                   sync-state-game-ids)))]
     (update ctx :events into events)))
 
@@ -305,27 +303,64 @@
                    :data {:ranks (mapv :pubkey (:ranks state))}}))
       ctx)))
 
+;;; Event handlers
 
+(defmulti apply-event
+  (fn [_state event]
+    (:type event)))
+
+;; The starting event for reconciler
 (defmethod apply-event :system/start-tournament
   [{:keys [tournament-id], :as state} _]
-  (start-tournament tournament-id state))
+  (let [{:keys [ranks num-players status size]} state
+        ranks     (filter some? ranks)
+        ;; calculate the number of tables
+        num-games (quot (+ (dec size) num-players) size)
 
-(defmethod apply-event :system/start-tournament-games
-  [{:keys [games], :as state} _]
-  [state
-   [{:type :system/tournament-broadcast,
-     :data {:event {:type :system/start-tournament-games,
-                    :data {:games games}}}}]])
+        ;; assign players to games
+        games     (assign-players-to-games tournament-id num-games ranks size)
+        new-state (assoc state :games games)
+        evts      (cond->
+                    [(broadcast-start-tournament new-state)]
 
+                    (= :registering status)
+                    (conj {:type :system/submit-start-tournament,
+                           :data {}})
+
+                    (= :playing status)
+                    (conj (broadcast-start-tournament-games new-state)))]
+
+    (log/log "🌠" tournament-id "Start tournament, creating %s tables" num-games)
+    [new-state evts]))
+
+;; Sync on-chain tournament state
 (defmethod apply-event :system/sync-tournament-state
   [old-state
    {{:keys [state]} :data}]
-  (if (= :registering (:status old-state))
-    [state
-     [{:type :system/tournament-broadcast,
-       :data {:state state}}]]
+  (cond
+    ;; Send start tournament game when StartTournament transaction is finalized
+    (and (= :registering (:status old-state))
+         (= :playing (:status state)))
+    (let [new-state (assoc state :games (:games old-state))]
+      (log/log "🌠"
+               (:tournament-id old-state)
+               "StartTournament transaction finalized. Send start games.")
+      [new-state
+       [(broadcast-state new-state)
+        (broadcast-start-tournament-games new-state)]])
+
+    ;; Update state during the registration
+    (= :registering (:status old-state))
+    (do
+      (log/log "🌠" (:tournament-id old-state) "Update tournament state.")
+      [state
+       [(broadcast-state state)]])
+
+    ;; No-op after started.
+    :else
     [old-state nil]))
 
+;; Handle the settlement, which is submitted by a tournament game.
 (defmethod apply-event :system/tournament-game-settle
   [state
    {:keys [game-id],
@@ -339,27 +374,35 @@
         {:keys [state events]} ctx]
     [state events]))
 
+;;; Reconciler definition
 (defn start-reconciler
   [{:keys [input output]} {:keys [tournament-id init-state]}]
   (let [current-time (current-unix-timestamp)
         {:keys [start-time status]} init-state]
+
+    ;; Starting
+    ;; The event loop will start with `system/start-tournament` event.
+    ;; If current time is before the start time, schedule a start event;
+    ;; If current time is after the start time, start immediately;
+    ;; Do nothing if the tournament is already completed.
     (if (#{:playing :registering} status)
       (a/go
        (if (> current-time start-time)
          ;; Start directly
-         (a/>! input {:type :system/start-tournament})
+         (do
+           (log/log "🌠" tournament-id "Starting tournament")
+           (a/>! input {:type :system/start-tournament}))
 
          ;; Trigger start event after timeout
          (let [secs (- start-time current-time)]
            (log/log "🌠" tournament-id "Schedule tournament starting after %s seconds" secs)
            (a/<! (a/timeout (* 1000 secs)))
-           (a/>! input {:type :system/start-tournament})))
-       (a/<! (a/timeout c/tournament-start-delay))
-       (a/>! input {:type :system/start-tournament-games}))
+           (a/>! input {:type :system/start-tournament}))))
       (do
         (log/log "🌠" tournament-id "Tournament already completed")
         (a/close! input))))
 
+  ;; Event loop
   (a/go-loop [state init-state]
     (if-let [evt (a/<! input)]
       (let [[new-state evts] (apply-event state evt)]
@@ -395,165 +438,3 @@
                           (a/chan)
                           (atom {})
                           (atom [])))
-
-;; Some dirty tests
-
-(comment
-  (let [init-state {:tournament-id "t",
-                    :num-players   4,
-                    :status        :playing,
-                    :ranks         [{:pubkey       "p1",
-                                     :chips        (js/BigInt 10000),
-                                     :rebuy        0,
-                                     :buyin-serial 0}
-                                    {:pubkey       "p2",
-                                     :chips        (js/BigInt 10000),
-                                     :rebuy        0,
-                                     :buyin-serial 1}
-                                    {:pubkey       "p3",
-                                     :chips        (js/BigInt 10000),
-                                     :rebuy        0,
-                                     :buyin-serial 2}
-                                    {:pubkey       "p4",
-                                     :chips        (js/BigInt 10000),
-                                     :rebuy        0,
-                                     :buyin-serial 3}]}]
-    (prn (start-tournament "t" init-state)))
-
-  ;; chips-only update
-  (let [state {:tournament-id "t",
-               :status        :playing,
-               :ranks         [{:pubkey "p1", :chips (js/BigInt 10000)}
-                               {:pubkey "p2", :chips (js/BigInt 10000)}
-                               {:pubkey "p3", :chips (js/BigInt 10000)}
-                               {:pubkey "p4", :chips (js/BigInt 10000)}],
-               :games         [{:game-id "t#100",
-                                :size    3,
-                                :players [{:pubkey "p1", :chips (js/BigInt 10000)}
-                                          {:pubkey "p2", :chips (js/BigInt 10000)}
-                                          nil]}
-                               {:game-id "t#200",
-                                :size    3,
-                                :players [{:pubkey "p3", :chips (js/BigInt 10000)}
-                                          {:pubkey "p4", :chips (js/BigInt 10000)}
-                                          nil]}]}
-
-        [state events] (apply-event state
-                                    {:type    :system/tournament-game-settle,
-                                     :game-id "t#100",
-                                     :data    {:settle-map {"p1" {:settle-type :chips-add,
-                                                                  :amount      (js/BigInt 500)},
-                                                            "p2" {:settle-type :chips-sub,
-                                                                  :amount      (js/BigInt 500)}}}})]
-    (println "state---------")
-    (prn state)
-    (println "events--------")
-    (prn events))
-
-
-  ;; eliminated -> final table
-  (let [state {:tournament-id "t",
-               :status        :playing,
-               :ranks         [{:pubkey "p1", :chips (js/BigInt 10000)}
-                               {:pubkey "p2", :chips (js/BigInt 10000)}
-                               {:pubkey "p3", :chips (js/BigInt 10000)}
-                               {:pubkey "p4", :chips (js/BigInt 10000)}],
-               :games         [{:game-id "t#100",
-                                :size    3,
-                                :players [{:pubkey "p1", :chips (js/BigInt 10000)}
-                                          {:pubkey "p2", :chips (js/BigInt 10000)}]}
-                               {:game-id "t#200",
-                                :size    3,
-                                :players [{:pubkey "p3", :chips (js/BigInt 10000)}
-                                          {:pubkey "p4", :chips (js/BigInt 10000)}]}]}
-
-        [state events]
-        (apply-event state
-                     {:type    :system/tournament-game-settle,
-                      :game-id "t#100",
-                      :data    {:settle-map {"p1" {:settle-type :chips-add,
-                                                   :amount      (js/BigInt 10000)},
-                                             "p2" {:settle-type :chips-sub,
-                                                   :amount      (js/BigInt 10000)}}}})]
-    (println "state---------")
-    (prn state)
-    (println "events--------")
-    (prn events))
-
-  ;; eliminated -> halt
-  (let [state {:tournament-id "t",
-               :status        :playing,
-               :ranks         [{:pubkey "p1", :chips (js/BigInt 10000)}
-                               {:pubkey "p2", :chips (js/BigInt 10000)}
-                               {:pubkey "p3", :chips (js/BigInt 10000)}
-                               {:pubkey "p4", :chips (js/BigInt 10000)}
-                               {:pubkey "p5", :chips (js/BigInt 10000)}
-                               {:pubkey "p6", :chips (js/BigInt 10000)}],
-               :games         [{:game-id "t#100",
-                                :size    3,
-                                :players [{:pubkey "p1", :chips (js/BigInt 10000)}
-                                          {:pubkey "p2", :chips (js/BigInt 10000)}]}
-                               {:game-id "t#200",
-                                :size    3,
-                                :players [{:pubkey "p3", :chips (js/BigInt 10000)}
-                                          {:pubkey "p4", :chips (js/BigInt 10000)}]}
-                               {:game-id "t#300",
-                                :size    3,
-                                :players [{:pubkey "p5", :chips (js/BigInt 10000)}
-                                          {:pubkey "p6", :chips (js/BigInt 10000)}]}]}
-
-        [state events]
-        (apply-event state
-                     {:type    :system/tournament-game-settle,
-                      :game-id "t#100",
-                      :data    {:settle-map {"p1" {:settle-type :chips-add,
-                                                   :amount      (js/BigInt 10000)},
-                                             "p2" {:settle-type :chips-sub,
-                                                   :amount      (js/BigInt 10000)}}}})]
-    (println "state---------")
-    (prn state)
-    (println "events--------")
-    (prn events))
-
-  ;; eliminated -> merge
-  (let [state {:tournament-id "t",
-               :status        :playing,
-               :ranks         [{:pubkey "p1", :chips (js/BigInt 10000)}
-                               {:pubkey "p2", :chips (js/BigInt 10000)}
-                               {:pubkey "p3", :chips (js/BigInt 10000)}
-                               {:pubkey "p4", :chips (js/BigInt 10000)}
-                               {:pubkey "p5", :chips (js/BigInt 0)}
-                               {:pubkey "p6", :chips (js/BigInt 10000)}],
-               :games         [{:game-id "t#100",
-                                :size    3,
-                                :players [{:pubkey "p1", :chips (js/BigInt 10000)}
-                                          {:pubkey "p2", :chips (js/BigInt 10000)}]}
-                               {:game-id "t#200",
-                                :size    3,
-                                :players [{:pubkey "p3", :chips (js/BigInt 10000)}
-                                          {:pubkey "p4", :chips (js/BigInt 10000)}]}
-                               {:game-id "t#300",
-                                :size    3,
-                                :players [{:pubkey "p6", :chips (js/BigInt 10000)}]}]}
-
-        [state events]
-        (apply-event state
-                     {:type    :system/tournament-game-settle,
-                      :game-id "t#100",
-                      :data    {:settle-map {"p1" {:settle-type :chips-add,
-                                                   :amount      (js/BigInt 10000)},
-                                             "p2" {:settle-type :chips-sub,
-                                                   :amount      (js/BigInt 10000)}}}})]
-    (println "state---------")
-    (prn state)
-    (println "events--------")
-    (prn events))
-
-  (let [tournament-id "t"
-        num-games     2
-        ranks         [{:pubkey "p1"}
-                       {:pubkey "p2"}
-                       {:pubkey "p3"}
-                       {:pubkey "p4"}]]
-    (println
-     (assign-players-to-games tournament-id num-games ranks))))
