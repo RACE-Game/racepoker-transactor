@@ -12,6 +12,7 @@
 (def encrypt-timeout-delay 10000)       ; 10 secs
 (def player-action-timeout-delay 30000) ; 30 secs
 (def droupout-player-action-timeout-delay 5000)
+(def sit-out-player-action-timeout-delay 1000)
 (def reset-timeout-delay 1000)
 (def sng-next-game-timeout-delay 30000)
 (def blinds-out-reset-delay 20000)

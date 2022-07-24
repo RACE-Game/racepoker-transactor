@@ -409,7 +409,9 @@
                      (fn [{:keys [online-status], :as player}]
                        (cond
                          (= :sit-out online-status)
-                         player
+                         (assoc player
+                                :status
+                                :player-status/wait)
 
                          :else
                          (assoc player
@@ -530,9 +532,7 @@
                           (do
                             (log/log "↗️" (:game-id state)
                                      "Set dropout player[%s] sit out" (:player-id player))
-                            (assoc player
-                                   :online-status :sit-out
-                                   :status        :player-status/fold))
+                            (assoc player :online-status :sit-out))
 
                           :else
                           (update player :drop-count inc)))))]
@@ -591,9 +591,15 @@
   [{:keys [action-player-id player-map], :as state}]
   (assoc state
          :dispatch-event
-         [(if (= :normal (get-in player-map [action-player-id :online-status]))
+         [(condp = (get-in player-map [action-player-id :online-status])
+            :normal
             c/player-action-timeout-delay
-            c/droupout-player-action-timeout-delay)
+
+            :dropout
+            c/droupout-player-action-timeout-delay
+
+            :sit-out
+            c/sit-out-player-action-timeout-delay)
           (m/make-event :system/player-action-timeout state {})]))
 
 (defn valid-key-ident?
@@ -1403,10 +1409,11 @@
                                     (fn [{:keys [player-id], :as p}]
                                       (if (= player-id winner-id)
                                         (assoc p :status :player-status/acted)
-                                        (assoc p :status :player-status/fold))))
+                                        (assoc p
+                                               :status        :player-status/fold
+                                               :online-status :sit-out))))
         bet-map        (assoc bet-map winner-id (+ curr-bet bet))]
     (-> state
         (assoc :player-map player-map
                :bet-map    bet-map)
-        (single-player-win winner-id)
-        (add-display [:display/blinds-out {}]))))
+        (single-player-win winner-id))))
