@@ -80,6 +80,13 @@
      (a/<! (game/fix-keys @worker-manager game-id player-id rsa-pub sig))
      (?reply-fn {:result :ok}))))
 
+;; (defmethod event-msg-handler :client/sit-out
+;;   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
+;;   (a/go
+;;    (let [[game-id player-id] uid]
+;;      (a/<! (game/sit-out @worker-manager game-id player-id))
+;;      (?reply-fn {:result :ok}))))
+
 (defmethod event-msg-handler :client/shuffle-cards
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
   (a/go
@@ -99,7 +106,7 @@
 (defmethod event-msg-handler :client/share-keys
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
   (a/go
-   (let [[game-id player-id]  uid
+   (let [[game-id player-id] uid
          {:keys [share-keys secret-id]} ?data]
      (a/<! (game/share-keys @worker-manager game-id player-id share-keys secret-id))
      (?reply-fn {:result :ok}))))

@@ -34,7 +34,7 @@
    position
    ;; player status: wait in-action acted fold allin
    status
-   ;; online status: normal dropout leave
+   ;; online status: normal dropout leave sit-out
    online-status
    ;; count the number of continuous drop
    drop-count])
@@ -48,7 +48,8 @@
                             :chips         chips,
                             :position      position,
                             :status        status,
-                            :online-status online-status}))))
+                            :online-status online-status,
+                            :drop-count    0}))))
 
 (defrecord Pot
   [owner-ids amount winner-ids])

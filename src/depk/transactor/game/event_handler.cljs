@@ -152,11 +152,28 @@
     ;; Otherwise the SNG game can not start.
     (and (= :sng game-type)
          (every? #(not= :normal (:online-status %)) (vals player-map))
-         (= :in-progress (:status game-account-state)))
+         start-time)
     (do
       (log/log "🛑" game-id "Can not start, no one is ready.(SNG)")
       (-> state
           (misc/dispatch-reset)))
+
+    ;; Only one player is ready
+    ;; Blinds out other players
+    (and (= :sng game-type)
+         (< (count (filter #(= :normal (:online-status %)) (vals player-map)))
+            2)
+         start-time)
+    (let [winner-id (->> player-map
+                         vals
+                         (filter #(= :normal (:online-status %)))
+                         first
+                         :player-id)]
+      (log/log "🔷" game-id
+               "Only Player[%s] is ready, blinds out other players.(SNG)"
+               winner-id)
+      (-> state
+          (misc/blinds-out winner-id)))
 
     ;; ------------------------------------------------
     ;; Common fail case
@@ -212,6 +229,7 @@
            (update :secret-id inc)
            (misc/set-operation-player-ids)
            (misc/with-next-op-player-id-as :shuffle-player-id)
+           (misc/sit-out-players)
            (assoc :prepare-cards [{:data      data,
                                    :op        :init,
                                    :player-id nil}]

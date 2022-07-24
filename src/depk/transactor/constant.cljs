@@ -4,7 +4,7 @@
 
 (def max-player-num 9)
 
-(def continue-start-game-delay 100)
+(def continue-start-game-delay 800)
 (def default-start-game-delay 5000)
 (def long-start-game-delay 30000)
 (def key-share-timeout-delay 20000)     ; 20 secs
@@ -15,7 +15,7 @@
 (def reset-timeout-delay 1000)
 (def sng-next-game-timeout-delay 30000)
 (def blinds-out-reset-delay 20000)
-(def max-drop-count 2)
+(def max-drop-count 1)
 (def tournament-start-delay
   (if goog.DEBUG
     (* 5 1000)

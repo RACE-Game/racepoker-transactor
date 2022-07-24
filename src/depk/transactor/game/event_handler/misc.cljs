@@ -399,17 +399,22 @@
 (defn with-next-op-player-id-as
   [state k]
   (let [id (next-op-player-id state (get state k))]
-    (log/log "🫴" (:game-id state) "Set %s: %s -> %s" k (get state k) id)
+    (log/log "🫴" (:game-id state) "Set %s: %s -> %s" (name k) (get state k) id)
     (assoc state k id)))
 
 (defn reset-player-map-status
   [{:keys [player-map], :as state}]
-  (let [new-player-map (->> (for [[pid p] player-map]
-                              [pid
-                               (assoc p
-                                      :status        :player-status/wait
-                                      :online-status :dropout)])
-                            (into {}))]
+  (let [new-player-map
+        (update-vals player-map
+                     (fn [{:keys [online-status], :as player}]
+                       (cond
+                         (= :sit-out online-status)
+                         player
+
+                         :else
+                         (assoc player
+                                :status        :player-status/wait
+                                :online-status :dropout))))]
     (assoc state :player-map new-player-map)))
 
 (defn increase-blinds
@@ -492,19 +497,46 @@
     (assoc state :btn next-btn)))
 
 (defn can-quick-start?
-  [{:keys [player-map game-type size]}]
-  (let [all-ready? (every? #(= :normal (:online-status %)) (vals player-map))]
+  [{:keys [player-map game-type start-time]}]
+  (let [all-ready? (every? (comp #{:sit-out :normal} :online-status) (vals player-map))
+        normal-cnt (count (filter (comp #{:normal} :online-status) (vals player-map)))]
     (or (and (= :cash game-type)
              (and all-ready?
                   (>= (count player-map) 2)))
 
-        (and (#{:bonus :sng} game-type)
-             (and all-ready?
-                  (= (count player-map) size))))))
+        (and (#{:tournament :sng} game-type)
+             (and all-ready? (some? start-time))
+             (> normal-cnt 1)))))
 
 (defn wait-longer-to-start?
   [{:keys [joined-players]}]
   (seq (filter some? joined-players)))
+
+(defn sit-out-players
+  "Reset online players' drop-count to zero.
+  Increase the drop count to dropout players.
+  If drop-count > max-drop-count, sit out the player."
+  [state]
+  (let [player-map (->
+                     (:player-map state)
+                     (update-vals
+                      (fn [{:keys [online-status drop-count], :as player}]
+                        (cond
+                          (= :normal online-status)
+                          (assoc player :drop-count 0)
+
+                          (and (= :dropout online-status)
+                               (= drop-count c/max-drop-count))
+                          (do
+                            (log/log "↗️" (:game-id state)
+                                     "Set dropout player[%s] sit out" (:player-id player))
+                            (assoc player
+                                   :online-status :sit-out
+                                   :status        :player-status/fold))
+
+                          :else
+                          (update player :drop-count inc)))))]
+    (assoc state :player-map player-map)))
 
 (defn dispatch-start-game
   [{:keys [game-type player-map], :as state} & [start-delay]]
@@ -782,37 +814,46 @@
 (defn blind-bets
   "Make blind bets for SB and BB, ask next player to action."
   [{:keys [sb bb btn player-map], :as state}]
-  (let [players               (list-players-in-order state btn)
-        [sb-player bb-player] (if (= 2 (count players))
-                                ;; two player, BTN is SB
-                                (reverse players)
-                                players)
+  (let [players          (list-players-in-order state btn)
+
+        [sb-player bb-player & rest-players] (if (= 2 (count players))
+                                               ;; two player, BTN is SB
+                                               (reverse players)
+                                               players)
 
         [bb-bet bb-player bb-allin?] (take-bet-from-player bb-player bb)
         [sb-bet sb-player sb-allin?] (take-bet-from-player sb-player sb)
 
-        new-sb-player         (if sb-allin?
-                                (assoc sb-player :status :player-status/allin)
-                                sb-player)
-        new-bb-player         (if bb-allin?
-                                (assoc bb-player :status :player-status/allin)
-                                bb-player)
+        new-sb-player    (if sb-allin?
+                           (assoc sb-player :status :player-status/allin)
+                           sb-player)
+        new-bb-player    (if bb-allin?
+                           (assoc bb-player :status :player-status/allin)
+                           bb-player)
 
-        sb-player-id          (:player-id new-sb-player)
-        bb-player-id          (:player-id new-bb-player)
+        sb-player-id     (:player-id new-sb-player)
+        bb-player-id     (:player-id new-bb-player)
 
-        bet-map               {sb-player-id sb-bet,
-                               bb-player-id bb-bet}
+        bet-map          {sb-player-id sb-bet,
+                          bb-player-id bb-bet}
 
-        action-player-id      (if (= 2 (count players))
+        action-player-id (if (= 2 (count players))
+                           sb-player-id
+                           ;; Pick the first player who does not fold nor allin
+                           (->> (concat rest-players [new-sb-player new-bb-player])
+                                (filter (comp
+                                         not
+                                         #{:player-status/fold
+                                           :player-status/allin}
+                                         :status))
+                                (first)
+                                (:player-id)))
+
+        new-player-map   (assoc player-map
                                 sb-player-id
-                                (:player-id (nth players 2)))
-
-        new-player-map        (assoc player-map
-                                     sb-player-id
-                                     new-sb-player
-                                     bb-player-id
-                                     new-bb-player)]
+                                new-sb-player
+                                bb-player-id
+                                new-bb-player)]
     (-> state
         (assoc
          :bet-map    bet-map
@@ -1359,12 +1400,13 @@
 
         player-map     (assoc player-map winner-id player)
         player-map     (update-vals player-map
-                                    (fn [{:keys [online-status], :as p}]
-                                      (if (= :normal online-status)
+                                    (fn [{:keys [player-id], :as p}]
+                                      (if (= player-id winner-id)
                                         (assoc p :status :player-status/acted)
                                         (assoc p :status :player-status/fold))))
         bet-map        (assoc bet-map winner-id (+ curr-bet bet))]
     (-> state
         (assoc :player-map player-map
                :bet-map    bet-map)
-        (single-player-win winner-id))))
+        (single-player-win winner-id)
+        (add-display [:display/blinds-out {}]))))

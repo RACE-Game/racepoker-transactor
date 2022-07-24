@@ -79,6 +79,20 @@
                                       player-id))
      (throw (ex-info "game not exist" {:game-id game-id})))))
 
+;; (defn sit-out
+;;   [game-manager game-id player-id]
+;;   {:pre [(string? player-id)
+;;          (string? game-id)]}
+;;   (go-try
+;;    (log/log "➡️" game-id "Player[%s] sit out" player-id)
+;;    (if-let [game-worker (manager/find-worker game-manager game-id)]
+;;      (worker/send-event game-worker
+;;                         (m/make-event :client/sit-out
+;;                                       (worker/get-snapshot game-worker)
+;;                                       {}
+;;                                       player-id))
+;;      (throw (ex-info "game not exist" {:game-id game-id})))))
+
 ;; Alive, reconnect
 (defn alive
   [game-manager game-id player-id]
