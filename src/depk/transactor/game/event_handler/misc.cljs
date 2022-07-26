@@ -1187,38 +1187,46 @@
 
 (defn settle
   [{:keys [community-cards], :as state} winning-type]
-  (go-try
-   (let [showdown-card-map (<!? (decrypt-showdown-card-map state))
-         community-cards (or community-cards (<!? (decrypt-community-cards state)))
-         showdown (->> (for [[player-id hole-cards] showdown-card-map]
-                         (let [res (evaluator/evaluate-cards (concat hole-cards
-                                                                     community-cards))]
-                           [player-id
-                            (assoc res
-                                   :player-id  player-id
-                                   :hole-cards hole-cards)]))
-                       (into {}))
-         winner-id-sets (->> showdown
-                             (group-by (comp :value second))
-                             (sort-by first compare-value)
-                             (mapv #(set (mapv first (second %)))))
+  (a/go
+   (try
+     (let [showdown-card-map (<!? (decrypt-showdown-card-map state))
+           community-cards (or community-cards (<!? (decrypt-community-cards state)))
+           showdown (->> (for [[player-id hole-cards] showdown-card-map]
+                           (let [res (evaluator/evaluate-cards (concat hole-cards
+                                                                       community-cards))]
+                             [player-id
+                              (assoc res
+                                     :player-id  player-id
+                                     :hole-cards hole-cards)]))
+                         (into {}))
+           winner-id-sets (->> showdown
+                               (group-by (comp :value second))
+                               (sort-by first compare-value)
+                               (mapv #(set (mapv first (second %)))))
 
-         log {:type         :log/showdown,
-              :showdown-map showdown}]
+           log {:type         :log/showdown,
+                :showdown-map showdown}]
 
-     (-> state
-         (assoc :showdown-map showdown)
-         (assoc :community-cards community-cards)
-         (assign-winner-to-pots winner-id-sets)
-         (update-prize-map)
-         (take-rake)
-         (apply-prize-map)
-         (update-chips-change-map)
-         (submit-game-result)
-         (add-log log)
-         (dispatch-reset)
-         (assoc :status       :game-status/showdown
-                :winning-type winning-type)))))
+       (-> state
+           (assoc :showdown-map showdown)
+           (assoc :community-cards community-cards)
+           (assign-winner-to-pots winner-id-sets)
+           (update-prize-map)
+           (take-rake)
+           (apply-prize-map)
+           (update-chips-change-map)
+           (submit-game-result)
+           (add-log log)
+           (dispatch-reset)
+           (assoc :status       :game-status/showdown
+                  :winning-type winning-type)))
+
+     ;; When decryption is failed
+     ;; We should terminate the game, and put a message
+     (catch js/Error _e
+       (-> state
+           (terminate #{})
+           (add-display [:display/decryption-failed {}]))))))
 
 (defn single-player-win
   "Single player win the game."
