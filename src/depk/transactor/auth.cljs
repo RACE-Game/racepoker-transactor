@@ -9,10 +9,12 @@
 
 (def sign-tmpl
   (str
-   "Signature for RACE Poker\n"
-   "Wallet address: %s\n"
-   "RSA: %s\n"
-   "ED25519: %s"))
+   "RACE Poker\n"
+   "A decentralized web3 poker platform\n"
+   "This signature will be used for authentication of encrypted data\n\n"
+   "Player ID: \n%s\n"
+   "RSA: \n%s\n"
+   "ED25519: \n%s\n"))
 
 (defn user-id-fn
   [{:keys [params], :as _req}]

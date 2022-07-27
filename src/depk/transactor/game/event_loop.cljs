@@ -1,9 +1,10 @@
 (ns depk.transactor.game.event-loop
   (:require
-   [cljs.core.async :as    a
-                    :refer [go go-loop <! timeout close! put!]]
+   [cljs.core.async             :as    a
+                                :refer [go go-loop <! timeout close! put!]]
    [depk.transactor.game.event-handler :as event-handler]
-   [depk.transactor.log :as log]
+   [depk.transactor.log         :as log]
+   [depk.transactor.util        :as u]
    [depk.transactor.game.models :refer [game-state->resp make-event]]
    [depk.transactor.event.protocol :as ep]))
 
@@ -69,6 +70,19 @@
       (assoc :state-id (str (random-uuid)))
       (dissoc :display)))
 
+(defn validate-event
+  [state event]
+  (let [player-id    (:player-id event)
+        state-id     (:state-id state)
+        state-id-sig (-> event
+                         :data
+                         :state-id-sig)]
+    (when (and player-id state-id-sig)
+      (u/verify-signature
+       state-id
+       state-id-sig
+       player-id))))
+
 (defn handle-event
   "Apply event to state, return a channel that contains the result map.
 
@@ -82,6 +96,7 @@
   [state event]
   (go
    (try
+     (validate-event state event)
      (let [new-state (-> state
                          (pre-process-state)
                          (event-handler/handle-event event))]

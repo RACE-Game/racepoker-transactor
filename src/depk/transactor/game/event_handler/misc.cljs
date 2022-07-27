@@ -9,7 +9,8 @@
    [cljs.core.async :as a]
    [clojure.set :as set]
    [goog.string :as gstr]
-   [depk.transactor.log :as log]))
+   [depk.transactor.log :as log]
+   ["tweetnacl" :as nacl]))
 
 (defn- update-vals*
   [f m]
@@ -243,6 +244,18 @@
       (log/log "🧹" game-id "Remove non-alive players: %s" dropout-pids)
       (remove-players state dropout-pids))
     state))
+
+(defn check-state-id-sig!
+  [state event]
+  (let [state-id     (:state-id state)
+        player-id    (:player-id event)
+        state-id-sig (-> event
+                         :data
+                         :state-id-sig)]
+    (js/console.log "state-id: " state-id)
+    (js/console.log "player-id: " player-id)
+    (js/console.log "state-id-sig: " state-id-sig)
+    (u/verify-signature state-id state-id-sig player-id)))
 
 (defn- build-settle-map
   "Build settle-map.

@@ -2,13 +2,14 @@
   (:refer-clojure :exclude [abs])
   (:require-macros depk.transactor.util)
   (:require
-   ["buffer"          :as buffer]
-   ["tweetnacl"       :as nacl]
-   [clojure.string    :as str]
-   [cognitect.transit :as transit]
+   ["buffer"             :as buffer]
+   ["tweetnacl"          :as nacl]
+   [clojure.string       :as str]
+   [cognitect.transit    :as transit]
    [depk.transactor.log]
+   [solana-clj.publickey :as pubkey]
    [taoensso.sente.packers.transit :as sente-transit]
-   [goog.string       :refer [format]]))
+   [goog.string          :refer [format]]))
 
 (def request-log-ignores
   #{"/api/v1/game/state"})
@@ -57,12 +58,11 @@
 
 (defn verify-signature
   [message signed-message pubkey]
-  (let [msg-buf    (buffer/Buffer.from message)
+  (let [msg-buf    (.encode (js/TextEncoder.) message)
         signed-buf (buffer/Buffer.from signed-message "hex")
-        key-buf    (buffer/Buffer.from pubkey)]
+        key-buf    (pubkey/to-buffer (pubkey/make-public-key pubkey))]
     (when-not (nacl/sign.detached.verify msg-buf signed-buf key-buf)
       (throw (ex-info "Invalid signature" {})))))
-
 
 (defn register-global-error-handler!
   [label]

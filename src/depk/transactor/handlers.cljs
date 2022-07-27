@@ -69,23 +69,16 @@
 (defmethod event-msg-handler :client/ready
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
   (a/go
-   (let [[game-id player-id rsa-pub sig] uid]
+   (let [[game-id player-id rsa-pub ed-pub sig] uid]
      (a/<! (game/ready @worker-manager game-id player-id rsa-pub sig))
      (?reply-fn {:result :ok}))))
 
 (defmethod event-msg-handler :client/fix-keys
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
   (a/go
-   (let [[game-id player-id rsa-pub sig] uid]
+   (let [[game-id player-id rsa-pub ed-pub sig] uid]
      (a/<! (game/fix-keys @worker-manager game-id player-id rsa-pub sig))
      (?reply-fn {:result :ok}))))
-
-;; (defmethod event-msg-handler :client/sit-out
-;;   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
-;;   (a/go
-;;    (let [[game-id player-id] uid]
-;;      (a/<! (game/sit-out @worker-manager game-id player-id))
-;;      (?reply-fn {:result :ok}))))
 
 (defmethod event-msg-handler :client/shuffle-cards
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
