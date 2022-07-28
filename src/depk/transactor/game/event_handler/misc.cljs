@@ -613,7 +613,7 @@
 
             :sit-out
             c/sit-out-player-action-timeout-delay)
-          (m/make-event :system/player-action-timeout state {})]))
+          (m/make-event :system/player-action-timeout state {:action-player-id action-player-id})]))
 
 (defn valid-key-ident?
   [state key-ident player-id]
