@@ -634,7 +634,8 @@
                                   (parse-tournament-state-data))
                                  (catch js/Error _ nil))]
        (if (and buyin-serial (not= buyin-serial (:buyin-serial tournament-state)))
-         (do (log/log "🫠"
+         (do (a/<! (a/timeout 1000))
+             (log/log "🫠"
                       tournament-id
                       "Retry fetch tournament, serial mismatch, %s != %s"
                       buyin-serial
@@ -657,6 +658,7 @@
                                   (if (and ranks (= (count ranks) num-players))
                                     ranks
                                     (do
+                                      (a/<! (a/timeout 1000))
                                       (log/log
                                        "🫠"
                                        tournament-id
