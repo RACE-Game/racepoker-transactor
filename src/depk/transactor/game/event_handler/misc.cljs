@@ -558,10 +558,10 @@
              [(cond
                 start-delay start-delay
 
-                (wait-longer-to-start? state)
-                (do
-                  (log/log "⏳" (:game-id state) "Wait %s ms to start" c/long-start-game-delay)
-                  c/long-start-game-delay)
+                ;; (wait-longer-to-start? state)
+                ;; (do
+                ;;   (log/log "⏳" (:game-id state) "Wait %s ms to start" c/long-start-game-delay)
+                ;;   c/long-start-game-delay)
 
                 (can-quick-start? state) c/continue-start-game-delay
                 :else c/default-start-game-delay)
