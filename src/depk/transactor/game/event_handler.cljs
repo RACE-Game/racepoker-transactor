@@ -551,7 +551,7 @@
             (not (get player-map player-id)))
     (misc/invalid-player-id! state event))
 
-  (when (#{:game-status/init} status)
+  (when-not (#{:game-status/play} status)
     (misc/invalid-game-status! state event))
 
   (log/log "❤️" game-id "Player[%s] alive by reconnect" player-id)
