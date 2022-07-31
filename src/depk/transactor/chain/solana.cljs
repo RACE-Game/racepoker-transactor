@@ -435,7 +435,7 @@
 
 (defn settle-tournament
   "Settle the result of tournament."
-  [tournament-id tournament-account-state ranks]
+  [tournament-id tournament-account-state offset ranks]
   (go-try
    (let [_ (log/log "🚀" tournament-id "Settle tournament")
          _ (doseq [r ranks]
@@ -445,19 +445,13 @@
          fee-payer-pubkey (keypair/public-key fee-payer)
          settle-serial    (:settle-serial tournament-account-state)
 
-         offset           0
-         cnt              (count ranks)
          conn             (conn/make-connection (get @config :solana-rpc-endpoint))
 
          rank-pubkey      (:rank-pubkey tournament-account-state)
          tournament-account-pubkey (pubkey/make-public-key tournament-id)
          dealer-program-id (pubkey/make-public-key (get @config :dealer-program-address))
 
-         ix-data          (ib/make-instruction-data
-                           [settle-tournament-ix-id 1]
-                           [cnt 4]
-                           [offset 4])
-
+         cnt              (count ranks)
          ix-keys          (into
                            [{:pubkey     fee-payer-pubkey,
                              :isSigner   true,
@@ -473,6 +467,10 @@
                                    :isSigner   false,
                                    :isWritable false}))
                            ranks)
+         ix-data          (ib/make-instruction-data
+                           [settle-tournament-ix-id 1]
+                           [cnt 4]
+                           [offset 4])
 
          ix               (transaction/make-transaction-instruction
                            {:programId dealer-program-id,
@@ -483,6 +481,8 @@
                            (transaction/add ix))
 
          sig              (<!? (conn/send-transaction conn tx [fee-payer]))
+
+         _ (log/log "🚀" tournament-id "Sig: %s" sig)
 
          ret
          (when sig (<!? (conn/confirm-transaction conn sig "finalized")))
@@ -544,6 +544,9 @@
                          (:settle-serial state))
                 (:settle-serial state))))))))
 
+
+
+
 (extend-type SolanaApi
  p/IChainApi
 
@@ -580,16 +583,28 @@
 
  (p/-settle-tournament
    [this tournament-id tournament-account-state settle-serial ranks]
-   (run-with-retry-loop
-    tournament-id
-    settle-serial
-    (fn []
-      (p/-fetch-tournament-account this
-                                   tournament-id
-                                   {:commitment     "finalized",
-                                    :without-ranks? true}))
-    (fn []
-      (settle-tournament tournament-id tournament-account-state ranks))))
+   (let [batch-size         25
+         offset-ranks-pairs (->> ranks
+                                 (partition-all batch-size)
+                                 (map-indexed vector))]
+     (a/go-loop [[[idx ranks] & pairs] offset-ranks-pairs]
+       (when idx
+         (a/<!
+          (run-with-retry-loop
+           tournament-id
+           (+ settle-serial idx)
+           (fn []
+             (p/-fetch-tournament-account this
+                                          tournament-id
+                                          {:commitment     "finalized",
+                                           :without-ranks? false}))
+           (fn []
+             (println "Settle offset:" (* batch-size idx))
+             (settle-tournament tournament-id
+                                tournament-account-state
+                                (* batch-size idx)
+                                ranks))))
+         (recur pairs)))))
 
  (p/-fetch-game-account
    [_this game-id {:keys [commitment settle-serial], :or {commitment "finalized"}}]
@@ -655,7 +670,7 @@
                                                   (bl/unpack ranks-layout)
                                                   (filter some?))
                                                  (catch js/Error e (println e)))]
-                                  (if (and ranks (= (count ranks) num-players))
+                                  (if (and ranks (>= (count ranks) num-players))
                                     ranks
                                     (do
                                       (a/<! (a/timeout 1000))
