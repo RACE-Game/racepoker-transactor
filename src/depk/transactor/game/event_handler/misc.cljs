@@ -985,7 +985,8 @@
              :status          :game-status/key-share
              :after-key-share :settle)
       (update-require-key-idents)
-      (take-released-keys)))
+      (take-released-keys)
+      (dispatch-key-share-timeout)))
 
 (defn prepare-runner
   "Prepare runner for allin.
@@ -1000,7 +1001,8 @@
              :street          :street/showdown
              :bet-map         nil)
       (update-require-key-idents)
-      (take-released-keys)))
+      (take-released-keys)
+      (dispatch-key-share-timeout)))
 
 (defn- decrypt-community-cards
   [{:keys [op-player-ids player-map share-key-map card-ciphers], :as state}]
