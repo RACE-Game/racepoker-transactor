@@ -71,6 +71,7 @@
        (fn [err]
          (js/console.error
           (format "[%s]There was an uncaught error" label)
+          (.error js/console err)
           err))))
 
 (defn tournament-game-id?

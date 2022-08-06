@@ -19,8 +19,7 @@
                                         settle-tournament-ix-id
                                         parse-bonus-state-data
                                         parse-tournament-state-data
-                                        rank-layout]]
-   [depk.transactor.util :as u]
+                                        registration-layout]]
    ["fs" :as fs]
    ["bn.js" :as bn]))
 
@@ -435,52 +434,58 @@
 
 (defn settle-tournament
   "Settle the result of tournament."
-  [tournament-id tournament-account-state offset ranks]
+  [tournament-id tournament-account-state ranks]
   (go-try
    (let [_ (log/log "🚀" tournament-id "Settle tournament")
          _ (doseq [r ranks]
              (log/log "🚀" tournament-id "-%s" r))
 
-         fee-payer        (load-private-key)
+         settle-size 100
+
+         fee-payer (load-private-key)
          fee-payer-pubkey (keypair/public-key fee-payer)
-         settle-serial    (:settle-serial tournament-account-state)
+         settle-serial (:settle-serial tournament-account-state)
 
-         conn             (conn/make-connection (get @config :solana-rpc-endpoint))
+         conn (conn/make-connection (get @config :solana-rpc-endpoint))
 
-         rank-pubkey      (:rank-pubkey tournament-account-state)
+         registration-pubkey (:registration-pubkey tournament-account-state)
          tournament-account-pubkey (pubkey/make-public-key tournament-id)
          dealer-program-id (pubkey/make-public-key (get @config :dealer-program-address))
 
-         cnt              (count ranks)
-         ix-keys          (into
-                           [{:pubkey     fee-payer-pubkey,
-                             :isSigner   true,
-                             :isWritable false}
-                            {:pubkey     tournament-account-pubkey,
-                             :isSigner   false,
-                             :isWritable true}
-                            {:pubkey     rank-pubkey,
-                             :isSigner   false,
-                             :isWritable true}]
-                           (map (fn [a]
-                                  {:pubkey     (pubkey/make-public-key a),
-                                   :isSigner   false,
-                                   :isWritable false}))
-                           ranks)
-         ix-data          (ib/make-instruction-data
-                           [settle-tournament-ix-id 1]
-                           [cnt 4]
-                           [offset 4])
+         pubkey-to-pos (->> (:ranks tournament-account-state)
+                          (map-indexed #(vector (str (:pubkey %2)) (inc %1)))
+                          (into {}))
 
-         ix               (transaction/make-transaction-instruction
-                           {:programId dealer-program-id,
-                            :keys      ix-keys,
-                            :data      ix-data})
+         ranks-data (->> (concat (mapv #(get pubkey-to-pos % 0) ranks)
+                                 (repeat 0))
+                         (take settle-size)
+                         (mapv #(vector % 2)))
 
-         tx               (doto (transaction/make-transaction)
-                           (transaction/add ix))
+         ix-data (apply
+                  ib/make-instruction-data
+                  [settle-tournament-ix-id 1]
+                  [settle-serial 4]
+                  ranks-data)
 
-         sig              (<!? (conn/send-transaction conn tx [fee-payer]))
+         ix-keys [{:pubkey     fee-payer-pubkey,
+                   :isSigner   true,
+                   :isWritable false}
+                  {:pubkey     tournament-account-pubkey,
+                   :isSigner   false,
+                   :isWritable true}
+                  {:pubkey     registration-pubkey,
+                   :isSigner   false,
+                   :isWritable true}]
+
+         ix (transaction/make-transaction-instruction
+             {:programId dealer-program-id,
+              :keys      ix-keys,
+              :data      ix-data})
+
+         tx (doto (transaction/make-transaction)
+             (transaction/add ix))
+
+         sig (<!? (conn/send-transaction conn tx [fee-payer]))
 
          _ (log/log "🚀" tournament-id "Sig: %s" sig)
 
@@ -544,9 +549,6 @@
                          (:settle-serial state))
                 (:settle-serial state))))))))
 
-
-
-
 (extend-type SolanaApi
  p/IChainApi
 
@@ -583,28 +585,16 @@
 
  (p/-settle-tournament
    [this tournament-id tournament-account-state settle-serial ranks]
-   (let [batch-size         25
-         offset-ranks-pairs (->> ranks
-                                 (partition-all batch-size)
-                                 (map-indexed vector))]
-     (a/go-loop [[[idx ranks] & pairs] offset-ranks-pairs]
-       (when idx
-         (a/<!
-          (run-with-retry-loop
-           tournament-id
-           (+ settle-serial idx)
-           (fn []
-             (p/-fetch-tournament-account this
-                                          tournament-id
-                                          {:commitment     "finalized",
-                                           :without-ranks? false}))
-           (fn []
-             (println "Settle offset:" (* batch-size idx))
-             (settle-tournament tournament-id
-                                tournament-account-state
-                                (* batch-size idx)
-                                ranks))))
-         (recur pairs)))))
+   (run-with-retry-loop
+    tournament-id
+    settle-serial
+    (fn []
+      (p/-fetch-tournament-account this
+                                   tournament-id
+                                   {:commitment     "finalized",
+                                    :without-ranks? false}))
+    (fn []
+      (settle-tournament tournament-id tournament-account-state ranks))))
 
  (p/-fetch-game-account
    [_this game-id {:keys [commitment settle-serial], :or {commitment "finalized"}}]
@@ -658,16 +648,16 @@
              (recur))
          (if without-ranks?
            tournament-state
-           (let [{:keys [rank-size rank-pubkey num-players]} tournament-state
-                 ranks-layout (bl/array rank-size (bl/option rank-layout))
+           (let [{:keys [max-players registration-pubkey num-players]} tournament-state
+                 reg-layout (bl/array max-players (bl/option registration-layout))
                  rank-state   (loop []
                                 (let [ranks (try (some->>
                                                   (a/<! (conn/get-account-info conn
-                                                                               rank-pubkey
+                                                                               registration-pubkey
                                                                                commitment))
                                                   :data
                                                   (buffer-from)
-                                                  (bl/unpack ranks-layout)
+                                                  (bl/unpack reg-layout)
                                                   (filter some?))
                                                  (catch js/Error e (println e)))]
                                   (if (and ranks (>= (count ranks) num-players))

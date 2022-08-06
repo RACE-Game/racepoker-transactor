@@ -42,12 +42,15 @@
 (def join-tournament-ix-id 10)
 (def settle-tournament-ix-id 11)
 (def start-tournament-ix-id 12)
-(def grant-tournament-ix-id 13)
-(def rebuy-tournament-ix-id 14)
+(def deposit-bonus-ix-id 13)
+(def deposit-prize-ix-id 14)
+(def claim-winner-ix-id 15)
 
 ;; Game Account
 
-(def ^:const max-players-num 9)
+(def max-players-num 9)
+(def max-winners 20)
+(def max-bonuses 20)
 
 (defrecord Player [pubkey chips buyin-serial rebuy])
 
@@ -142,50 +145,69 @@
   [data]
   (bl/unpack bonus-state-layout (bl/buffer-from data)))
 
-
 ;; Tournament ranks
 
-(defrecord Rank [pubkey rebuy buyin-serial])
+(defrecord Registration [pubkey rebuy buyin-serial ranking is-settled])
 
-(def rank-layout
-  (bl/struct ->Rank
+(def registration-layout
+  (bl/struct ->Registration
              [:pubkey ; pubkey
               :u8     ; rebuy
               :u32    ; buyin-serial
+              :u16    ; ranking
+              :bool   ; is_settled
              ]))
 
-(def rank-data-len (bl/size rank-layout))
+(def registration-data-len (bl/size registration-layout))
 
-(defn parse-rank-data
+(defn parse-registration-data
   [data]
-  (bl/unpack rank-layout (bl/buffer-from data)))
+  (bl/unpack registration-layout (bl/buffer-from data)))
 
 ;; Tournament Account
 ;; Since the number of participants is uncertain, we need another account to save the ranks
 ;; The size of the ranks will be stored in this account.
 
-(defrecord TournamentState [is-initialized settle-serial buyin-serial size transactor-pubkey
-                            owner-pubkey ticket-pubkey ticket-price rank-pubkey rank-size
-                            num-players buyin-limit start-time status name])
+(defrecord TournamentState [is-initialized settle-serial buyin-serial scene-pubkey size transactor-pubkey
+                            owner-pubkey ticket-pubkey ticket-price max-players
+                            num-players buyin-limit start-time status name
+                            transactor-rake owner-rake blinds-mode total-prize
+                            registration-pubkey prize-pubkey start-chips
+                            bonuses prize-quota])
+
+(defrecord BonusItem [stake-pubkey ranking])
+
+(def bonus-item-layout
+  (bl/struct ->BonusItem
+             [:pubkey
+              :u16]))
 
 (def tournament-state-layout
   (bl/struct ->TournamentState
              [:bool   ; is-initialized
               :u32    ; settle-serial
               :u32    ; buyin-serial
+              :pubkey ; scene-pubkey
               :u8     ; size
               :pubkey ; transactor-pubkey
               :pubkey ; owner-pubkey
               :pubkey ; ticket-pubkey
               :u64    ; ticket-price
-              :pubkey ; rank-pubkey
-              :u32    ; rank-size
-              :u32    ; num-players
+              :u16    ; max-players
+              :u16    ; num-players
               :u8     ; buyin-limit
               :u32    ; start-time
               (bl/enum :registering :playing :completed) ; status
               :str16 ; name
-             ]))
+              :u16   ; transactor-rake
+              :u16   ; owner-rake
+              (bl/enum :normal :turbo :slow)
+              :u64   ; total-prize
+              :pubkey ; registration-pubkey
+              :pubkey ; prize-pubkey
+              :u64   ; start-chips
+              (bl/array max-bonuses (bl/option bonus-item-layout))
+              (bl/array max-winners :u16)]))
 
 (def tournament-state-data-len (bl/size tournament-state-layout))
 

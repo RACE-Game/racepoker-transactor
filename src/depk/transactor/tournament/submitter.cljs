@@ -34,7 +34,7 @@
                                          chain-api
                                          tournament-id
                                          {:settle-serial  settle-serial,
-                                          :without-ranks? true}))]
+                                          :without-ranks? false}))]
               (a/<! (p/-settle-tournament chain-api
                                           tournament-id
                                           last-state
