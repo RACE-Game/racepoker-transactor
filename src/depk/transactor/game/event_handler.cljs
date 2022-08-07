@@ -408,6 +408,7 @@
 
   (-> state
       (misc/mark-dropout-players [shuffle-player-id])
+      (assoc :status :game-status/init)
       (misc/dispatch-reset)))
 
 ;; system/encrypt-timeout
@@ -426,6 +427,7 @@
 
   (-> state
       (misc/mark-dropout-players [encrypt-player-id])
+      (assoc :status :game-status/init)
       (misc/dispatch-reset)))
 
 ;; system/player-action-timeout
