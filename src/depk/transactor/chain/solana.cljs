@@ -77,43 +77,50 @@
                 [(or rake (js/BigInt 0)) 8]])))
    (doall)))
 
+(defn- get-receiver-pubkey
+  [account-pubkey mint-pubkey]
+  (go-try
+   (if (= spl-token/native-mint mint-pubkey)
+     account-pubkey
+
+     (<!?
+      (spl-token/get-associated-token-address
+       mint-pubkey
+       account-pubkey)))))
+
 (defn- find-player-ata-keys-by-settle-map
   [players mint-pubkey bonus-mint-pubkey settle-map]
   (go-try
-   (let [ata-keys-ch (->>
-                      players
-                      (mapcat
-                       (fn [{:keys [pubkey]}]
-                         (when pubkey
-                           (cond-> []
+   (let [ata-keys-ch
+         (->>
+          players
+          (mapcat
+           (fn [{:keys [pubkey]}]
+             (when pubkey
+               (cond-> []
 
-                             ;; When a player left, add his asset ata
-                             (#{:leave} (get-in settle-map [(str pubkey) :settle-status]))
-                             (conj (a/go
-                                    (let [account-pubkey (pubkey/make-public-key pubkey)
-                                          ata-pubkey     (<!?
-                                                          (spl-token/get-associated-token-address
-                                                           mint-pubkey
-                                                           account-pubkey))]
-                                      {:pubkey     ata-pubkey,
-                                       :isSigner   false,
-                                       :isWritable true})))
+                 ;; When a player left, add his asset ata
+                 (#{:leave} (get-in settle-map [(str pubkey) :settle-status]))
+                 (conj (a/go
+                        (let [account-pubkey (pubkey/make-public-key pubkey)
+                              ata-pubkey     (<!? (get-receiver-pubkey account-pubkey mint-pubkey))]
+                          {:pubkey     ata-pubkey,
+                           :isSigner   false,
+                           :isWritable true})))
 
 
-                             ;; When a player pay rake, add his bonus ata
-                             (and bonus-mint-pubkey
-                                  (> (get-in settle-map [(str pubkey) :rake] (js/BigInt 0))
-                                     (js/BigInt 0)))
-                             (conj (a/go
-                                    (let [account-pubkey (pubkey/make-public-key pubkey)
-                                          ata-pubkey     (<!?
-                                                          (spl-token/get-associated-token-address
-                                                           bonus-mint-pubkey
-                                                           account-pubkey))]
-                                      {:pubkey     ata-pubkey,
-                                       :isSigner   false,
-                                       :isWritable true})))))))
-                      (a/map vector))]
+                 ;; When a player pay rake, add his bonus ata
+                 (and bonus-mint-pubkey
+                      (> (get-in settle-map [(str pubkey) :rake] (js/BigInt 0))
+                         (js/BigInt 0)))
+                 (conj (a/go
+                        (let [account-pubkey (pubkey/make-public-key pubkey)
+                              ata-pubkey     (<!? (get-receiver-pubkey account-pubkey
+                                                                       bonus-mint-pubkey))]
+                          {:pubkey     ata-pubkey,
+                           :isSigner   false,
+                           :isWritable true})))))))
+          (a/map vector))]
      (<!? ata-keys-ch))))
 
 (defn- find-player-ata-keys-by-ranking-pos
@@ -127,10 +134,8 @@
                          (when pubkey
                            (a/go
                             (let [account-pubkey (pubkey/make-public-key pubkey)
-                                  ata-pubkey     (<!?
-                                                  (spl-token/get-associated-token-address
-                                                   bonus-mint-pubkey
-                                                   account-pubkey))]
+                                  ata-pubkey     (<!? (get-receiver-pubkey account-pubkey
+                                                                           bonus-mint-pubkey))]
                               {:pubkey     ata-pubkey,
                                :isSigner   false,
                                :isWritable true})))))
@@ -180,15 +185,9 @@
                                  :data
                                  (parse-bonus-state-data)))
 
-           transactor-ata-pubkey (<!?
-                                  (spl-token/get-associated-token-address
-                                   mint-pubkey
-                                   transactor-pubkey))
+           transactor-ata-pubkey (<!? (get-receiver-pubkey transactor-pubkey mint-pubkey))
 
-           owner-ata-pubkey (<!?
-                             (spl-token/get-associated-token-address
-                              mint-pubkey
-                              owner-pubkey))
+           owner-ata-pubkey (<!? (get-receiver-pubkey owner-pubkey mint-pubkey))
 
            ix-body (build-settle-ix-body players settle-map)
 
@@ -198,7 +197,7 @@
                                    [(:settle-serial game-account-state) 4]]
                                   ix-body))
 
-           [pda] (<!? (pubkey/find-program-address #js [(buffer-from "stake")]
+           [pda] (<!? (pubkey/find-program-address #js [(pubkey/to-buffer game-account-pubkey)]
                                                    dealer-program-id))
 
            ata-keys
@@ -228,7 +227,7 @@
                :isWritable true}
               {:pubkey     pda,
                :isSigner   false,
-               :isWritable false}
+               :isWritable true}
               {:pubkey     transactor-ata-pubkey,
                :isSigner   false,
                :isWritable true}
@@ -237,12 +236,22 @@
                :isWritable true}
               {:pubkey     spl-token/token-program-id,
                :isSigner   false,
+               :isWritable false}
+              {:pubkey     pubkey/system-program,
+               :isSigner   false,
                :isWritable false}]
 
              bonus-pubkey
              (into [{:pubkey     bonus-pubkey,
                      :isSigner   false,
                      :isWritable false}
+                    (let [[bonus-pda] (<!? (pubkey/find-program-address #js
+                                                                       [(pubkey/to-buffer
+                                                                         bonus-pubkey)]
+                                                                      dealer-program-id))]
+                      {:pubkey     bonus-pda,
+                       :isSigner   false,
+                       :isWritable false})
                     {:pubkey     (:stake-pubkey bonus-state),
                      :isSigner   false,
                      :isWritable true}])
@@ -297,25 +306,16 @@
 
          _ (log/log "🚀" game-id "Ranking: %s" ranking-pos-list)
 
-         [pda] (<!? (pubkey/find-program-address #js [(buffer-from "stake")]
+         [pda] (<!? (pubkey/find-program-address #js [(pubkey/to-buffer game-account-pubkey)]
                                                  dealer-program-id))
 
          winner-pubkey (pubkey/make-public-key (first ranking))
 
-         ata-pubkey (<!?
-                     (spl-token/get-associated-token-address
-                      mint-pubkey
-                      winner-pubkey))
+         ata-pubkey (<!? (get-receiver-pubkey winner-pubkey mint-pubkey))
 
-         transactor-ata-pubkey (<!?
-                                (spl-token/get-associated-token-address
-                                 mint-pubkey
-                                 transactor-pubkey))
+         transactor-ata-pubkey (<!? (get-receiver-pubkey transactor-pubkey mint-pubkey))
 
-         owner-ata-pubkey (<!?
-                           (spl-token/get-associated-token-address
-                            mint-pubkey
-                            owner-pubkey))
+         owner-ata-pubkey (<!? (get-receiver-pubkey owner-pubkey mint-pubkey))
 
          bonus-state (when bonus-pubkey
                        (some-> (<!? (conn/get-account-info conn bonus-pubkey "finalized"))
@@ -345,7 +345,7 @@
              :isWritable true}
             {:pubkey     pda,
              :isSigner   false,
-             :isWritable false}
+             :isWritable true}
             {:pubkey     transactor-ata-pubkey,
              :isSigner   false,
              :isWritable true}
@@ -357,12 +357,22 @@
              :isWritable true}
             {:pubkey     spl-token/token-program-id,
              :isSigner   false,
+             :isWritable false}
+            {:pubkey     pubkey/system-program,
+             :isSigner   false,
              :isWritable false}]
 
            bonus-state
            (into [{:pubkey     bonus-pubkey,
                    :isSigner   false,
                    :isWritable false}
+                  (let [[bonus-pda] (<!? (pubkey/find-program-address #js
+                                                                     [(pubkey/to-buffer
+                                                                       bonus-pubkey)]
+                                                                    dealer-program-id))]
+                    {:pubkey     bonus-pda,
+                     :isSigner   false,
+                     :isWritable false})
                   {:pubkey     (:stake-pubkey bonus-state),
                    :isSigner   false,
                    :isWritable true}])
@@ -453,8 +463,8 @@
          dealer-program-id (pubkey/make-public-key (get @config :dealer-program-address))
 
          pubkey-to-pos (->> (:ranks tournament-account-state)
-                          (map-indexed #(vector (str (:pubkey %2)) (inc %1)))
-                          (into {}))
+                            (map-indexed #(vector (str (:pubkey %2)) (inc %1)))
+                            (into {}))
 
          ranks-data (->> (concat (mapv #(get pubkey-to-pos % 0) ranks)
                                  (repeat 0))
@@ -650,23 +660,23 @@
            tournament-state
            (let [{:keys [max-players registration-pubkey num-players]} tournament-state
                  reg-layout (bl/array max-players (bl/option registration-layout))
-                 rank-state   (loop []
-                                (let [ranks (try (some->>
-                                                  (a/<! (conn/get-account-info conn
-                                                                               registration-pubkey
-                                                                               commitment))
-                                                  :data
-                                                  (buffer-from)
-                                                  (bl/unpack reg-layout)
-                                                  (filter some?))
-                                                 (catch js/Error e (println e)))]
-                                  (if (and ranks (>= (count ranks) num-players))
-                                    ranks
-                                    (do
-                                      (a/<! (a/timeout 1000))
-                                      (log/log
-                                       "🫠"
-                                       tournament-id
-                                       "Retry fetch tournament ranks, ranks data mismatch.")
-                                      (recur)))))]
+                 rank-state (loop []
+                              (let [ranks (try (some->>
+                                                (a/<! (conn/get-account-info conn
+                                                                             registration-pubkey
+                                                                             commitment))
+                                                :data
+                                                (buffer-from)
+                                                (bl/unpack reg-layout)
+                                                (filter some?))
+                                               (catch js/Error e (println e)))]
+                                (if (and ranks (>= (count ranks) num-players))
+                                  ranks
+                                  (do
+                                    (a/<! (a/timeout 1000))
+                                    (log/log
+                                     "🫠"
+                                     tournament-id
+                                     "Retry fetch tournament ranks, ranks data mismatch.")
+                                    (recur)))))]
              (assoc tournament-state :ranks rank-state))))))))

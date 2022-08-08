@@ -56,9 +56,10 @@
 
 (def player-layout (bl/struct ->Player [:pubkey :u64 :u32 :u8]))
 
-(defrecord GameState [is-initialized buyin-serial settle-serial players stake-account-pubkey
-                      mint-pubkey ante sb bb buyin size game-type transactor-pubkey owner-pubkey
-                      transactor-rake owner-rake status bonus-pubkey name])
+(defrecord GameState [is-initialized buyin-serial settle-serial scene-pubkey players
+                      stake-account-pubkey mint-pubkey ante sb bb buyin size game-type
+                      transactor-pubkey owner-pubkey transactor-rake owner-rake status bonus-pubkey
+                      name])
 
 (def game-state-layout
   (bl/struct ->GameState
@@ -68,6 +69,8 @@
               :u32
               ;; settle_serial
               :u32
+              ;; scene_pubkey
+              :pubkey
               ;; players
               (bl/array max-players-num (bl/option player-layout))
               ;; stake_account_pubkey
@@ -168,7 +171,8 @@
 ;; Since the number of participants is uncertain, we need another account to save the ranks
 ;; The size of the ranks will be stored in this account.
 
-(defrecord TournamentState [is-initialized settle-serial buyin-serial scene-pubkey size transactor-pubkey
+(defrecord TournamentState [is-initialized settle-serial buyin-serial scene-pubkey size
+                            transactor-pubkey
                             owner-pubkey ticket-pubkey ticket-price max-players
                             num-players buyin-limit start-time status name
                             transactor-rake owner-rake blinds-mode total-prize
@@ -205,7 +209,7 @@
               :u64   ; total-prize
               :pubkey ; registration-pubkey
               :pubkey ; prize-pubkey
-              :u64   ; start-chips
+              :u64 ; start-chips
               (bl/array max-bonuses (bl/option bonus-item-layout))
               (bl/array max-winners :u16)]))
 
