@@ -44,7 +44,8 @@
 (def start-tournament-ix-id 12)
 (def deposit-bonus-ix-id 13)
 (def deposit-prize-ix-id 14)
-(def claim-winner-ix-id 15)
+(def claim-prize-ix-id 15)
+(def claim-bonus-ix-id 16)
 
 ;; Game Account
 
