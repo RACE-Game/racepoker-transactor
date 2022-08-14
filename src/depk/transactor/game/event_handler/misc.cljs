@@ -51,6 +51,12 @@
                   {:state state,
                    :event event})))
 
+(defn invalid-player-online-status!
+  [state event]
+  (throw (ex-info "Invalid player online status"
+                  {:state state,
+                   :event event})))
+
 (defn invalid-share-key!
   [state event]
   (throw (ex-info "Invalid share key"

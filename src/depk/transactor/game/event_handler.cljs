@@ -475,6 +475,9 @@
 
   (when winner-id (misc/sng-finished! state event))
 
+  (when-not (= :dropout (get-in player-map [player-id :online-status]))
+    (misc/invalid-player-online-status! state event))
+
   (log/log "✅" game-id "Player[%s] send ready" player-id)
 
   (-> state
