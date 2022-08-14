@@ -141,20 +141,19 @@
 (defn take-event
   [input state]
   (go
-   (let [{:keys [timeout-event]} state
-         [to to-evt] timeout-event
-         ms (- (or to 0) (.getTime (js/Date.)))]
-
-     (if (pos? ms)
-       (let [to-ch      (a/timeout ms)
-             _ (log/log "⌛" (:game-id state) "Timeout %sms event %s" ms (name (:type to-evt)))
-             [val port] (a/alts! [to-ch input])]
-
-         (if (= port to-ch)
-           ;; Fix the dispatch-id of timeout event
-           (assoc to-evt :dispatch-id (:state-id state))
-           val))
-       (a/<! input)))))
+   (let [{:keys [timeout-event]} state]
+     (if (nil? timeout-event)
+       (a/<! input)
+       (let [[to to-evt] timeout-event
+             ms (- (or to 0) (.getTime (js/Date.)))]
+         (if (pos? ms)
+           (let [to-ch      (a/timeout ms)
+                 [val port] (a/alts! [to-ch input])]
+             (if (= port to-ch)
+               ;; Fix the dispatch-id of timeout event
+               (assoc to-evt :dispatch-id (:state-id state))
+               val))
+           (assoc to-evt :dispatch-id (:state-id state))))))))
 
 (defn run-event-loop
   [game-id init-state input output]
