@@ -32,7 +32,8 @@
     :player/bet
     ;; Only for tournament games
     :system/next-game
-    :system/resit-table})
+    :system/resit-table
+    :system/blinds-out})
 
 (defn handle-result
   "Handle the result of event handler.
@@ -122,7 +123,7 @@
                game-id
                "Event[%s] dispatch api request: %s"
                (:type event)
-               req)
+               (:type req))
       (put! output req))))
 
 (defn collect-and-dispatch-game-history

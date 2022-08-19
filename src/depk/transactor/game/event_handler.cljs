@@ -132,7 +132,7 @@
                "Only Player[%s] is ready, blinds out other players.(Tournament)"
                winner-id)
       (-> state
-          (misc/blinds-out winner-id)))
+          (misc/dispatch-blinds-out winner-id)))
 
     ;; ------------------------------------------------
     ;; SNG fail case
@@ -173,7 +173,7 @@
                "Only Player[%s] is ready, blinds out other players.(SNG)"
                winner-id)
       (-> state
-          (misc/blinds-out winner-id)))
+          (misc/dispatch-blinds-out winner-id)))
 
     ;; ------------------------------------------------
     ;; Common fail case
@@ -475,8 +475,9 @@
 
   (when winner-id (misc/sng-finished! state event))
 
-  (when-not (= :dropout (get-in player-map [player-id :online-status]))
-    (misc/invalid-player-online-status! state event))
+  (let [online-status (get-in player-map [player-id :online-status])]
+    (when-not (#{:dropout :sit-out} online-status)
+      (misc/invalid-player-online-status! state event online-status)))
 
   (log/log "✅" game-id "Player[%s] send ready" player-id)
 
@@ -484,7 +485,7 @@
       (assoc-in [:player-map player-id :online-status] :normal)
       (assoc-in [:rsa-pub-map player-id] rsa-pub)
       (assoc-in [:sig-map player-id] sig)
-      (misc/dispatch-start-game)))
+      (misc/reserve-timeout)))
 
 (defmethod handle-event :client/fix-keys
   [{:keys [player-map rsa-pub-map sig-map game-id winner-id status], :as state}
@@ -605,7 +606,7 @@
       (#{:game-status/init :game-status/settle :game-status/showdown} status)
       (do (log/log "⏪️" game-id "Player[%s] leave" player-id)
           (-> new-state
-              (misc/dispatch-reset)))
+              (misc/reserve-timeout)))
 
       ;; The last player will win immediately
       (= 1 (count remain-players))
@@ -865,3 +866,8 @@
       (cond->
         finish?
         (assoc :halt? true))))
+
+(defmethod handle-event :system/blinds-out
+  [{:keys [game-id], :as state}
+   {{:keys [winner-id]} :data}]
+  (misc/blinds-out state winner-id))

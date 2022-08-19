@@ -9,8 +9,7 @@
    [cljs.core.async :as a]
    [clojure.set :as set]
    [goog.string :as gstr]
-   [depk.transactor.log :as log]
-   ["tweetnacl" :as nacl]))
+   [depk.transactor.log :as log]))
 
 (defn- update-vals*
   [f m]
@@ -52,8 +51,8 @@
                    :event event})))
 
 (defn invalid-player-online-status!
-  [state event]
-  (throw (ex-info "Invalid player online status"
+  [state event status]
+  (throw (ex-info (gstr/format "Invalid player online status: %s" status)
                   {:state state,
                    :event event})))
 
@@ -497,14 +496,26 @@
          (into {}))))
 
 (defn dispatch-reset
+  "Dispatch reset event.
+  Tournament game has no reset event."
   [state & [ms]]
+  (if (= :tournament (:game-type state))
+    state
+    (assoc state
+           :dispatch-event
+           [(cond
+              ms ms
+              (:winner-id state) c/sng-next-game-timeout-delay
+              :else c/reset-timeout-delay)
+            (m/make-event :system/reset state {})])))
+
+(defn dispatch-blinds-out
+  "Dispatch blinds out."
+  [state winner-id]
   (assoc state
          :dispatch-event
-         [(cond
-            ms ms
-            (:winner-id state) c/sng-next-game-timeout-delay
-            :else c/reset-timeout-delay)
-          (m/make-event :system/reset state {})]))
+         [c/blinds-out-delay
+          (m/make-event :system/blinds-out state {:winner-id winner-id})]))
 
 (defn next-btn
   [state]
@@ -561,17 +572,7 @@
   [{:keys [game-type player-map], :as state} & [start-delay]]
   (-> state
       (assoc :dispatch-event
-             [(cond
-                start-delay start-delay
-
-                ;; (wait-longer-to-start? state)
-                ;; (do
-                ;;   (log/log "⏳" (:game-id state) "Wait %s ms to start" c/long-start-game-delay)
-                ;;   c/long-start-game-delay)
-
-                (can-quick-start? state) c/continue-start-game-delay
-                :else c/default-start-game-delay)
-              (m/make-event :system/start-game state {})])))
+             [c/default-start-game-delay (m/make-event :system/start-game state {})])))
 
 (defn mark-dropout-players
   [state player-ids]

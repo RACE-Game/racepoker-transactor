@@ -4,18 +4,16 @@
 
 (def max-player-num 9)
 
-(def continue-start-game-delay 2000)
-(def default-start-game-delay 5000)
-(def long-start-game-delay 30000)
+(def default-start-game-delay 3000)
 (def key-share-timeout-delay 20000)     ; 20 secs
-(def shuffle-timeout-delay 15000)       ; 15 secs
+(def shuffle-timeout-delay 10000)       ; 10 secs
 (def encrypt-timeout-delay 10000)       ; 10 secs
 (def player-action-timeout-delay 30000) ; 30 secs
 (def droupout-player-action-timeout-delay 5000)
 (def sit-out-player-action-timeout-delay 1000)
-(def reset-timeout-delay 1000)
+(def reset-timeout-delay 50)
 (def sng-next-game-timeout-delay 30000)
-(def blinds-out-reset-delay 20000)
+(def blinds-out-delay 12000)
 (def max-drop-count 1)
 (def tournament-start-delay
   (if goog.DEBUG

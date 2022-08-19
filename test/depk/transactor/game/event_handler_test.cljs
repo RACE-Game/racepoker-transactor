@@ -101,13 +101,13 @@
                (-> (sut/handle-event state-1 event-1)
                    (select-keys [:player-map :dispatch-event])))))
 
-    (t/testing "success for the second player"
-      (t/is (= {:player-map     {100 {:player-id 100, :position 0, :online-status :normal},
-                                 200 {:player-id 200, :position 1, :online-status :normal}},
-                :dispatch-event [c/continue-start-game-delay
-                                 (m/make-event :system/start-game state-1)]}
-               (-> (sut/handle-event state-2 event-1)
-                   (select-keys [:player-map :dispatch-event])))))
+    ;; (t/testing "success for the second player"
+    ;;   (t/is (= {:player-map     {100 {:player-id 100, :position 0, :online-status :normal},
+    ;;                              200 {:player-id 200, :position 1, :online-status :normal}},
+    ;;             :dispatch-event [c/continue-start-game-delay
+    ;;                              (m/make-event :system/start-game state-1)]}
+    ;;            (-> (sut/handle-event state-2 event-1)
+    ;;                (select-keys [:player-map :dispatch-event])))))
 
     (t/testing "success for single player"
       (t/is (= {:player-map     {100 {:player-id 100, :position 0, :online-status :normal}},
