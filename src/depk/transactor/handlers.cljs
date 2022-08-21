@@ -152,7 +152,7 @@
              :message/id (uuid/v4),
              :timestamp  (js/Date.)}]
     (doseq [u (:any @connected-uids)]
-      (when (= game-id (first u))
+      (when (u/same-message-channel? game-id (first u))
         (send-fn u [:message/text msg])))))
 
 (defmethod event-msg-handler :message/sticker
@@ -165,7 +165,7 @@
               :message/id (uuid/v4),
               :timestamp  (js/Date.)}]
      (doseq [u (:any @connected-uids)]
-       (when (= game-id (first u))
+       (when (u/same-message-channel? game-id (first u))
          (send-fn u [:message/sticker msg]))))))
 
 (defmethod event-msg-handler :tournament/join

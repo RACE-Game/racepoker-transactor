@@ -1,10 +1,10 @@
 (ns depk.transactor.constant)
 
-(def version "40")
+(def version "43")
 
 (def max-player-num 9)
 
-(def default-start-game-delay 3000)
+(def default-start-game-delay 4000)
 (def key-share-timeout-delay 20000)     ; 20 secs
 (def shuffle-timeout-delay 10000)       ; 10 secs
 (def encrypt-timeout-delay 10000)       ; 10 secs
@@ -17,8 +17,8 @@
 (def max-drop-count 1)
 (def tournament-start-delay
   (if goog.DEBUG
-    (* 5 1000)
-    (* 60 1000)))
+    (* 240 1000)
+    (* 300 1000)))
 
 (def increase-blinds-interval (* 5 60 1000))
 (def shutdown-game-delay 5000)

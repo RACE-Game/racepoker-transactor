@@ -499,15 +499,13 @@
   "Dispatch reset event.
   Tournament game has no reset event."
   [state & [ms]]
-  (if (= :tournament (:game-type state))
-    state
-    (assoc state
-           :dispatch-event
-           [(cond
-              ms ms
-              (:winner-id state) c/sng-next-game-timeout-delay
-              :else c/reset-timeout-delay)
-            (m/make-event :system/reset state {})])))
+  (assoc state
+         :dispatch-event
+         [(cond
+            ms ms
+            (:winner-id state) c/sng-next-game-timeout-delay
+            :else c/reset-timeout-delay)
+          (m/make-event :system/reset state {})]))
 
 (defn dispatch-blinds-out
   "Dispatch blinds out."
@@ -569,10 +567,11 @@
     (assoc state :player-map player-map)))
 
 (defn dispatch-start-game
-  [{:keys [game-type player-map], :as state} & [start-delay]]
+  [state & [start-delay]]
   (-> state
       (assoc :dispatch-event
-             [c/default-start-game-delay (m/make-event :system/start-game state {})])))
+             [(or start-delay c/default-start-game-delay)
+              (m/make-event :system/start-game state {})])))
 
 (defn mark-dropout-players
   [state player-ids]

@@ -28,13 +28,6 @@
   {:type :system/tournament-broadcast,
    :data {:state state}})
 
-(defn broadcast-start-tournament-games
-  [state]
-  {:type :system/tournament-broadcast,
-   :data {:event {:type :system/start-tournament-games,
-                  :data {:start-time (.getTime (js/Date.)),
-                         :games      (:games state)}}}})
-
 (defn broadcast-next-game
   [game-id game-account-state finish?]
   {:type :system/tournament-broadcast,
@@ -60,10 +53,15 @@
 
 (defn broadcast-start-tournament
   [state]
-  {:type :system/tournament-broadcast,
-   :data {:state state,
-          :event {:type :system/start-tournament,
-                  :data {:games (:games state)}}}})
+  (let [{:keys [start-time]} state
+        ;; on-chain start-time is unix timestamp, we multiply 1000 here to convert it to ms
+        ;; timestamp
+        start-time (+ c/tournament-start-delay (* start-time 1000))]
+    {:type :system/tournament-broadcast,
+     :data {:state state,
+            :event {:type :system/start-tournament,
+                    :data {:games      (:games state),
+                           :start-time start-time}}}}))
 
 ;;; Helpers
 
@@ -318,36 +316,44 @@
         num-games (quot (+ (dec size) num-players) size)
 
         ;; assign players to games
-        games     (assign-players-to-games tournament-id num-games ranks size)
-        new-state (assoc state :games games)
-        evts      (cond->
-                    [(broadcast-start-tournament new-state)]
+        new-state (cond-> state
+                    (= :playing status)
+                    (assoc :games (assign-players-to-games tournament-id num-games ranks size)))
+
+        evts      (cond-> []
 
                     (= :registering status)
                     (conj {:type :system/submit-start-tournament,
                            :data {}})
 
                     (= :playing status)
-                    (conj (broadcast-start-tournament-games new-state)))]
-
+                    (conj
+                     (broadcast-state new-state)
+                     (broadcast-start-tournament new-state)))]
     (log/log "🌠" tournament-id "Start tournament, creating %s tables" num-games)
     [new-state evts]))
 
 ;; Sync on-chain tournament state
 (defmethod apply-event :system/sync-tournament-state
-  [old-state
+  [{:keys [tournament-id], :as old-state}
    {{:keys [state]} :data}]
   (cond
     ;; Send start tournament game when StartTournament transaction is finalized
+    ;; Create games
+    ;; So frontend can join.
     (and (= :registering (:status old-state))
          (= :playing (:status state)))
-    (let [new-state (assoc state :games (:games old-state))]
+    (let [{:keys [ranks num-players size]} state
+          ranks     (filter some? ranks)
+          num-games (quot (+ (dec size) num-players) size)
+          games     (assign-players-to-games tournament-id num-games ranks size)
+          new-state (assoc state :games games)]
       (log/log "🌠"
                (:tournament-id old-state)
                "StartTournament transaction finalized. Send start games.")
       [new-state
        [(broadcast-state new-state)
-        (broadcast-start-tournament-games new-state)]])
+        (broadcast-start-tournament new-state)]])
 
     ;; Update state during the registration
     (= :registering (:status old-state))

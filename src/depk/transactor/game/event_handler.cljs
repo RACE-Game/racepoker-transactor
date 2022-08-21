@@ -812,12 +812,15 @@
 (defmethod handle-event :system/start-tournament-game
   [{:keys [game-id], :as state}
    {{:keys [start-time]} :data,
-    :as _event}]
-  (log/log "🏁" game-id "Start game")
+    timestamp :timestamp,
+    :as       _event}]
+  (log/log "🏁" game-id
+           "Start game, after %s ms"
+           (max 0 (- start-time timestamp)))
   (-> state
       (assoc :halt?      false
              :start-time start-time)
-      (misc/reserve-timeout)))
+      (misc/dispatch-start-game (max 0 (- start-time timestamp)))))
 
 ;; :system/next-game & :system/resit-table
 ;; are the replacements for reset in TOURNAMENT

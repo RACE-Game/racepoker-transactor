@@ -77,3 +77,11 @@
 (defn tournament-game-id?
   [id]
   (str/includes? id "#"))
+
+(defn same-message-channel?
+  [id1 id2]
+  (or (= id1 id2)
+      (and (tournament-game-id? id1)
+           (tournament-game-id? id2)
+           (= (first (str/split id1 #"#"))
+              (first (str/split id2 #"#"))))))
