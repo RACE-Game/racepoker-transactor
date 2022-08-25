@@ -4,7 +4,7 @@
 
 (def max-player-num 9)
 
-(def default-start-game-delay 4000)
+(def default-start-game-delay 4500)
 (def key-share-timeout-delay 20000)     ; 20 secs
 (def shuffle-timeout-delay 10000)       ; 10 secs
 (def encrypt-timeout-delay 10000)       ; 10 secs

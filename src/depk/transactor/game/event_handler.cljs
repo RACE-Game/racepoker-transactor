@@ -479,7 +479,7 @@
     (when-not (#{:dropout :sit-out} online-status)
       (misc/invalid-player-online-status! state event online-status)))
 
-  (log/log "✅" game-id "Player[%s] send ready" player-id)
+  (log/log "✅" game-id "Player[%s] ready" player-id)
 
   (-> state
       (assoc-in [:player-map player-id :online-status] :normal)

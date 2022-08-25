@@ -19,6 +19,12 @@
 
 ;; errors
 
+(defn player-is-not-co-dealer!
+  [state event]
+  (throw (ex-info "Player is not co-dealer"
+                  {:state state,
+                   :event event})))
+
 (defn player-already-alive!
   [state event]
   (throw (ex-info "Player already alive"

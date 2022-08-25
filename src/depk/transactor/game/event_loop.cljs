@@ -68,7 +68,9 @@
 (defn pre-process-state
   [state]
   (-> state
+      ;; Give random `state-id` to identify each state
       (assoc :state-id (str (random-uuid)))
+      ;; Display instruction will be used only-once
       (dissoc :display)))
 
 (defn validate-event
@@ -142,7 +144,11 @@
 (defn take-event
   [input state]
   (go
-   (let [{:keys [timeout-event]} state]
+   (let [{:keys [timeout-event state-id]} state
+         process-event (fn [event]
+                         (assoc event
+                                :dispatch-id state-id
+                                :timestamp   (.getTime (js/Date.))))]
      (if (nil? timeout-event)
        (a/<! input)
        (let [[to to-evt] timeout-event
@@ -152,9 +158,9 @@
                  [val port] (a/alts! [to-ch input])]
              (if (= port to-ch)
                ;; Fix the dispatch-id of timeout event
-               (assoc to-evt :dispatch-id (:state-id state))
+               (process-event to-evt)
                val))
-           (assoc to-evt :dispatch-id (:state-id state))))))))
+           (process-event to-evt)))))))
 
 (defn run-event-loop
   [game-id init-state input output]
@@ -165,9 +171,7 @@
             records []]
     (if-let [event (<! (take-event input state))]
       (if (event-list (:type event))
-        (let [;; Set current time as timestamp
-              event     (assoc event :timestamp (.getTime (js/Date.)))
-              old-state state
+        (let [old-state state
               {:keys [result state api-requests error]}
               (<! (handle-event state event))]
 
