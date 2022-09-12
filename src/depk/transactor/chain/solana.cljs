@@ -246,9 +246,9 @@
                      :isSigner   false,
                      :isWritable false}
                     (let [[bonus-pda] (<!? (pubkey/find-program-address #js
-                                                                       [(pubkey/to-buffer
-                                                                         bonus-pubkey)]
-                                                                      dealer-program-id))]
+                                                                         [(pubkey/to-buffer
+                                                                           bonus-pubkey)]
+                                                                        dealer-program-id))]
                       {:pubkey     bonus-pda,
                        :isSigner   false,
                        :isWritable false})
@@ -367,9 +367,9 @@
                    :isSigner   false,
                    :isWritable false}
                   (let [[bonus-pda] (<!? (pubkey/find-program-address #js
-                                                                     [(pubkey/to-buffer
-                                                                       bonus-pubkey)]
-                                                                    dealer-program-id))]
+                                                                       [(pubkey/to-buffer
+                                                                         bonus-pubkey)]
+                                                                      dealer-program-id))]
                     {:pubkey     bonus-pda,
                      :isSigner   false,
                      :isWritable false})
@@ -593,19 +593,6 @@
     (fn []
       (start-tournament tournament-id tournament-account-state))))
 
- (p/-settle-tournament
-   [this tournament-id tournament-account-state settle-serial ranks]
-   (run-with-retry-loop
-    tournament-id
-    settle-serial
-    (fn []
-      (p/-fetch-tournament-account this
-                                   tournament-id
-                                   {:commitment     "finalized",
-                                    :without-ranks? false}))
-    (fn []
-      (settle-tournament tournament-id tournament-account-state ranks))))
-
  (p/-fetch-game-account
    [_this game-id {:keys [commitment settle-serial], :or {commitment "finalized"}}]
    (a/go-loop []
@@ -635,6 +622,19 @@
           mint-state  (<!? (spl-token/get-mint conn mint-pubkey "finalized"))]
       mint-state)))
 
+ (p/-settle-tournament
+   [this tournament-id tournament-account-state settle-serial ranks]
+   (run-with-retry-loop
+    tournament-id
+    settle-serial
+    (fn []
+      (p/-fetch-tournament-account this
+                                   tournament-id
+                                   {:commitment     "finalized",
+                                    :without-ranks? false}))
+    (fn []
+      (settle-tournament tournament-id tournament-account-state ranks))))
+
  (p/-fetch-tournament-account
    [_this tournament-id
     {:keys [commitment buyin-serial without-ranks?],
@@ -648,35 +648,36 @@
                                   :data
                                   (parse-tournament-state-data))
                                  (catch js/Error _ nil))]
-       (if (and buyin-serial (not= buyin-serial (:buyin-serial tournament-state)))
-         (do (a/<! (a/timeout 1000))
-             (log/log "🫠"
-                      tournament-id
-                      "Retry fetch tournament, serial mismatch, %s != %s"
-                      buyin-serial
-                      (:buyin-serial tournament-state))
-             (recur))
-         (if without-ranks?
-           tournament-state
-           (let [{:keys [max-players registration-pubkey num-players]} tournament-state
-                 reg-layout (bl/array max-players (bl/option registration-layout))
-                 rank-state (loop []
-                              (let [ranks (try (some->>
-                                                (a/<! (conn/get-account-info conn
-                                                                             registration-pubkey
-                                                                             commitment))
-                                                :data
-                                                (buffer-from)
-                                                (bl/unpack reg-layout)
-                                                (filter some?))
-                                               (catch js/Error e (println e)))]
-                                (if (and ranks (>= (count ranks) num-players))
-                                  ranks
-                                  (do
-                                    (a/<! (a/timeout 1000))
-                                    (log/log
-                                     "🫠"
-                                     tournament-id
-                                     "Retry fetch tournament ranks, ranks data mismatch.")
-                                    (recur)))))]
-             (assoc tournament-state :ranks rank-state))))))))
+       (when tournament-state
+         (if (and buyin-serial (not= buyin-serial (:buyin-serial tournament-state)))
+           (do (a/<! (a/timeout 1000))
+               (log/log "🫠"
+                        tournament-id
+                        "Retry fetch tournament, serial mismatch, %s != %s"
+                        buyin-serial
+                        (:buyin-serial tournament-state))
+               (recur))
+           (if without-ranks?
+             tournament-state
+             (let [{:keys [max-players registration-pubkey num-players]} tournament-state
+                   reg-layout (bl/array max-players (bl/option registration-layout))
+                   rank-state (loop []
+                                (let [ranks (try (some->>
+                                                  (a/<! (conn/get-account-info conn
+                                                                               registration-pubkey
+                                                                               commitment))
+                                                  :data
+                                                  (buffer-from)
+                                                  (bl/unpack reg-layout)
+                                                  (filter some?))
+                                                 (catch js/Error e (println e)))]
+                                  (if (and ranks (>= (count ranks) num-players))
+                                    ranks
+                                    (do
+                                      (a/<! (a/timeout 1000))
+                                      (log/log
+                                       "🫠"
+                                       tournament-id
+                                       "Retry fetch tournament ranks, ranks data mismatch.")
+                                      (recur)))))]
+               (assoc tournament-state :ranks rank-state)))))))))

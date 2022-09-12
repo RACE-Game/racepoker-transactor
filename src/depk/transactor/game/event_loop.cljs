@@ -145,12 +145,19 @@
   [input state]
   (go
    (let [{:keys [timeout-event state-id]} state
-         process-event (fn [event]
-                         (assoc event
-                                :dispatch-id state-id
-                                :timestamp   (.getTime (js/Date.))))]
+         with-dispatch-id-and-timestamp
+         (fn [event]
+           (when event
+             (assoc event
+                    :dispatch-id state-id
+                    :timestamp   (.getTime (js/Date.)))))
+
+         with-timestamp
+         (fn [event]
+           (when event
+             (assoc event :timestamp (.getTime (js/Date.)))))]
      (if (nil? timeout-event)
-       (a/<! input)
+       (with-timestamp (a/<! input))
        (let [[to to-evt] timeout-event
              ms (- (or to 0) (.getTime (js/Date.)))]
          (if (pos? ms)
@@ -158,9 +165,10 @@
                  [val port] (a/alts! [to-ch input])]
              (if (= port to-ch)
                ;; Fix the dispatch-id of timeout event
-               (process-event to-evt)
-               val))
-           (process-event to-evt)))))))
+               (with-dispatch-id-and-timestamp to-evt)
+               (with-timestamp val)))
+           ;; Fix the dispatch-id of instant timeout event
+           (with-dispatch-id-and-timestamp to-evt)))))))
 
 (defn run-event-loop
   [game-id init-state input output]

@@ -7,19 +7,12 @@
   1. Mark the tournament is playing
   At start-time, submit the transaction to set the tournament status to `:playing`.
 
-  2. Update ranks, tables and merge tables whenever possible
-  During the game, whenever possible, tables will be merged.
-  In the tournament, each tables has the size 6, except the final table, which has size 9.
-
-  3. Contract will automatically set the status to completed
-  When there's only one player remainning.
-  "
+  2. Update ranks, tables and merge tables when the tournament is finished."
   (:require
    [cljs.core.async          :as a]
    [depk.transactor.constant :as c]
    [depk.transactor.event.protocol :as event-p]
-   [depk.transactor.log      :as log]
-   [depk.transactor.util     :as u]))
+   [depk.transactor.log      :as log]))
 
 ;;; Event broadcasts
 

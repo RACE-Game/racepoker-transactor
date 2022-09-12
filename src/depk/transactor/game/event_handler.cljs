@@ -814,9 +814,12 @@
    {{:keys [start-time]} :data,
     timestamp :timestamp,
     :as       _event}]
-  (log/log "🏁" game-id
-           "Start game, after %s ms"
-           (max 0 (- start-time timestamp)))
+  (log/log "🏁"
+           game-id
+           "Start game, after %s ms. timestamp: %s, start-time: %s"
+           (max 0 (- start-time timestamp))
+           timestamp
+           start-time)
   (-> state
       (assoc :halt?      false
              :start-time start-time)
