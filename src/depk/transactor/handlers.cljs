@@ -143,6 +143,18 @@
      (a/<! (game/player-fold @worker-manager game-id player-id share-keys))
      (?reply-fn {:result :ok}))))
 
+(defmethod event-msg-handler :message/show-cards
+  [{:as ev-msg, :keys [connected-uids event id uid ?data ring-req ?reply-fn send-fn]}]
+  (let [[game-id player-id] uid
+        msg {:game-id    (:game-id ?data),
+             :sender     player-id,
+             :hole-cards (:hole-cards ?data),
+             :message/id (uuid/v4),
+             :timestamp  (js/Date.)}]
+    (doseq [u (:any @connected-uids)]
+      (when (= game-id (first u))
+        (send-fn u [:message/show-cards msg])))))
+
 (defmethod event-msg-handler :message/text
   [{:as ev-msg, :keys [connected-uids event id uid ?data ring-req ?reply-fn send-fn]}]
   (let [[game-id player-id] uid
