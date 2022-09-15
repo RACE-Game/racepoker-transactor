@@ -46,7 +46,7 @@
 
 (defn make-worker
   [game-id opts]
-  (let [{:keys [tournament-id players size start-time]} opts
+  (let [{:keys [tournament-id players size start-time blinds-mode]} opts
         snapshot   (atom {})
         on-message (make-worker-message-handler snapshot opts)
         worker     (doto
@@ -61,6 +61,7 @@
                                            :tournament-id tournament-id,
                                            :size          size,
                                            :players       players,
+                                           :blinds-mode   blinds-mode,
                                            :start-time    start-time})}})
                     (.on "message" on-message)
                     (.on "error" (partial on-worker-error game-id))

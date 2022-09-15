@@ -23,7 +23,7 @@
           (case type
             ;; Start new tournament, create tables
             :system/start-tournament
-            (let [{:keys [games start-time]} data]
+            (let [{:keys [games start-time blinds-mode]} data]
               (doseq [{:keys [game-id players size]} games]
                 ;; Wait till the game is started
                 (a/<! (tournament-game/start-tournament-game
@@ -32,6 +32,7 @@
                         :game-id       game-id,
                         :players       players,
                         :size          size,
+                        :blinds-mode   blinds-mode,
                         :report-fn     (fn [event]
                                          (send-event {:worker worker} event))}))
                 (tournament-game/send-tournament-event

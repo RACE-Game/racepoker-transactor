@@ -20,7 +20,10 @@
     (* 240 1000)
     (* 300 1000)))
 
-(def increase-blinds-interval (* 5 60 1000))
+(def blinds-interval-normal (* 15 60 1000))
+(def blinds-interval-turbo (* 10 60 1000))
+(def blinds-interval-hyper (* 5 60 1000))
+
 (def shutdown-game-delay 5000)
 
 (def level-info-map

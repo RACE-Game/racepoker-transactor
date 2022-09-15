@@ -444,17 +444,23 @@
     (assoc state :player-map new-player-map)))
 
 (defn increase-blinds
-  [{:keys [base-sb base-bb game-type start-time game-id], :as state} timestamp]
+  [{:keys [base-sb base-bb game-type start-time game-id blinds-mode], :as state} timestamp]
   (if (and (#{:sng :tournament} game-type)
            start-time)
-    (let [cnt    (int (/ (- timestamp start-time)
-                         c/increase-blinds-interval))
-          blinds (nth c/blinds-structure cnt (last c/blinds-structure))
-          sb     (/ (* (js/BigInt (first blinds)) base-sb) (js/BigInt 50))
-          bb     (/ (* (js/BigInt (second blinds)) base-sb) (js/BigInt 50))]
+    (let [interval (case blinds-mode
+                     :normal c/blinds-interval-normal
+                     :turbo  c/blinds-interval-turbo
+                     :hyper  c/blinds-interval-hyper
+                     c/blinds-interval-turbo)
+          cnt      (int (/ (- timestamp start-time)
+                           interval))
+          blinds   (nth c/blinds-structure cnt (last c/blinds-structure))
+          sb       (/ (* (js/BigInt (first blinds)) base-sb) (js/BigInt 50))
+          bb       (/ (* (js/BigInt (second blinds)) base-sb) (js/BigInt 50))]
       (log/log "🌶️"
                game-id
-               "Maintain blinds, start-time: %s count: %s sb: %s bb: %s"
+               "Maintain blinds, blinds-mode: %s start-time: %s count: %s sb: %s bb: %s"
+               blinds-mode
                start-time
                cnt
                sb

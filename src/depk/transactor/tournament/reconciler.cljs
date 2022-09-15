@@ -46,15 +46,16 @@
 
 (defn broadcast-start-tournament
   [state]
-  (let [{:keys [start-time]} state
+  (let [{:keys [start-time blinds-mode]} state
         ;; on-chain start-time is unix timestamp, we multiply 1000 here to convert it to ms
         ;; timestamp
         start-time (+ c/tournament-start-delay (* start-time 1000))]
     {:type :system/tournament-broadcast,
      :data {:state state,
             :event {:type :system/start-tournament,
-                    :data {:games      (:games state),
-                           :start-time start-time}}}}))
+                    :data {:games       (:games state),
+                           :start-time  start-time,
+                           :blinds-mode blinds-mode}}}}))
 
 ;;; Helpers
 

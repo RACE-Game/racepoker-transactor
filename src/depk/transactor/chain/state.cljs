@@ -206,7 +206,7 @@
               :str16 ; name
               :u16   ; transactor-rake
               :u16   ; owner-rake
-              (bl/enum :normal :turbo :slow)
+              (bl/enum :normal :turbo :hyper)
               :u64   ; total-prize
               :pubkey ; registration-pubkey
               :pubkey ; prize-pubkey

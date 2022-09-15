@@ -17,7 +17,7 @@
    event-loop])
 
 (defn make-game-handle
-  [game-id players size post-msg-fn]
+  [game-id players size blinds-mode post-msg-fn]
   (log/log "🎉" game-id "Create game handle")
   (a/go
    (let [game-account-state {:players         players,
@@ -39,8 +39,9 @@
          mint-info          {:decimals 0}
          init-state         (m/make-game-state game-account-state
                                                mint-info
-                                               {:game-id game-id,
-                                                :halt?   true})
+                                               {:game-id     game-id,
+                                                :blinds-mode blinds-mode,
+                                                :halt?       true})
          opts               {:game-id game-id, :init-state init-state}
          event-bus          (event/make-mem-event-bus)
          submitter          (submitter/make-tournament-game-submitter post-msg-fn)

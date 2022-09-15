@@ -45,6 +45,7 @@
            :ranks         (:ranks parsed-account-state),
            :status        (:status tournament-account-state),
            :start-time    (:start-time tournament-account-state),
+           :blinds-mode   (:blinds-mode tournament-account-state)
            :size          (:size tournament-account-state),
            :num-players   (:num-players tournament-account-state),
            :tournament-account-state parsed-account-state})
