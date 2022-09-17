@@ -59,8 +59,6 @@
 
 ;;; Helpers
 
-(def init-chips (js/BigInt 10000))
-
 (let [n (atom 0)]
   (defn gen-serial-number
     []
@@ -107,7 +105,7 @@
 
 (defn- assign-players-to-games
   "Assign players to games"
-  [tournament-id num-games ranks size]
+  [tournament-id start-chips num-games ranks size]
   (let [init (vec
               (repeatedly num-games
                           (partial make-pseudo-game-account-state
@@ -123,7 +121,7 @@
                  sit-in-game
                  (-> r
                      (update :pubkey str)
-                     (assoc :chips init-chips))
+                     (assoc :chips start-chips))
                  true)
 
          (let [new-idx (inc idx)]
@@ -303,16 +301,17 @@
 
 ;; The starting event for reconciler
 (defmethod apply-event :system/start-tournament
-  [{:keys [tournament-id], :as state} _]
-  (let [{:keys [ranks num-players status size]} state
-        ranks     (filter some? ranks)
+  [{:keys [tournament-id ranks num-players status size start-chips], :as state} _]
+  (let [ranks     (filter some? ranks)
         ;; calculate the number of tables
         num-games (quot (+ (dec size) num-players) size)
 
         ;; assign players to games
         new-state (cond-> state
                     (= :playing status)
-                    (assoc :games (assign-players-to-games tournament-id num-games ranks size)))
+                    (assoc
+                     :games
+                     (assign-players-to-games tournament-id start-chips num-games ranks size)))
 
         evts      (cond-> []
 
@@ -330,7 +329,7 @@
 ;; Sync on-chain tournament state
 (defmethod apply-event :system/sync-tournament-state
   [{:keys [tournament-id], :as old-state}
-   {{:keys [state]} :data}]
+   {{:keys [state start-chips]} :data}]
   (cond
     ;; Send start tournament game when StartTournament transaction is finalized
     ;; Create games
@@ -340,7 +339,7 @@
     (let [{:keys [ranks num-players size]} state
           ranks     (filter some? ranks)
           num-games (quot (+ (dec size) num-players) size)
-          games     (assign-players-to-games tournament-id num-games ranks size)
+          games     (assign-players-to-games tournament-id start-chips num-games ranks size)
           new-state (assoc state :games games)]
       (log/log "🌠"
                (:tournament-id old-state)
