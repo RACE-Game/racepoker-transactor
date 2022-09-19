@@ -26,6 +26,7 @@
       (gstr/format sign-tmpl pubkey rsa-pub ed-pub sig))]
     (if (nacl/sign.detached.verify msg (buffer/Buffer.from sig "hex") k)
       (do (log/log "🤝" game-id "Receive valid connecting request from player[%s]" pubkey)
+          (println ed-pub)
           [game-id pubkey rsa-pub ed-pub sig])
       (do (log/log "⭕" game-id "Receive invalid connecting request from player[%s]" pubkey)
           (throw (ex-info "Reject connection" {:reason "Signature check failed"}))))))

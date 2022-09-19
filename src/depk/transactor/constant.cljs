@@ -1,6 +1,6 @@
 (ns depk.transactor.constant)
 
-(def version "45")
+(def version "47")
 
 (def max-player-num 9)
 
@@ -40,4 +40,4 @@
 (def blinds-structure
   (->> sb-list
        (mapv (fn [sb]
-               [sb (* sb 2) 5]))))
+               [sb (* sb 2)]))))

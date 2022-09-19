@@ -86,15 +86,21 @@
                   {:state state,
                    :event event})))
 
-(defn cant-update-rsa-pub!
+(defn cant-update-pub!
   [state event]
-  (throw (ex-info "Can't update RSA public key"
+  (throw (ex-info "Can't update public key"
                   {:state state,
                    :event event})))
 
 (defn invalid-rsa-pub!
   [state event]
   (throw (ex-info "Invalid RSA public key"
+                  {:state state,
+                   :event event})))
+
+(defn invalid-ed-pub!
+  [state event]
+  (throw (ex-info "Invalid ED25519 public key"
                   {:state state,
                    :event event})))
 
@@ -187,6 +193,7 @@
     (-> state
         (update :player-map remove-by-pids)
         (update :rsa-pub-map remove-by-pids)
+        (update :ed-pub-map remove-by-pids)
         (update :sig-map remove-by-pids))))
 
 (defn remove-eliminated-players

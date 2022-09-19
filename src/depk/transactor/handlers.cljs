@@ -70,43 +70,42 @@
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
   (a/go
    (let [[game-id player-id rsa-pub ed-pub sig] uid]
-     (a/<! (game/ready @worker-manager game-id player-id rsa-pub sig))
+     (a/<! (game/ready @worker-manager game-id player-id rsa-pub ed-pub sig))
      (?reply-fn {:result :ok}))))
 
 (defmethod event-msg-handler :client/fix-keys
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
   (a/go
    (let [[game-id player-id rsa-pub ed-pub sig] uid]
-     (a/<! (game/fix-keys @worker-manager game-id player-id rsa-pub sig))
+     (a/<! (game/fix-keys @worker-manager game-id player-id rsa-pub ed-pub sig))
      (?reply-fn {:result :ok}))))
 
 (defmethod event-msg-handler :client/shuffle-cards
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
   (a/go
    (let [[game-id player-id] uid
-         {:keys [data]}      ?data]
-     (a/<! (game/shuffle-cards @worker-manager game-id player-id data))
+         {:keys [data secret-id sig]}      ?data]
+     (a/<! (game/shuffle-cards @worker-manager game-id player-id secret-id sig data))
      (?reply-fn {:result :ok}))))
 
 (defmethod event-msg-handler :client/encrypt-cards
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
   (a/go
-   (let [[game-id player-id] uid
-         {:keys [data]}      ?data]
-     (a/<! (game/encrypt-cards @worker-manager game-id player-id data))
+   (let [[game-id player-id _ ed-pub] uid
+         {:keys [data secret-id sig]}      ?data]
+     (a/<! (game/encrypt-cards @worker-manager game-id player-id secret-id sig data))
      (?reply-fn {:result :ok}))))
 
 (defmethod event-msg-handler :client/share-keys
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
   (a/go
-   (let [[game-id player-id] uid
-         {:keys [share-keys secret-id]} ?data]
-     (a/<! (game/share-keys @worker-manager game-id player-id share-keys secret-id))
+   (let [[game-id player-id _ ed-pub] uid
+         {:keys [share-keys secret-id sig]} ?data]
+     (a/<! (game/share-keys @worker-manager game-id player-id share-keys secret-id sig))
      (?reply-fn {:result :ok}))))
 
 (defmethod event-msg-handler :player/call
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
-
   (a/go
    (let [[game-id player-id] uid]
      (a/<! (game/player-call @worker-manager game-id player-id))

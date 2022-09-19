@@ -46,10 +46,11 @@
      (throw (ex-info "game not exist" {:game-id game-id})))))
 
 (defn ready
-  [game-manager game-id player-id rsa-pub sig]
+  [game-manager game-id player-id rsa-pub ed-pub sig]
   {:pre [(string? player-id)
          (string? game-id)
          (string? rsa-pub)
+         (string? ed-pub)
          (string? sig)]}
   (go-try
    (log/log "➡️" game-id "Player[%s] ready" player-id)
@@ -58,15 +59,17 @@
                         (m/make-event :client/ready
                                       (worker/get-snapshot game-worker)
                                       {:rsa-pub rsa-pub,
-                                       :sig     sig}
+                                       :sig     sig,
+                                       :ed-pub  ed-pub}
                                       player-id))
      (throw (ex-info "game not exist" {:game-id game-id})))))
 
 (defn fix-keys
-  [game-manager game-id player-id rsa-pub sig]
+  [game-manager game-id player-id rsa-pub ed-pub sig]
   {:pre [(string? player-id)
          (string? game-id)
          (string? rsa-pub)
+         (string? ed-pub)
          (string? sig)]}
   (go-try
    (log/log "➡️" game-id "Player[%s] fix keys" player-id)
@@ -75,7 +78,8 @@
                         (m/make-event :client/fix-keys
                                       (worker/get-snapshot game-worker)
                                       {:rsa-pub rsa-pub,
-                                       :sig     sig}
+                                       :sig     sig,
+                                       :ed-pub  ed-pub}
                                       player-id))
      (throw (ex-info "game not exist" {:game-id game-id})))))
 
@@ -124,9 +128,11 @@
 ;; Shuffle Cards
 
 (defn shuffle-cards
-  [game-manager game-id player-id data]
+  [game-manager game-id player-id secret-id sig data]
   {:pre [(string? game-id)
          (string? player-id)
+         (int? secret-id)
+         (string? sig)
          (some? data)]}
   (go-try
    (log/log "➡️" game-id "Player[%s] shuffle cards" player-id)
@@ -134,14 +140,18 @@
      (worker/send-event game-worker
                         (m/make-event :client/shuffle-cards
                                       (worker/get-snapshot game-worker)
-                                      {:data data}
+                                      {:data      data,
+                                       :sig       sig,
+                                       :secret-id secret-id}
                                       player-id))
      (throw (ex-info "game not exist" {:game-id game-id})))))
 
 (defn encrypt-cards
-  [game-manager game-id player-id data]
+  [game-manager game-id player-id secret-id sig data]
   {:pre [(string? game-id)
          (string? player-id)
+         (int? secret-id)
+         (string? sig)
          (some? data)]}
   (go-try
    (log/log "➡️" game-id "Player[%s] encrypt cards" player-id)
@@ -149,12 +159,14 @@
      (worker/send-event game-worker
                         (m/make-event :client/encrypt-cards
                                       (worker/get-snapshot game-worker)
-                                      {:data data}
+                                      {:data      data,
+                                       :sig       sig,
+                                       :secret-id secret-id}
                                       player-id))
      (throw (ex-info "game not exist" {:game-id game-id})))))
 
 (defn share-keys
-  [game-manager game-id player-id share-keys secret-id]
+  [game-manager game-id player-id share-keys secret-id sig]
   {:pre [(string? game-id)
          (string? player-id)
          (map? share-keys)
@@ -166,7 +178,8 @@
                         (m/make-event :client/share-keys
                                       (worker/get-snapshot game-worker)
                                       {:share-keys share-keys,
-                                       :secret-id  secret-id}
+                                       :secret-id  secret-id,
+                                       :sig        sig}
                                       player-id))
      (error-game-not-exist! game-id))))
 

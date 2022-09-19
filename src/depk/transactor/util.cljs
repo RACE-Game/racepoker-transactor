@@ -64,6 +64,14 @@
     (when-not (nacl/sign.detached.verify msg-buf signed-buf key-buf)
       (throw (ex-info "Invalid signature" {})))))
 
+(defn verify-signature2
+  [message signed-message ed-pub-hex]
+  (let [msg-buf    (.encode (js/TextEncoder.) message)
+        signed-buf (buffer/Buffer.from signed-message "hex")
+        key-buf    (buffer/Buffer.from ed-pub-hex "hex")]
+    (when-not (nacl/sign.detached.verify msg-buf signed-buf key-buf)
+      (throw (ex-info "Invalid signature" {})))))
+
 (defn register-global-error-handler!
   [label]
   (.on js/process

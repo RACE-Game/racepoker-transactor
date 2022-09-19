@@ -1,9 +1,11 @@
 (ns depk.transactor.game.event-handler
   (:require
+   [depk.transactor.util :as u]
    [depk.transactor.game.encrypt :as encrypt]
    [depk.transactor.game.event-handler.misc :as misc]
-   [depk.transactor.log :as log]
-   [cljs.core.async :refer [go <!]]))
+   [depk.transactor.log  :as log]
+   [goog.string          :refer [format]]
+   [cljs.core.async      :refer [go <!]]))
 
 (defmulti handle-event
   (fn [_state event]
@@ -240,8 +242,12 @@
 ;; receiving this event when player submit shuffled cards
 ;; each player will shuffle cards and encrypt with their shuffle key.
 (defmethod handle-event :client/shuffle-cards
-  [{:keys [op-player-ids shuffle-player-id btn prepare-cards status], :as state}
-   {{:keys [data]} :data, player-id :player-id, :as event}]
+  [{:keys [game-id op-player-ids shuffle-player-id btn prepare-cards status ed-pub-map],
+    :as   state}
+   {{:keys [data sig secret-id]} :data, player-id :player-id, :as event}]
+
+  (when (not= secret-id (:secret-id state))
+    (misc/invalid-secret-id! state event))
 
   (when-not (= :game-status/shuffle status)
     (misc/invalid-game-status! state event))
@@ -249,6 +255,9 @@
   (when (or (not player-id)
             (not (= shuffle-player-id player-id)))
     (misc/invalid-player-id! state event))
+
+  (let [msg (format "client/shuffle-cards %s %s" game-id secret-id)]
+    (u/verify-signature2 msg sig (get ed-pub-map player-id)))
 
   (let [new-shuffle-player-id (misc/next-op-player-id state shuffle-player-id)
         new-prepare-cards     (conj prepare-cards
@@ -275,8 +284,11 @@
 ;; receiving this event when player submit encrypted cards
 ;; each player will remove its shuffle key, and encrypt each cards with encrypt keys respectly.
 (defmethod handle-event :client/encrypt-cards
-  [{:keys [op-player-ids encrypt-player-id prepare-cards status], :as state}
-   {{:keys [data]} :data, player-id :player-id, :as event}]
+  [{:keys [game-id ed-pub-map op-player-ids encrypt-player-id prepare-cards status], :as state}
+   {{:keys [secret-id sig data]} :data, player-id :player-id, :as event}]
+
+  (when (not= secret-id (:secret-id state))
+    (misc/invalid-secret-id! state event))
 
   (when-not (= :game-status/encrypt status)
     (misc/invalid-game-status! state event))
@@ -284,6 +296,9 @@
   (when (or (not player-id)
             (not (= encrypt-player-id player-id)))
     (misc/invalid-player-id! state event))
+
+  (let [msg (format "client/encrypt-cards %s %s" game-id secret-id)]
+    (u/verify-signature2 msg sig (get ed-pub-map player-id)))
 
   (let [new-encrypt-player-id (misc/next-op-player-id state encrypt-player-id)
         new-prepare-cards     (conj prepare-cards
@@ -317,8 +332,8 @@
 ;; client/share-keys
 ;; receiving this event when player share its keys.
 (defmethod handle-event :client/share-keys
-  [{:keys [status after-key-share game-id], :as state}
-   {{:keys [share-keys secret-id]} :data,
+  [{:keys [status after-key-share game-id ed-pub-map], :as state}
+   {{:keys [share-keys secret-id sig]} :data,
     player-id :player-id,
     :as       event}]
 
@@ -331,6 +346,9 @@
 
   (when-not (seq share-keys)
     (misc/empty-share-keys! state event))
+
+  (let [msg (format "client/share-keys %s %s" game-id secret-id)]
+    (u/verify-signature2 msg sig (get ed-pub-map player-id)))
 
   (let [new-state (update state :share-key-map merge share-keys)]
     (cond
@@ -450,21 +468,25 @@
 ;; client/ready
 ;; A event received when a client is ready to start
 (defmethod handle-event :client/ready
-  [{:keys [status player-map winner-id rsa-pub-map sig-map game-id], :as state}
+  [{:keys [status player-map winner-id rsa-pub-map ed-pub-map sig-map game-id], :as state}
    {player-id :player-id,
-    {:keys [rsa-pub sig]} :data,
+    {:keys [rsa-pub sig ed-pub]} :data,
     :as       event}]
 
   (when-not rsa-pub
     (misc/invalid-rsa-pub! state event))
+
+  (when-not ed-pub
+    (misc/invalid-ed-pub! state event))
 
   (when-not sig
     (misc/invalid-sig! state event))
 
   (when (and (get rsa-pub-map player-id)
              (or (not= (get rsa-pub-map player-id) rsa-pub)
+                 (not= (get ed-pub-map player-id) ed-pub)
                  (not= (get sig-map player-id) sig)))
-    (misc/cant-update-rsa-pub! state event))
+    (misc/cant-update-pub! state event))
 
   (when (or (not player-id)
             (not (get player-map player-id)))
@@ -484,13 +506,14 @@
   (-> state
       (assoc-in [:player-map player-id :online-status] :normal)
       (assoc-in [:rsa-pub-map player-id] rsa-pub)
+      (assoc-in [:ed-pub-map player-id] ed-pub)
       (assoc-in [:sig-map player-id] sig)
       (misc/reserve-timeout)))
 
 (defmethod handle-event :client/fix-keys
-  [{:keys [player-map rsa-pub-map sig-map game-id winner-id status], :as state}
+  [{:keys [player-map rsa-pub-map ed-pub-map sig-map game-id winner-id status], :as state}
    {player-id :player-id,
-    {:keys [rsa-pub sig]} :data,
+    {:keys [rsa-pub ed-pub sig]} :data,
     :as       event}]
 
   (when-not (= :game-status/play status)
@@ -498,6 +521,9 @@
 
   (when-not rsa-pub
     (misc/invalid-rsa-pub! state event))
+
+  (when-not ed-pub
+    (misc/invalid-ed-pub! state event))
 
   (when-not sig
     (misc/invalid-sig! state event))
@@ -510,10 +536,12 @@
     (misc/invalid-player-status! state event))
 
   (let [saved-rsa-pub (get rsa-pub-map player-id)
-        saved-sig     (get sig-map player-id)]
+        saved-sig     (get sig-map player-id)
+        saved-ed-pub  (get ed-pub-map player-id)]
     (when (or (and saved-rsa-pub (not= saved-rsa-pub rsa-pub))
-              (and saved-sig (not= saved-sig sig)))
-      (misc/cant-update-rsa-pub! state event)))
+              (and saved-sig (not= saved-sig sig))
+              (and saved-ed-pub (not= saved-ed-pub ed-pub)))
+      (misc/cant-update-pub! state event)))
 
   (when winner-id (misc/sng-finished! state event))
 
@@ -522,6 +550,7 @@
   (-> state
       (assoc-in [:player-map player-id :online-status] :normal)
       (assoc-in [:rsa-pub-map player-id] rsa-pub)
+      (assoc-in [:ed-pub-map player-id] ed-pub)
       (assoc-in [:sig-map player-id] sig)
       (misc/update-require-key-idents)
       (misc/reserve-timeout)))
@@ -849,6 +878,7 @@
         finish?
         (assoc :player-map  {}
                :rsa-pub-map {}
+               :ed-pub-map  {}
                :sig-map     {}
                :halt?       true))))
 
