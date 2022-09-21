@@ -329,14 +329,14 @@
 ;; Sync on-chain tournament state
 (defmethod apply-event :system/sync-tournament-state
   [{:keys [tournament-id], :as old-state}
-   {{:keys [state start-chips]} :data}]
+   {{:keys [state]} :data}]
   (cond
     ;; Send start tournament game when StartTournament transaction is finalized
     ;; Create games
     ;; So frontend can join.
     (and (= :registering (:status old-state))
          (= :playing (:status state)))
-    (let [{:keys [ranks num-players size]} state
+    (let [{:keys [ranks num-players size start-chips]} state
           ranks     (filter some? ranks)
           num-games (quot (+ (dec size) num-players) size)
           games     (assign-players-to-games tournament-id start-chips num-games ranks size)
