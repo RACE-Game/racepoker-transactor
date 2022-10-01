@@ -628,29 +628,40 @@
 
 (defn dispatch-player-action-timeout
   "Dispatch action timeout events."
-  [{:keys [action-player-id player-map street bb bet-map], :as state}]
-  (assoc state
-         :dispatch-event
-         [(condp = (get-in player-map [action-player-id :online-status])
-            :normal
-            ;; depend on the street, and pot
-            (cond
-              (not= :street/preflop street)
-              c/postflop-player-action-timeout-delay
+  [{:keys [action-player-id player-map street bb bet-map], :as state}
+   timestamp]
+  (let [event (m/make-event :system/player-action-timeout
+                            state
+                            {:action-player-id action-player-id})]
+    (condp = (get-in player-map [action-player-id :online-status])
+      :normal
+      ;; depend on the street, and pot
+      (cond
+        (not= :street/preflop street)
+        (assoc state
+               :dispatch-event    [c/postflop-player-action-timeout-delay event]
+               :action-timeout-ts (+ timestamp c/postflop-player-action-timeout-delay))
 
-              (< (* (js/BigInt 2) bb (js/BigInt (count bet-map)))
-                 (reduce + (js/BigInt 0) (vals bet-map)))
-              c/preflop-raised-action-timeout-delay
+        (< (* (js/BigInt 2) bb (js/BigInt (count bet-map)))
+           (reduce + (js/BigInt 0) (vals bet-map)))
+        (assoc state
+               :dispatch-event    [c/preflop-raised-action-timeout-delay event]
+               :action-timeout-ts (+ timestamp c/preflop-raised-action-timeout-delay))
 
-              :else
-              c/preflop-player-action-timeout-delay)
+        :else
+        (assoc state
+               :dispatch-event    [c/preflop-player-action-timeout-delay event]
+               :action-timeout-ts (+ timestamp c/preflop-player-action-timeout-delay)))
 
-            :dropout
-            c/droupout-player-action-timeout-delay
+      :dropout
+      (assoc state
+             :dispatch-event    [c/dropout-player-action-timeout-delay event]
+             :action-timeout-ts (+ timestamp c/dropout-player-action-timeout-delay))
 
-            :sit-out
-            c/sit-out-player-action-timeout-delay)
-          (m/make-event :system/player-action-timeout state {:action-player-id action-player-id})]))
+      :sit-out
+      (assoc state
+             :dispatch-event    [c/sit-out-player-action-timeout-delay event]
+             :action-timeout-ts (+ timestamp c/sit-out-player-action-timeout-delay)))))
 
 (defn valid-key-ident?
   [state key-ident player-id]
@@ -861,15 +872,15 @@
     [real-bet (update player :chips - real-bet) allin?]))
 
 (defn ask-player-for-action
-  [state player-id]
+  [state player-id timestamp]
   (-> state
       (assoc :action-player-id player-id)
       (assoc-in [:player-map player-id :status] :player-status/in-action)
-      (dispatch-player-action-timeout)))
+      (dispatch-player-action-timeout timestamp)))
 
 (defn blind-bets
   "Make blind bets for SB and BB, ask next player to action."
-  [{:keys [sb bb btn player-map], :as state}]
+  [{:keys [sb bb btn player-map], :as state} timestamp]
   (let [players          (list-players-in-order state btn)
 
         [sb-player bb-player & rest-players] (if (= 2 (count players))
@@ -916,7 +927,7 @@
          :player-map new-player-map
          :min-raise  bb
          :street-bet bb)
-        (ask-player-for-action action-player-id)
+        (ask-player-for-action action-player-id timestamp)
         (add-display [:display/deal-cards {}]))))
 
 (defn apply-prize-map
@@ -1396,14 +1407,14 @@
       [:showdown])))
 
 (defn next-state
-  [{:keys [game-id], :as state}]
+  [{:keys [game-id], :as state} timestamp]
   (let [[c v] (next-state-case state)]
     (log/log "💡" game-id "Next state: %s %s" c (or v ""))
     (case c
       ;; :terminate         (terminate state v)
-      :blind-bets        (blind-bets state)
+      :blind-bets        (blind-bets state timestamp)
       :single-player-win (single-player-win state v)
-      :ask-player-for-action (ask-player-for-action state v)
+      :ask-player-for-action (ask-player-for-action state v timestamp)
       :change-street     (change-street state v)
       :showdown          (prepare-showdown state)
       :runner            (prepare-runner state)
@@ -1452,10 +1463,10 @@
   "Finish a game by transfering the blinds.
 
   Used when no enough players to start."
-  [state winner-id]
+  [state winner-id timestamp]
   (let [state          (-> state
                            (assoc :btn (next-btn state))
-                           (blind-bets))
+                           (blind-bets timestamp))
 
         {:keys [player-map bet-map street-bet]} state
         curr-bet       (get bet-map winner-id (js/BigInt 0))

@@ -1,17 +1,17 @@
 (ns depk.transactor.constant)
 
-(def version "49")
+(def version "50")
 
 (def max-player-num 9)
 
-(def default-start-game-delay 4500)
+(def default-start-game-delay 5500)
 (def key-share-timeout-delay 20000)     ; 20 secs
 (def shuffle-timeout-delay 10000)       ; 10 secs
 (def encrypt-timeout-delay 10000)       ; 10 secs
 (def postflop-player-action-timeout-delay 25000) ; 25 secs
-(def preflop-player-action-timeout-delay 10000)  ; 10 secs
+(def preflop-player-action-timeout-delay 12000)  ; 12 secs
 (def preflop-raised-action-timeout-delay 15000)  ; 15 secs
-(def droupout-player-action-timeout-delay 5000)
+(def dropout-player-action-timeout-delay 5000)
 (def sit-out-player-action-timeout-delay 1000)
 (def reset-timeout-delay 50)
 (def sng-next-game-timeout-delay 30000)

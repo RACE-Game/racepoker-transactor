@@ -145,6 +145,7 @@
    bet-map
    collect-bet-map
    action-player-id
+   action-timeout-ts
 
    ;; ----------------------------------------------
    ;; player id to showdown info

@@ -336,6 +336,7 @@
   [{:keys [status after-key-share game-id ed-pub-map], :as state}
    {{:keys [share-keys secret-id sig]} :data,
     player-id :player-id,
+    timestamp :timestamp,
     :as       event}]
 
   (when (not= secret-id (:secret-id state))
@@ -375,7 +376,7 @@
         (log/log "🔑" game-id "Key share complete, go next street")
         (-> new-state
             (assoc :status :game-status/play)
-            (misc/next-state)))
+            (misc/next-state timestamp)))
 
       (= :runner after-key-share)
       (do
@@ -453,7 +454,8 @@
 (defmethod handle-event :system/player-action-timeout
   [{:keys [status action-player-id game-id], :as state}
    {{:keys [share-keys]} :data,
-    :as event}]
+    timestamp :timestamp,
+    :as       event}]
 
   (when-not (= :game-status/play status)
     (misc/invalid-game-status! state event))
@@ -464,7 +466,7 @@
       (assoc-in [:player-map action-player-id :status] :player-status/fold)
       (misc/add-log {:player-id action-player-id,
                      :type      :log/player-action-timeout})
-      (misc/next-state)))
+      (misc/next-state timestamp)))
 
 ;; client/ready
 ;; A event received when a client is ready to start
@@ -608,6 +610,7 @@
   [{:keys [status action-player-id game-type start-time game-id player-map], :as state}
    {{:keys [released-keys]} :data,
     player-id :player-id,
+    timestamp :timestamp,
     :as       event}]
 
   (when (or (not player-id)
@@ -660,7 +663,7 @@
                     (update :released-keys-map assoc player-id released-keys))
 
           (= player-id action-player-id)
-          (misc/next-state)
+          (misc/next-state timestamp)
 
           (not (= player-id action-player-id))
           (misc/reserve-timeout))))))
@@ -670,6 +673,7 @@
    ;; use released keys
    {{:keys [released-keys]} :data,
     player-id :player-id,
+    timestamp :timestamp,
     :as       event}]
 
   (when (or (not player-id)
@@ -686,11 +690,13 @@
       (assoc-in [:player-map player-id :status] :player-status/fold)
       (misc/add-log {:player-id player-id,
                      :type      :log/player-fold})
-      (misc/next-state)))
+      (misc/next-state timestamp)))
 
 (defmethod handle-event :player/call
   [{:keys [bet-map player-map status action-player-id street-bet state-id], :as state}
-   {player-id :player-id, :as event}]
+   {player-id :player-id,
+    timestamp :timestamp,
+    :as       event}]
 
   (when (or (not player-id)
             (not (get player-map player-id)))
@@ -715,11 +721,13 @@
         (misc/add-log {:player-id player-id,
                        :type      :log/player-call,
                        :amount    bet})
-        (misc/next-state))))
+        (misc/next-state timestamp))))
 
 (defmethod handle-event :player/check
   [{:keys [bet-map status action-player-id street-bet state-id player-map], :as state}
-   {player-id :player-id, :as event}]
+   {player-id :player-id,
+    timestamp :timestamp,
+    :as       event}]
 
   (when (or (not player-id)
             (not (get player-map player-id)))
@@ -738,12 +746,13 @@
       (assoc-in [:player-map player-id :status] :player-status/acted)
       (misc/add-log {:player-id player-id,
                      :type      :log/player-check})
-      (misc/next-state)))
+      (misc/next-state timestamp)))
 
 (defmethod handle-event :player/bet
   [{:keys [bet-map player-map bb status min-raise action-player-id street-bet state-id], :as state}
    {{:keys [amount]} :data,
     player-id        :player-id,
+    timestamp        :timestamp,
     :as              event}]
 
   (when (or (not player-id)
@@ -787,12 +796,13 @@
                        :type      :log/player-bet,
                        :amount    amount})
         (assoc :overwrite-this-event (if allin? :player/allin :player/bet))
-        (misc/next-state))))
+        (misc/next-state timestamp))))
 
 (defmethod handle-event :player/raise
   [{:keys [bet-map player-map min-raise status action-player-id street-bet state-id], :as state}
    {{:keys [amount]} :data,
     player-id        :player-id,
+    timestamp        :timestamp,
     :as              event}]
 
   (when (or (not player-id)
@@ -835,7 +845,7 @@
                          :type      :log/player-raise,
                          :amount    amount})
           (assoc :overwrite-this-event (if allin? :player/allin :player/raise))
-          (misc/next-state)))))
+          (misc/next-state timestamp)))))
 
 ;;; Tournament specific
 
@@ -906,5 +916,6 @@
 
 (defmethod handle-event :system/blinds-out
   [{:keys [game-id], :as state}
-   {{:keys [winner-id]} :data}]
-  (misc/blinds-out state winner-id))
+   {{:keys [winner-id]} :data,
+    timestamp           :timestamp}]
+  (misc/blinds-out state winner-id timestamp))
