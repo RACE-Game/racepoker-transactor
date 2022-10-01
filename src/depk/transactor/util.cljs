@@ -78,9 +78,8 @@
        "uncaughtException"
        (fn [err]
          (js/console.error
-          (format "[%s]There was an uncaught error" label)
-          (.error js/console err)
-          err))))
+          err
+          (format "[%s]There was an uncaught error" label)))))
 
 (defn tournament-game-id?
   [id]

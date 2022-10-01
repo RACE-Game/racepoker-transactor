@@ -4,7 +4,9 @@
 
 (goog-define disable-log false)
 
-(def log-ignore-tags #{"➡️" "🔈"})
+(def log-ignore-tags #{"➡️"
+                       ;; "🔈"
+                       })
 
 (defn log
   [tag id fmt & args]

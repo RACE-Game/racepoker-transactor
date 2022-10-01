@@ -627,12 +627,23 @@
           (m/make-event :system/key-share-timeout state {})]))
 
 (defn dispatch-player-action-timeout
-  [{:keys [action-player-id player-map], :as state}]
+  "Dispatch action timeout events."
+  [{:keys [action-player-id player-map street bb bet-map], :as state}]
   (assoc state
          :dispatch-event
          [(condp = (get-in player-map [action-player-id :online-status])
             :normal
-            c/player-action-timeout-delay
+            ;; depend on the street, and pot
+            (cond
+              (not= :street/preflop street)
+              c/postflop-player-action-timeout-delay
+
+              (< (* (js/BigInt 2) bb (js/BigInt (count bet-map)))
+                 (reduce + (js/BigInt 0) (vals bet-map)))
+              c/preflop-raised-action-timeout-delay
+
+              :else
+              c/preflop-player-action-timeout-delay)
 
             :dropout
             c/droupout-player-action-timeout-delay

@@ -61,7 +61,7 @@
 ;; - generate a default deck of cards
 ;; - ask the first player (BTN) to shuffle the cards.
 (defmethod handle-event :system/start-game
-  [{:keys [status player-map game-type size start-time game-account-state halt? game-id], :as state}
+  [{:keys [status player-map game-type size start-time state-id halt? game-id], :as state}
    {:keys [timestamp], :as event}]
 
   (when-not (= :game-status/init status)
@@ -223,12 +223,13 @@
                         timestamp
                         start-time)]
        (log/log "🔥" game-id "Start game, BTN position: %s" next-btn)
+       (log/log "🔀" game-id "Secret-id: %s" state-id)
        (-> state
            (assoc :start-time start-time)
            (assoc :btn next-btn)
            ;; Set a new secret-id
            ;; This will expire old shuffle-key & encrypt-key
-           (update :secret-id inc)
+           (assoc :secret-id state-id)
            (misc/set-operation-player-ids)
            (misc/with-next-op-player-id-as :shuffle-player-id)
            (misc/sit-out-players)

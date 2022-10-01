@@ -46,6 +46,7 @@
 (def deposit-prize-ix-id 14)
 (def claim-prize-ix-id 15)
 (def claim-bonus-ix-id 16)
+(def grant-ix-id 17)
 
 ;; Game Account
 

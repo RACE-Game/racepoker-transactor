@@ -26,25 +26,35 @@
                   :player-ids       (keys (:player-map init-state)),
                   :start-time       (:start-time init-state)})
 
-    (a/go-loop [{:keys [type data], :as event} (a/<! input)]
+    (a/go-loop [{:keys [type data], :as event} (a/<! input)
+                last-state-id (:state-id init-state)]
       (if-not event
         ;; EXIT
         (log/log "💤" game-id "Broadcast quit")
-        (do
-          (condp = type
-            :system/broadcast-state
-            (let [{:keys [state game-id event]} data]
-              (log/log "🔈" game-id "Broadcaster receives Event[%s]" (:this-event state))
-              ;; The state will be sent in Transit serialized
-              ;; So the main thread doesn't have to unpack/pack it.
-              (post-msg-fn {:broadcast        :broadcast/game-event,
-                            :game-id          game-id,
-                            :serialized-state (u/transit-write state),
-                            :player-ids       (keys (:player-map state)),
-                            :start-time       (:start-time state),
-                            :event            [:game/event event]}))
-            :noop)
-          (recur (a/<! input)))))))
+        (condp = type
+          :system/broadcast-state
+          (let [{:keys [state game-id event]} data]
+            (log/log "🔈" game-id "Broadcaster receives Event[%s]" (:this-event state))
+            (log/log "🔈"
+                     game-id
+                     "Broadcaster last id: %s, this id: %s"
+                     last-state-id
+                     (:state-id state))
+            ;; The state will be sent in Transit serialized
+            ;; So the main thread doesn't have to unpack/pack it.
+            (post-msg-fn {:broadcast        :broadcast/game-event,
+                          :game-id          game-id,
+                          :serialized-state (u/transit-write state),
+                          :player-ids       (keys (:player-map state)),
+                          :start-time       (:start-time state),
+                          :event            [:game/event
+                                             (assoc event
+                                                    :last-state-id
+                                                    last-state-id)]})
+            (recur (a/<! input) (:state-id state)))
+
+          ;; default
+          (recur (a/<! input) last-state-id))))))
 
 (defrecord GameBroadcaster [post-msg-fn snapshot input])
 

@@ -66,10 +66,10 @@
            :api-requests api-requests)))
 
 (defn pre-process-state
-  [state]
+  [state state-id]
   (-> state
-      ;; Give random `state-id` to identify each state
-      (assoc :state-id (str (random-uuid)))
+      ;; Give `state-id` to identify each state
+      (assoc :state-id state-id)
       ;; Display instruction will be used only-once
       (dissoc :display)))
 
@@ -96,12 +96,12 @@
     * (optional) error, an Exception
 
   An event with an invalid state-id is considered to be expired."
-  [state event]
+  [state event state-id]
   (go
    (try
      (validate-event state event)
      (let [new-state (-> state
-                         (pre-process-state)
+                         (pre-process-state state-id)
                          (event-handler/handle-event event))]
        (if (map? new-state)
          (handle-result event {:result :ok, :state new-state})
@@ -144,14 +144,7 @@
 (defn take-event
   [input state]
   (go
-   (let [{:keys [timeout-event state-id]} state
-         with-dispatch-id-and-timestamp
-         (fn [event]
-           (when event
-             (assoc event
-                    :dispatch-id state-id
-                    :timestamp   (.getTime (js/Date.)))))
-
+   (let [{:keys [timeout-event]} state
          with-timestamp
          (fn [event]
            (when event
@@ -165,10 +158,10 @@
                  [val port] (a/alts! [to-ch input])]
              (if (= port to-ch)
                ;; Fix the dispatch-id of timeout event
-               (with-dispatch-id-and-timestamp to-evt)
+               (with-timestamp to-evt)
                (with-timestamp val)))
            ;; Fix the dispatch-id of instant timeout event
-           (with-dispatch-id-and-timestamp to-evt)))))))
+           (with-timestamp to-evt)))))))
 
 (defn run-event-loop
   [game-id init-state input output]
@@ -181,7 +174,7 @@
       (if (event-list (:type event))
         (let [old-state state
               {:keys [result state api-requests error]}
-              (<! (handle-event state event))]
+              (<! (handle-event state event (str (random-uuid))))]
 
           ;; Log the event
           (log/log (case result

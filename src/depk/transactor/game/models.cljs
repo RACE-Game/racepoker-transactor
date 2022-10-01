@@ -10,19 +10,15 @@
   (throw (ex-info "Missing state id" {})))
 
 (defrecord Event
-  [type dispatch-id data player-id])
+  [type data player-id])
 
-;; TODO
-;; Remove dispatch-id in this structure
-;; dispatch-id is still necessary, but is no longer needed here
 (defn make-event
   ([type state]
    (make-event type state {}))
   ([type state data]
    (make-event type state data nil))
-  ([type state data player-id]
-   (let [dispatch-id (:state-id state)]
-     (into {} (->Event type dispatch-id data player-id)))))
+  ([type _state data player-id]
+   (into {} (->Event type data player-id))))
 
 (defrecord PlayerState
   [
@@ -37,7 +33,9 @@
    ;; online status: normal dropout leave sit-out
    online-status
    ;; count the number of continuous drop
-   drop-count])
+   drop-count
+   ;; time bank remainning in seconds
+   time-bank])
 
 (defn make-player-state
   ([player-id chips position]
@@ -161,7 +159,7 @@
    ;; dispatch event [ms, event]
    ;; an events dispatched with a delay
    dispatch-event
-   ;; preserve current dispatch, means "don't update dispatch-id"
+   ;; preserve current timeout dispatch
    reserve-timeout
 
    ;; uuid, updated whenever state changes
@@ -261,7 +259,7 @@
               :base-bb            (:bb game-account-state),
               :base-ante          (:ante game-account-state),
               ;; Give a initial value for secret-id
-              :secret-id          (* 1000 (:settle-serial game-account-state)),
+              :secret-id          (str (random-uuid)),
               :rake               (+ (js/BigInt (:transactor-rake game-account-state))
                                      (js/BigInt (:owner-rake game-account-state))),
               :game-account-state (parse-raw-game-account-state game-account-state),

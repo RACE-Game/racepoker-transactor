@@ -131,7 +131,7 @@
   [game-manager game-id player-id secret-id sig data]
   {:pre [(string? game-id)
          (string? player-id)
-         (int? secret-id)
+         (string? secret-id)
          (string? sig)
          (some? data)]}
   (go-try
@@ -150,7 +150,7 @@
   [game-manager game-id player-id secret-id sig data]
   {:pre [(string? game-id)
          (string? player-id)
-         (int? secret-id)
+         (string? secret-id)
          (string? sig)
          (some? data)]}
   (go-try
@@ -170,7 +170,7 @@
   {:pre [(string? game-id)
          (string? player-id)
          (map? share-keys)
-         (int? secret-id)]}
+         (string? secret-id)]}
   (go-try
    (log/log "➡️" game-id "Player[%s] share keys" player-id)
    (if-let [game-worker (manager/find-worker game-manager game-id)]
