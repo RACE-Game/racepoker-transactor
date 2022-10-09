@@ -14,11 +14,13 @@
    [depk.transactor.constant :as c]
    [depk.transactor.state.config :refer [config]]
    [depk.transactor.log :as log]
-   [depk.transactor.chain.state :refer [parse-state-data set-winner-ix-id settle-ix-id
+   [depk.transactor.chain.state :as    state
+                                :refer [parse-state-data set-winner-ix-id settle-ix-id
                                         start-tournament-ix-id
                                         settle-tournament-ix-id
                                         parse-bonus-state-data
                                         parse-tournament-state-data
+                                        parse-reg-center-data
                                         registration-layout]]
    ["fs" :as fs]
    ["bn.js" :as bn]))
@@ -680,4 +682,22 @@
                                        tournament-id
                                        "Retry fetch tournament ranks, ranks data mismatch.")
                                       (recur)))))]
-               (assoc tournament-state :ranks rank-state)))))))))
+               (assoc tournament-state :ranks rank-state))))))))
+
+ (-fetch-tournament-list [this reg-center-address]
+   (a/go
+    (let [conn   (conn/make-connection (get @config :solana-rpc-endpoint))
+          pubkey (pubkey/make-public-key reg-center-address)
+          state  (some-> (a/<! (conn/get-account-info conn pubkey "finalized"))
+                         :data
+                         (parse-reg-center-data))
+          {:keys [tournament-reg]} state]
+
+      (when tournament-reg
+        (let [layout      (bl/array 100 (bl/option state/tournament-reg-layout))
+              tournaments (some-> (a/<! (conn/get-account-info conn tournament-reg "finalized"))
+                                  :data
+                                  (bl/buffer-from)
+                                  (->> (bl/unpack layout)
+                                       (filterv some?)))]
+          (mapv (comp str :pubkey) tournaments)))))))

@@ -24,6 +24,11 @@
   (log/log "🔍" nil "Fetch tournament account: %s" tournament-id)
   (p/-fetch-tournament-account chain-api tournament-id opts))
 
+(defn fetch-tournament-list
+  "Fetch list of tournaments."
+  [chain-api reg-center-address]
+  (p/-fetch-tournament-list chain-api reg-center-address))
+
 (defn make-solana-api
   []
   (solana/make-solana-api))

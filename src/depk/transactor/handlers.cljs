@@ -84,7 +84,7 @@
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
   (a/go
    (let [[game-id player-id] uid
-         {:keys [data secret-id sig]}      ?data]
+         {:keys [data secret-id sig]} ?data]
      (a/<! (game/shuffle-cards @worker-manager game-id player-id secret-id sig data))
      (?reply-fn {:result :ok}))))
 
@@ -92,14 +92,14 @@
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
   (a/go
    (let [[game-id player-id _ ed-pub] uid
-         {:keys [data secret-id sig]}      ?data]
+         {:keys [data secret-id sig]} ?data]
      (a/<! (game/encrypt-cards @worker-manager game-id player-id secret-id sig data))
      (?reply-fn {:result :ok}))))
 
 (defmethod event-msg-handler :client/share-keys
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
   (a/go
-   (let [[game-id player-id _ ed-pub] uid
+   (let [[game-id player-id _ ed-pub]       uid
          {:keys [share-keys secret-id sig]} ?data]
      (a/<! (game/share-keys @worker-manager game-id player-id share-keys secret-id sig))
      (?reply-fn {:result :ok}))))

@@ -26,6 +26,26 @@
   [type]
   16)
 
+(defmethod bl/unpack :arweave-id
+  [_ buf]
+  (str/replace (.toString (.slice buf 0 43))
+               (js/String.fromCharCode 0)
+               ""))
+
+(defmethod bl/size :arweave-id
+  [type]
+  43)
+
+(defmethod bl/unpack :str140
+  [_ buf]
+  (str/replace (.toString (.slice buf 0 140))
+               (js/String.fromCharCode 0)
+               ""))
+
+(defmethod bl/size :str140
+  [type]
+  140)
+
 (def init-player-profile-ix-id 0)
 (def close-player-profile-ix-id 1)
 
@@ -47,6 +67,8 @@
 (def claim-prize-ix-id 15)
 (def claim-bonus-ix-id 16)
 (def grant-ix-id 17)
+(def reg-tournament-ix-id 18)
+(def init-reg-accounts-ix-id 19)
 
 ;; Game Account
 
@@ -179,7 +201,7 @@
                             num-players buyin-limit start-time status name
                             transactor-rake owner-rake blinds-mode total-prize
                             registration-pubkey prize-pubkey start-chips
-                            bonuses prize-quota])
+                            bonuses prize-quota cover desc])
 
 (defrecord BonusItem [stake-pubkey ranking])
 
@@ -213,10 +235,61 @@
               :pubkey ; prize-pubkey
               :u64 ; start-chips
               (bl/array max-bonuses (bl/option bonus-item-layout))
-              (bl/array max-winners :u16)]))
+              (bl/array max-winners :u16)
+              :arweave-id ;cover
+              :str140     ; desc
+             ]))
 
 (def tournament-state-data-len (bl/size tournament-state-layout))
 
 (defn parse-tournament-state-data
   [data]
   (bl/unpack tournament-state-layout (bl/buffer-from data)))
+
+;; Registration
+
+(defrecord RegCenter [is-initialized is-private owner tournament-reg game-reg])
+
+(def reg-center-layout
+  (bl/struct ->RegCenter
+             [:bool
+              :bool
+              :pubkey
+              :pubkey
+              :pubkey]))
+
+(def reg-center-data-len (bl/size reg-center-layout))
+
+(defn parse-reg-center-data
+  [data]
+  (bl/unpack reg-center-layout (bl/buffer-from data)))
+
+(defrecord TournamentReg [pubkey mint reg-time start-time is-hidden])
+
+(def tournament-reg-layout
+  (bl/struct ->TournamentReg
+             [:pubkey
+              :pubkey
+              :u32
+              :u32
+              :bool]))
+
+(def tournament-reg-data-len (bl/size tournament-reg-layout))
+
+(defn parse-tournament-reg-data
+  [data]
+  (bl/unpack tournament-reg-layout (bl/buffer-from data)))
+
+(defrecord GameReg [pubkey mint is-private])
+
+(def game-reg-layout
+  (bl/struct ->GameReg
+             [:pubkey
+              :pubkey
+              :bool]))
+
+(def game-reg-data-len (bl/size game-reg-layout))
+
+(defn parse-game-reg-data
+  [data]
+  (bl/unpack game-reg-layout (bl/buffer-from data)))

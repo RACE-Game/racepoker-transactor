@@ -22,4 +22,7 @@
    "Get the state of mint account.")
   (-fetch-tournament-account
    [this tournament-id opts]
-   "Get the state of tournament account."))
+    "Get the state of tournament account.")
+  (-fetch-tournament-list
+    [this reg-center-address]
+    "Get the list of tournaments."))

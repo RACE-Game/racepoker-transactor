@@ -4,6 +4,7 @@
    [depk.transactor.state.express]
    [depk.transactor.state.worker-manager]
    [depk.transactor.state.global-chain-api]
+   [depk.transactor.state.reg-center]
    [mount.core :as mount]))
 
 (defn main-server
@@ -18,4 +19,5 @@
   (when env (use-env env))
   (mount/start #'depk.transactor.state.config/config
                #'depk.transactor.state.worker-manager/worker-manager
-               #'depk.transactor.state.express/server))
+               #'depk.transactor.state.express/server
+               #'depk.transactor.state.reg-center/reg-center))
