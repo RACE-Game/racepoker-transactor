@@ -1,6 +1,6 @@
 (ns depk.transactor.constant)
 
-(def version "50")
+(def version "51")
 
 (def max-player-num 9)
 
@@ -22,9 +22,9 @@
     (* 30 1000)
     (* 300 1000)))
 
-(def blinds-interval-normal (* 15 60 1000))
-(def blinds-interval-turbo (* 10 60 1000))
-(def blinds-interval-hyper (* 5 60 1000))
+(def blinds-interval-normal (* 12 60 1000))
+(def blinds-interval-turbo (* 8 60 1000))
+(def blinds-interval-hyper (* 4 60 1000))
 
 (def shutdown-game-delay 5000)
 

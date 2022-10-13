@@ -700,4 +700,4 @@
                                   (bl/buffer-from)
                                   (->> (bl/unpack layout)
                                        (filterv some?)))]
-          (mapv (comp str :pubkey) tournaments)))))))
+          tournaments))))))

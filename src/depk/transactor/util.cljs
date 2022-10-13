@@ -14,6 +14,10 @@
 (def request-log-ignores
   #{"/api/v1/game/state"})
 
+(defn current-unix-timestamp
+  []
+  (quot (.getTime (js/Date.)) 1000))
+
 (def bigint-writer
   (transit/write-handler
    (constantly "n")
