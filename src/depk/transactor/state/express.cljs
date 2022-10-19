@@ -3,6 +3,7 @@
    [depk.transactor.handlers :as h]
    [depk.transactor.log :as log]
    [depk.transactor.state.websocket :refer [websocket]]
+   [depk.transactor.state.config :refer [config]]
    [taoensso.sente]
    [mount.core          :as mount]
    ["express"           :as express]
@@ -68,7 +69,7 @@
 
 (defn start-selected-web-server!
   [port]
-  (log/log "🎉" nil "Start web server")
+  (log/log "🎉" nil "Start web server at port: %s" port)
   (let [express-app       (express)
         express-ws-server (express-ws express-app)]
 
@@ -83,6 +84,6 @@
 
 (mount/defstate server
   :start
-  (start-selected-web-server! 3000)
+  (start-selected-web-server! (get-in @config [:transactor :port] 3000))
   :stop
   (.close (:http-server @server)))

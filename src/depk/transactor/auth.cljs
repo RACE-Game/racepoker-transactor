@@ -9,9 +9,9 @@
 
 (def sign-tmpl
   (str
-   "RACE Poker\n"
-   "A decentralized web3 poker platform\n"
-   "This signature will be used for authentication of encrypted data\n\n"
+   "Race Protocol\n"
+   "A decentralized protocol for competition games.\n"
+   "This signature will be used for authentication of encrypted data.\n\n"
    "Player ID: \n%s\n"
    "RSA: \n%s\n"
    "ED25519: \n%s\n"))
