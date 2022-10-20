@@ -23,6 +23,6 @@
   },
   "devDependencies": {
     "@vercel/ncc": "^0.33.0",
-    "shadow-cljs": "^2.19.2"
+    "shadow-cljs": "^2.20.5"
   }
 }
