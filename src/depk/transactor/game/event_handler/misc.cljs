@@ -451,13 +451,13 @@
     (assoc state :player-map new-player-map)))
 
 (defn increase-blinds
-  [{:keys [base-sb base-bb game-type start-time game-id blinds-mode], :as state} timestamp]
+  [{:keys [base-sb game-type start-time game-id blinds-mode], :as state} timestamp]
   (if (#{:sng :tournament} game-type)
     (let [interval (case blinds-mode
                      :normal c/blinds-interval-normal
                      :turbo  c/blinds-interval-turbo
                      :hyper  c/blinds-interval-hyper
-                     c/blinds-interval-turbo)
+                     c/blinds-interval-sng)
           cnt      (if start-time
                      (int (/ (- timestamp start-time)
                              interval))
