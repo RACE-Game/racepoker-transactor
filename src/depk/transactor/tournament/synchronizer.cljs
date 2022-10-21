@@ -1,6 +1,7 @@
 (ns depk.transactor.tournament.synchronizer
   (:require
    [cljs.core.async :as a]
+   [depk.transactor.util :as u]
    [depk.transactor.chain.protocol :as p]
    [depk.transactor.event.protocol :as event-p]
    [depk.transactor.log :as log]
@@ -36,7 +37,6 @@
           (a/<! (a/timeout 5000))
           (recur (max buyin-serial (:buyin-serial state))
                  (max settle-serial (:settle-serial state))))
-
 
         ;; Tournament is finished
         :else
