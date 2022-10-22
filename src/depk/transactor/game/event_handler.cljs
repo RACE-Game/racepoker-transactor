@@ -451,10 +451,10 @@
       (misc/dispatch-reset)))
 
 ;; system/player-action-timeout
+;; Check or fold action player
 (defmethod handle-event :system/player-action-timeout
-  [{:keys [status action-player-id game-id], :as state}
-   {{:keys [share-keys]} :data,
-    timestamp :timestamp,
+  [{:keys [status action-player-id game-id player-map street-bet bet-map], :as state}
+   {timestamp :timestamp,
     :as       event}]
 
   (when-not (= :game-status/play status)
@@ -462,11 +462,23 @@
 
   (log/log "🔒️" game-id "Player[%s] action timeout" action-player-id)
 
-  (-> state
-      (assoc-in [:player-map action-player-id :status] :player-status/fold)
-      (misc/add-log {:player-id action-player-id,
-                     :type      :log/player-action-timeout})
-      (misc/next-state timestamp)))
+  (if (and
+       (= :normal (get-in player-map [action-player-id :online-status]))
+       (= street-bet (get bet-map action-player-id)))
+
+    ;; Check player
+    (-> state
+        (assoc-in [:player-map action-player-id :status] :player-status/acted)
+        (misc/add-log {:player-id action-player-id,
+                       :type      :log/player-check})
+        (misc/next-state timestamp))
+
+    ;; Fold player
+    (-> state
+        (assoc-in [:player-map action-player-id :status] :player-status/fold)
+        (misc/add-log {:player-id action-player-id,
+                       :type      :log/player-action-timeout})
+        (misc/next-state timestamp))))
 
 ;; client/ready
 ;; A event received when a client is ready to start
