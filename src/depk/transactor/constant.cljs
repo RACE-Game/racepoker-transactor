@@ -21,7 +21,7 @@
 (def max-drop-count 1)
 (def tournament-start-delay
   (if goog.DEBUG
-    (* 300 1000)
+    (* 30 1000)
     (* 300 1000)))
 
 (def blinds-interval-normal (* 12 60 1000))
