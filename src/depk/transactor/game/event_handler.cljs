@@ -877,7 +877,7 @@
   (-> state
       (assoc :halt?      false
              :start-time start-time)
-      (misc/dispatch-start-game :start-deplay (max 0 (- start-time timestamp)))))
+      (misc/dispatch-start-game :start-delay (max 0 (- start-time timestamp)))))
 
 ;; :system/next-game & :system/resit-table
 ;; are the replacements for reset in TOURNAMENT
@@ -923,7 +923,7 @@
       (misc/increase-blinds timestamp)            ; For SNG & Tournament
       (misc/reset-game-state)
       (misc/remove-players (keys resit-map))
-      (misc/dispatch-start-game :start-deplay c/resit-start-delay)
+      (misc/dispatch-start-game :start-delay c/resit-start-delay)
       (cond->
         finish?
         (assoc :halt? true))))
