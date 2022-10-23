@@ -3,6 +3,7 @@
    [depk.transactor.chain.protocol :as p]
    [depk.transactor.util :refer [go-try <!?]]
    [cljs.core.async :as a]
+   [solana-clj.compute-budget :as cb]
    [solana-clj.connection :as conn]
    [solana-clj.publickey :as pubkey]
    [solana-clj.keypair :as keypair]
@@ -191,6 +192,8 @@
 
            owner-ata-pubkey (<!? (get-receiver-pubkey owner-pubkey mint-pubkey))
 
+           set-compute-unit-limit-ix (cb/set-compute-unit-limit-ix 1200000)
+
            ix-body (build-settle-ix-body players settle-map)
 
            ix-data (apply ib/make-instruction-data
@@ -266,9 +269,11 @@
             {:keys      ix-keys,
              :programId (pubkey/make-public-key dealer-program-id),
              :data      ix-data})
-           tx
-           (doto (transaction/make-transaction)
-            (transaction/add ix))
+
+           tx (transaction/make-transaction)
+
+           _ (when-not goog.DEBUG (transaction/add tx set-compute-unit-limit-ix))
+           _ (transaction/add tx ix)
 
            sig
            (<!? (conn/send-transaction conn tx [fee-payer]))
@@ -387,9 +392,11 @@
           {:keys      ix-keys,
            :programId (pubkey/make-public-key dealer-program-id),
            :data      ix-data})
+
          tx
          (doto (transaction/make-transaction)
-          (transaction/add ix))
+           (transaction/add ix))
+
 
          sig
          (<!? (conn/send-transaction conn tx [fee-payer]))
