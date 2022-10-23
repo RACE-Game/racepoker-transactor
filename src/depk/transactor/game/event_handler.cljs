@@ -1,6 +1,7 @@
 (ns depk.transactor.game.event-handler
   (:require
    [depk.transactor.util :as u]
+   [depk.transactor.constant :as c]
    [depk.transactor.game.encrypt :as encrypt]
    [depk.transactor.game.event-handler.misc :as misc]
    [depk.transactor.log  :as log]
@@ -40,7 +41,7 @@
 ;; system/reset
 ;; receiving this event for reset states
 (defmethod handle-event :system/reset
-  [{:keys [player-map], :as state}
+  [{:keys [winning-type], :as state}
    {:keys [timestamp], :as event}]
   (-> state
       (misc/remove-eliminated-players)
@@ -50,7 +51,7 @@
       (misc/add-joined-player)
       (misc/reset-player-map-status)
       (misc/increase-blinds timestamp)            ; For SNG & Tournament
-      (misc/dispatch-start-game)
+      (misc/dispatch-start-game :winning-type winning-type)
       (misc/reset-game-state)))
 
 ;; system/start-game
@@ -876,13 +877,13 @@
   (-> state
       (assoc :halt?      false
              :start-time start-time)
-      (misc/dispatch-start-game (max 0 (- start-time timestamp)))))
+      (misc/dispatch-start-game :start-deplay (max 0 (- start-time timestamp)))))
 
 ;; :system/next-game & :system/resit-table
 ;; are the replacements for reset in TOURNAMENT
 
 (defmethod handle-event :system/next-game
-  [{:keys [status], :as state}
+  [{:keys [status winning-type], :as state}
    {{:keys [game-account-state finish?]} :data,
     timestamp :timestamp,
     :as       _event}]
@@ -896,7 +897,7 @@
       (misc/add-joined-player)
       (misc/reset-player-map-status)
       (misc/increase-blinds timestamp)            ; For SNG & Tournament
-      (misc/dispatch-start-game)
+      (misc/dispatch-start-game :winning-type winning-type)
       (misc/reset-game-state)
       (cond->
         finish?
@@ -922,7 +923,7 @@
       (misc/increase-blinds timestamp)            ; For SNG & Tournament
       (misc/reset-game-state)
       (misc/remove-players (keys resit-map))
-      (misc/dispatch-start-game)
+      (misc/dispatch-start-game :start-deplay c/resit-start-delay)
       (cond->
         finish?
         (assoc :halt? true))))

@@ -14,7 +14,8 @@
 (def dropout-player-action-timeout-delay 5000)
 (def sit-out-player-action-timeout-delay 1000)
 (def reset-timeout-delay 50)
-(def runner-timeout-delay 6000)            ; wait 6 more secs for allin
+(def runner-start-delay 10000)            ; wait more secs for allin
+(def resit-start-delay 15000)
 (def sng-next-game-timeout-delay 30000)
 (def blinds-out-delay 12000)
 (def max-drop-count 1)

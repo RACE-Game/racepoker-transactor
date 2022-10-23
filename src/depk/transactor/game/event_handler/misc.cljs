@@ -522,8 +522,7 @@
   (assoc state :shutdown? true))
 
 (defn dispatch-reset
-  "Dispatch reset event.
-  Tournament game has no reset event."
+  "Dispatch reset event."
   [state & [ms]]
   (assoc state
          :dispatch-event
@@ -593,10 +592,15 @@
     (assoc state :player-map player-map)))
 
 (defn dispatch-start-game
-  [state & [start-delay]]
+  [state & {:keys [start-delay winning-type]}]
   (-> state
       (assoc :dispatch-event
-             [(or start-delay c/default-start-game-delay)
+             [(cond
+                (= winning-type :runner)
+                c/runner-start-delay
+
+                :else
+                (or start-delay c/default-start-game-delay))
               (m/make-event :system/start-game state {})])))
 
 (defn mark-dropout-players
@@ -1286,9 +1290,7 @@
            (update-chips-change-map)
            (submit-game-result)
            (add-log log)
-           (dispatch-reset (if (= winning-type :runner)
-                             c/runner-timeout-delay
-                             c/reset-timeout-delay))
+           (dispatch-reset c/reset-timeout-delay)
            (assoc :status       :game-status/showdown
                   :winning-type winning-type)))
 
