@@ -1286,7 +1286,9 @@
            (update-chips-change-map)
            (submit-game-result)
            (add-log log)
-           (dispatch-reset)
+           (dispatch-reset (if (= winning-type :runner)
+                             c/runner-timeout-delay
+                             c/reset-timeout-delay))
            (assoc :status       :game-status/showdown
                   :winning-type winning-type)))
 
