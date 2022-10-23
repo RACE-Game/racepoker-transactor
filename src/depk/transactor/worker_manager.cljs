@@ -36,8 +36,10 @@
   ([manager id builder start-opts]
    (go-try
     (when-not (find-worker-unchecked manager id)
-      (let [{:keys [worker-map worker-opts]} manager]
-        (swap! worker-map assign-new-worker id builder (merge worker-opts start-opts)))))))
+      (let [{:keys [worker-map worker-opts]} manager
+            clean-fn (fn [] (swap! worker-map dissoc id))
+            opts     (merge worker-opts start-opts {:clean-fn clean-fn})]
+        (swap! worker-map assign-new-worker id builder opts))))))
 
 (defn make-worker-manager
   "Create worker manager."

@@ -59,6 +59,7 @@
      (event/start-component broadcaster opts)
 
      (log/log "🎉" game-id "Game handle started")
+     (event/send event-bus {:type :system/start-synchronizer})
      (->GameHandle event-bus chain-api store-api broadcaster event-loop))))
 
 (defn game-handle?
@@ -68,3 +69,6 @@
 (defn send-event
   [game-handle event]
   (event/send (:event-bus game-handle) event))
+
+(defn wait [game-handle]
+  (event/wait! (:event-bus game-handle)))

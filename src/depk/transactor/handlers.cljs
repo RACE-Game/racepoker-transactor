@@ -43,9 +43,10 @@
 
 (defmethod event-msg-handler :game/attach
   [{:as ev-msg, :keys [event id uid ?data ring-req ?reply-fn send-fn]}]
+
   (let [[game-id player-id] uid]
     (a/go
-     (if (a/<! (game/attach-game @worker-manager game-id player-id))
+      (if (a/<! (game/attach-game @worker-manager game-id player-id))
        (?reply-fn {:result :ok})
        (?reply-fn {:result :err})))))
 

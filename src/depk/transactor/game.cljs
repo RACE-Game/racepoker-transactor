@@ -18,7 +18,13 @@
    (log/log "➡️" game-id "Player[%s] attach to game" player-id)
    ;; We can only start normal game through this API
    (if-not (tournament-game-id? game-id)
-     (manager/try-start game-manager game-id worker/make-worker)
+     (if-let [game-worker (manager/find-worker-unchecked game-manager game-id)]
+       (do
+         (worker/send-event game-worker {:type :system/start-synchronizer})
+         :ok)
+       (do
+         (manager/try-start game-manager game-id worker/make-worker)
+         :ok))
      :ok)))
 
 (defn state

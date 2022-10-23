@@ -27,4 +27,7 @@
      (.on parentPort
           "message"
           (fn [data]
-            (handle/send-event handle (u/transit-read data)))))))
+            (handle/send-event handle (u/transit-read data))))
+
+     (a/<! (handle/wait handle))
+     (js/process.exit))))

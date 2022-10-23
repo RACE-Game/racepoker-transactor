@@ -23,17 +23,18 @@
             (chsk-send! uid event)))))))
 
 (defn on-worker-error
-  [tournament-id x]
-  (log/log "💀" tournament-id "Game worker error. %s" x))
+  [game-id x]
+  (log/log "💀" game-id "Game worker error. %s" x))
 
 (defn on-worker-exit
-  [tournament-id x]
-  (log/log "💀" tournament-id "Game worker exit. %s" x))
+  [game-id clean-fn x]
+  (log/log "💀" game-id "Game worker exit. %s" x)
+  (clean-fn))
 
 (defn make-worker
   [game-id opts]
   (log/log "📯" game-id "Spawn game worker")
-  (let [{:keys [tournament-id players]} opts
+  (let [{:keys [players clean-fn]} opts
         snapshot   (atom {})
         on-message (make-worker-message-handler snapshot opts)
         worker     (doto
@@ -45,12 +46,10 @@
                                  :params (u/transit-write
                                           {:game-id       game-id,
                                            :env           @env,
-                                           :tournament-id tournament-id,
                                            :players       players})}})
                     (.on "message" on-message)
-                    (.on "error" (partial on-worker-error tournament-id))
-                    (.on "exit" (partial on-worker-exit tournament-id))
-                    (.ref))]
+                    (.on "error" (partial on-worker-error game-id))
+                    (.on "exit" (partial on-worker-exit game-id clean-fn)))]
     {:worker   worker,
      :snapshot snapshot}))
 

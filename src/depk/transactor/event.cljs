@@ -21,6 +21,13 @@
     (when output
       (a/pipe output (:input ebus)))))
 
+(defn wait!
+  [ebus]
+  (a/go
+   (let [ch (a/chan)]
+     (a/sub (:output-pub ebus) :non-exist-topic ch)
+     (a/<! ch))))
+
 (defn start-component
   [component opts]
   (p/-start component opts))
