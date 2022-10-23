@@ -2,7 +2,6 @@
   "Game handle is used to control a set of components of a game."
   (:require
    [cljs.core.async :as a]
-   [depk.transactor.constant :as c]
    [depk.transactor.tournament-game.submitter :as submitter]
    [depk.transactor.game.models :as m]
    [depk.transactor.event :as event]
@@ -70,3 +69,7 @@
 (defn shutdown
   [game-handle]
   (event/shutdown (:event-bus game-handle)))
+
+(defn wait
+  [game-handle]
+  (event/wait (:submitter game-handle)))

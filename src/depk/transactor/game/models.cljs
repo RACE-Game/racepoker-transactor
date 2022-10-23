@@ -186,6 +186,9 @@
 
    ;; Logs
    logs
+
+   ;; shutdown event loop
+   shutdown?
   ])
 
 ;;; Initial state builder

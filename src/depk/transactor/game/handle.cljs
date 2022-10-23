@@ -23,7 +23,8 @@
    chain-api
    store-api
    broadcaster
-   event-loop])
+   event-loop
+   submitter])
 
 (defn make-game-handle
   [game-id post-msg-fn]
@@ -60,7 +61,7 @@
 
      (log/log "🎉" game-id "Game handle started")
      (event/send event-bus {:type :system/start-synchronizer})
-     (->GameHandle event-bus chain-api store-api broadcaster event-loop))))
+     (->GameHandle event-bus chain-api store-api broadcaster event-loop submitter))))
 
 (defn game-handle?
   [x]
@@ -70,5 +71,6 @@
   [game-handle event]
   (event/send (:event-bus game-handle) event))
 
-(defn wait [game-handle]
-  (event/wait! (:event-bus game-handle)))
+(defn wait
+  [game-handle]
+  (event/wait (:submitter game-handle)))

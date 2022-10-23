@@ -6,7 +6,7 @@
    [depk.transactor.log :as log]
    [depk.transactor.game.models :as m]))
 
-(def sync-times 8)
+(def sync-times 32)
 (def sync-buf-lens 2)
 
 (defn empty-game?

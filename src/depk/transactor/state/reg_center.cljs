@@ -18,11 +18,13 @@
     (a/go-loop []
       (let [tournaments (a/<! (chain/fetch-tournament-list chain-api reg-center-address))
             now         (u/current-unix-timestamp)]
+
         (doseq [{:keys [pubkey start-time]} tournaments
                 :when (and (>= now (- start-time 600))
-                           (<= now (+ start-time 3600)))]
+                           (<= now (+ start-time 600)))]
+
           (tournament/launch-tournament @worker-manager/worker-manager (str pubkey))))
-      (a/<! (a/timeout 60000))
+      (a/<! (a/timeout 10000))
       (recur))))
 
 (mount/defstate reg-center

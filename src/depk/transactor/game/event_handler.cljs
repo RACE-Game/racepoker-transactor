@@ -92,7 +92,8 @@
          (= (count player-map) 0))
     (do
       (log/log "🛑" game-id "Tournament game closed.(Tournament)")
-      state)
+      (-> state
+          (misc/set-shutdown)))
 
     (and (= :tournament game-type)
          halt?)

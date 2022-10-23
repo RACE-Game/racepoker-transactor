@@ -515,6 +515,12 @@
            [pid (nth idxs (get pid-to-idx pid))])
          (into {}))))
 
+(defn set-shutdown
+  "Dispatch shutdown event.
+  Used in tournament."
+  [state]
+  (assoc state :shutdown? true))
+
 (defn dispatch-reset
   "Dispatch reset event.
   Tournament game has no reset event."

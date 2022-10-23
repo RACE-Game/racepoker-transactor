@@ -41,12 +41,13 @@
   (log/log "💀" game-id "Tournament Game worker error. %s" x))
 
 (defn on-worker-exit
-  [game-id x]
-  (log/log "💀" game-id "Tournament Game worker exit. %s" x))
+  [game-id clean-fn x]
+  (log/log "💀" game-id "Tournament Game worker exit. %s" x)
+  (clean-fn))
 
 (defn make-worker
   [game-id opts]
-  (let [{:keys [tournament-id players size start-time blinds-mode]} opts
+  (let [{:keys [tournament-id players size start-time blinds-mode clean-fn]} opts
         snapshot   (atom {})
         on-message (make-worker-message-handler snapshot opts)
         worker     (doto
@@ -65,7 +66,7 @@
                                            :start-time    start-time})}})
                     (.on "message" on-message)
                     (.on "error" (partial on-worker-error game-id))
-                    (.on "exit" (partial on-worker-exit game-id))
+                    (.on "exit" (partial on-worker-exit game-id clean-fn))
                     (.ref))]
     (log/log "📯" game-id "Spawn tournament game worker")
     {:worker   worker,

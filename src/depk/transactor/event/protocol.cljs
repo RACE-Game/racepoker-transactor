@@ -11,3 +11,6 @@
 
 (defprotocol IComponent
   (-start [this opts]))
+
+(defprotocol IWaitable
+  (-wait [this]))

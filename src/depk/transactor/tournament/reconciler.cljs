@@ -409,8 +409,11 @@
         (log/log "🌠" tournament-id
                  "Tournament reconciler emits event: %s" (mapv (comp :type :event :data) evts))
         (a/<! (a/onto-chan! output evts false))
-        (when-not (= :completed (:status new-state))
-          (recur new-state)))
+        (if-not (= :completed (:status new-state))
+          (recur new-state)
+          (do
+            (log/log "💤️" tournament-id "Reconciler quit")
+            (a/close! output))))
       (do
         (log/log "💤️" tournament-id "Reconciler quit")
         (a/close! output)))))

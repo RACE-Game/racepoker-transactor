@@ -62,13 +62,19 @@
   (log/log "💀" tournament-id "Tournament worker error. %s" x))
 
 (defn on-worker-exit
-  [tournament-id x]
-  (log/log "💀" tournament-id "💀Tournament worker exit. %s" x))
+  [tournament-id clean-fn x]
+  (log/log "💀" tournament-id "Tournament worker exit. %s" x)
+  (a/go
+    ;; Wait 10 mins before remove it
+    ;; Otherwise it will keep starting
+   (a/<! (a/timeout 600000))
+   (clean-fn)))
 
 (defn make-worker
   [tournament-id opts]
   (log/log "📯" tournament-id "Spawn tournament worker")
   (let [snapshot   (atom {})
+        {:keys [clean-fn]} opts
         worker     (Worker. js/__filename
                             #js
                              {:workerData
@@ -81,7 +87,7 @@
     (doto worker
      (.on "message" on-message)
      (.on "error" (partial on-worker-error tournament-id))
-     (.on "exit" (partial on-worker-exit tournament-id))
+     (.on "exit" (partial on-worker-exit tournament-id clean-fn))
      (.unref))
     {:worker   worker,
      :snapshot snapshot}))

@@ -29,4 +29,7 @@
           (fn [data]
             (if data
               (handle/send-event handle (u/transit-read data))
-              (handle/shutdown handle)))))))
+              (handle/shutdown handle))))
+
+     (a/<! (handle/wait handle))
+     (js/process.exit 0))))

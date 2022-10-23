@@ -21,13 +21,6 @@
     (when output
       (a/pipe output (:input ebus)))))
 
-(defn wait!
-  [ebus]
-  (a/go
-   (let [ch (a/chan)]
-     (a/sub (:output-pub ebus) :non-exist-topic ch)
-     (a/<! ch))))
-
 (defn start-component
   [component opts]
   (p/-start component opts))
@@ -43,3 +36,7 @@
 (defn make-mem-event-bus
   []
   (ebus/make-mem-event-bus))
+
+(defn wait
+  [waitable]
+  (p/-wait waitable))

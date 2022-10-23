@@ -47,13 +47,13 @@
   (merge-with merge-settle-item m1 m2))
 
 (defn start
-  [chain-api game-id input init-state]
+  [chain-api game-id input output init-state]
   (a/go-loop [settle-serial  (-> init-state
                                  :game-account-state
                                  :settle-serial)
               acc-settle-map nil
               acc-count      0]
-    (let [{:keys [type data], :as event} (a/<! input)]
+    (let [{:keys [type data]} (a/<! input)]
       (case type
         :system/settle
         (let [{:keys [rake settle-map]} data
@@ -95,9 +95,11 @@
 
         ;; EXIT
         nil
-        (log/log "💤️" game-id "Sync loop quit")))))
+        (do
+          (log/log "💤️" game-id "Sync loop quit")
+          (a/close! output))))))
 
-(defrecord Submitter [chain-api input])
+(defrecord Submitter [chain-api input output])
 
 (extend-type Submitter
  ep/IAttachable
@@ -109,14 +111,19 @@
    [:system/settle
     :system/set-winner])
 
+ ep/IWaitable
+ (-wait [this]
+   (a/go (a/<! (:output this))))
+
  ep/IComponent
  (-start [this opts]
-   (let [{:keys [chain-api input]}    this
-         {:keys [game-id init-state]} opts]
+   (let [{:keys [chain-api input output]} this
+         {:keys [game-id init-state]}     opts]
      (log/log "🎉" game-id "Start submitter")
-     (start chain-api game-id input init-state))))
+     (start chain-api game-id input output init-state))))
 
 (defn make-submitter
   [chain-api]
-  (let [input (a/chan 4)]
-    (->Submitter chain-api input)))
+  (let [input  (a/chan 4)
+        output (a/promise-chan)]
+    (->Submitter chain-api input output)))

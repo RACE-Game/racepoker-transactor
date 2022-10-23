@@ -196,7 +196,9 @@
                   (collect-and-dispatch-game-history old-state state event records output)]
               (dispatch-api-request game-id event api-requests output)
               (dispatch-broadcast-state game-id event state output)
-              (recur state records))
+              (if-not (:shutdown? state)
+                (recur state records)
+                (a/close! output)))
             (recur old-state records)))
         (recur state records))
       ;; EXIT

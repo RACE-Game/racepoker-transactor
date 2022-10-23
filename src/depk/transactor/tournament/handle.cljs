@@ -15,7 +15,8 @@
   [event-bus
    chain-api
    broadcaster
-   reconciler])
+   reconciler
+   submitter])
 
 (defn make-tournament-handle
   [tournament-id post-msg-fn]
@@ -46,12 +47,16 @@
      (event/start-component submitter opts)
 
      (log/log "🎉" tournament-id "Tournament handle started")
-     (->TournamentHandle event-bus chain-api broadcaster reconciler))))
+     (->TournamentHandle event-bus chain-api broadcaster reconciler submitter))))
 
 (defn worker-handle?
   [x]
   (instance? TournamentHandle x))
 
 (defn send-event
-  [game-handle event]
-  (event/send (:event-bus game-handle) event))
+  [tournament-handle event]
+  (event/send (:event-bus tournament-handle) event))
+
+(defn wait
+  [tournament-handle]
+  (event/wait (:submitter tournament-handle)))
