@@ -20,7 +20,7 @@
 ;; system/sync-state
 ;; receiving this event when game account reflect there's an update from onchain state
 (defmethod handle-event :system/sync-state
-  [{:keys [status game-id], :as state}
+  [{:keys [status game-id dispatch-event], :as state}
    {{:keys [game-account-state]} :data, :as event}]
 
   (log/log "📦"
@@ -192,7 +192,7 @@
 
     ;; No players
     ;; Reset game state, and do nothing
-    ;; Waiting a player to join
+    ;; Waiting for event :system/sync-state
     (zero? (count player-map))
     (do
       (log/log "🛑" game-id "Can not start, no player")

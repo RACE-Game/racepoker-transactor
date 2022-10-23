@@ -6,8 +6,9 @@
    [depk.transactor.log :as log]
    [depk.transactor.game.models :as m]))
 
-(def sync-times 32)
+(def sync-times 12)
 (def sync-buf-lens 2)
+(def query-interval 3000)
 
 (defn empty-game?
   [state]
@@ -23,7 +24,7 @@
         (nil? state)
         ;; Invalid response, retry
         (do
-          (a/<! (a/timeout 3000))
+          (a/<! (a/timeout query-interval))
           (recur (max buyin-serial (:buyin-serial state)) quit-count))
 
         ;; Pause
@@ -45,13 +46,12 @@
                  :game-id game-id,
                  :data
                  {:game-account-state (m/parse-raw-game-account-state state)}})
-          (a/<! (a/timeout 500))
           (recur (max buyin-serial (:buyin-serial state)) (inc quit-count)))
 
         ;; Refetch
         :else
         (do
-          (a/<! (a/timeout 3000))
+          (a/<! (a/timeout query-interval))
           (recur (max buyin-serial (:buyin-serial state)) (inc quit-count)))))))
 
 (defrecord Synchronizer [chain-api input output])
@@ -68,7 +68,7 @@
  ep/IComponent
  (-start [this opts]
    (let [{:keys [chain-api input output]} this
-         {:keys [game-id init-state]} opts]
+         {:keys [game-id init-state]}     opts]
      (log/log "🎉" game-id "Start synchronizer")
      (start chain-api game-id input output init-state))))
 

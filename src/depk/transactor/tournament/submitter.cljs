@@ -59,7 +59,7 @@
    [:system/settle-tournament
     :system/submit-start-tournament])
 
- ep/IWait
+ ep/IWaitable
  (-wait [this]
    (a/go (a/<! (:output this))))
 
