@@ -1,12 +1,12 @@
 (ns depk.transactor.game.event-handler
   (:require
-   [depk.transactor.util :as u]
+   [depk.transactor.util     :as u]
    [depk.transactor.constant :as c]
    [depk.transactor.game.encrypt :as encrypt]
    [depk.transactor.game.event-handler.misc :as misc]
-   [depk.transactor.log  :as log]
-   [goog.string          :refer [format]]
-   [cljs.core.async      :refer [go <!]]))
+   [depk.transactor.log      :as log]
+   [goog.string              :refer [format]]
+   [cljs.core.async          :refer [go <!]]))
 
 (defmulti handle-event
   (fn [_state event]
@@ -225,13 +225,10 @@
                         timestamp
                         start-time)]
        (log/log "🔥" game-id "Start game, BTN position: %s" next-btn)
-       (log/log "🔀" game-id "Secret-id: %s" state-id)
        (-> state
            (assoc :start-time start-time)
            (assoc :btn next-btn)
-           ;; Set a new secret-id
            ;; This will expire old shuffle-key & encrypt-key
-           (assoc :secret-id state-id)
            (misc/set-operation-player-ids)
            (misc/with-next-op-player-id-as :shuffle-player-id)
            (misc/sit-out-players)
@@ -245,12 +242,14 @@
 ;; receiving this event when player submit shuffled cards
 ;; each player will shuffle cards and encrypt with their shuffle key.
 (defmethod handle-event :client/shuffle-cards
-  [{:keys [game-id op-player-ids shuffle-player-id btn prepare-cards status ed-pub-map],
+  [{:keys [game-id op-player-ids shuffle-player-id btn prepare-cards
+           status ed-pub-map secret-nonce-map],
     :as   state}
-   {{:keys [data sig secret-id]} :data, player-id :player-id, :as event}]
+   {{:keys [data sig secret-nonce]} :data, player-id :player-id, :as event}]
 
-  (when (not= secret-id (:secret-id state))
-    (misc/invalid-secret-id! state event))
+  (when-not (and secret-nonce
+                 (= secret-nonce (get secret-nonce-map player-id)))
+    (misc/invalid-secret-nonce! state event))
 
   (when-not (= :game-status/shuffle status)
     (misc/invalid-game-status! state event))
@@ -259,7 +258,7 @@
             (not (= shuffle-player-id player-id)))
     (misc/invalid-player-id! state event))
 
-  (let [msg (format "client/shuffle-cards %s %s" game-id secret-id)]
+  (let [msg (format "client/shuffle-cards %s %s" game-id secret-nonce)]
     (u/verify-signature2 msg sig (get ed-pub-map player-id)))
 
   (let [new-shuffle-player-id (misc/next-op-player-id state shuffle-player-id)
@@ -287,11 +286,14 @@
 ;; receiving this event when player submit encrypted cards
 ;; each player will remove its shuffle key, and encrypt each cards with encrypt keys respectly.
 (defmethod handle-event :client/encrypt-cards
-  [{:keys [game-id ed-pub-map op-player-ids encrypt-player-id prepare-cards status], :as state}
-   {{:keys [secret-id sig data]} :data, player-id :player-id, :as event}]
+  [{:keys [game-id ed-pub-map op-player-ids encrypt-player-id
+           prepare-cards status secret-nonce-map],
+    :as   state}
+   {{:keys [secret-nonce sig data]} :data, player-id :player-id, :as event}]
 
-  (when (not= secret-id (:secret-id state))
-    (misc/invalid-secret-id! state event))
+  (when-not (and secret-nonce
+                 (= secret-nonce (get secret-nonce-map player-id)))
+    (misc/invalid-secret-nonce! state event))
 
   (when-not (= :game-status/encrypt status)
     (misc/invalid-game-status! state event))
@@ -300,7 +302,7 @@
             (not (= encrypt-player-id player-id)))
     (misc/invalid-player-id! state event))
 
-  (let [msg (format "client/encrypt-cards %s %s" game-id secret-id)]
+  (let [msg (format "client/encrypt-cards %s %s" game-id secret-nonce)]
     (u/verify-signature2 msg sig (get ed-pub-map player-id)))
 
   (let [new-encrypt-player-id (misc/next-op-player-id state encrypt-player-id)
@@ -335,14 +337,16 @@
 ;; client/share-keys
 ;; receiving this event when player share its keys.
 (defmethod handle-event :client/share-keys
-  [{:keys [status after-key-share game-id ed-pub-map], :as state}
-   {{:keys [share-keys secret-id sig]} :data,
+  [{:keys [status after-key-share game-id ed-pub-map secret-nonce-map],
+    :as   state}
+   {{:keys [share-keys secret-nonce sig]} :data,
     player-id :player-id,
     timestamp :timestamp,
     :as       event}]
 
-  (when (not= secret-id (:secret-id state))
-    (misc/invalid-secret-id! state event))
+  (when-not (and secret-nonce
+                 (= secret-nonce (get secret-nonce-map player-id)))
+    (misc/invalid-secret-nonce! state event))
 
   (doseq [[key-ident _] share-keys]
     (when-not (misc/valid-key-ident? state key-ident player-id)
@@ -351,7 +355,7 @@
   (when-not (seq share-keys)
     (misc/empty-share-keys! state event))
 
-  (let [msg (format "client/share-keys %s %s" game-id secret-id)]
+  (let [msg (format "client/share-keys %s %s" game-id secret-nonce)]
     (u/verify-signature2 msg sig (get ed-pub-map player-id)))
 
   (let [new-state (update state :share-key-map merge share-keys)]
@@ -485,10 +489,16 @@
 ;; client/ready
 ;; A event received when a client is ready to start
 (defmethod handle-event :client/ready
-  [{:keys [status player-map winner-id rsa-pub-map ed-pub-map sig-map game-id], :as state}
+  [{:keys [status player-map winner-id rsa-pub-map
+           ed-pub-map sig-map game-id secret-nonce-map],
+    :as   state}
    {player-id :player-id,
-    {:keys [rsa-pub sig ed-pub]} :data,
+    {:keys [rsa-pub sig ed-pub secret-nonce]} :data,
     :as       event}]
+
+  (when (or (not secret-nonce)
+            (get secret-nonce-map player-id))
+    (misc/invalid-secret-nonce! state event))
 
   (when-not rsa-pub
     (misc/invalid-rsa-pub! state event))
@@ -525,6 +535,7 @@
       (assoc-in [:rsa-pub-map player-id] rsa-pub)
       (assoc-in [:ed-pub-map player-id] ed-pub)
       (assoc-in [:sig-map player-id] sig)
+      (assoc-in [:secret-nonce-map player-id] secret-nonce)
       (misc/reserve-timeout)))
 
 (defmethod handle-event :client/fix-keys

@@ -52,21 +52,23 @@
      (throw (ex-info "game not exist" {:game-id game-id})))))
 
 (defn ready
-  [game-manager game-id player-id rsa-pub ed-pub sig]
+  [game-manager game-id player-id rsa-pub ed-pub sig secret-nonce]
   {:pre [(string? player-id)
          (string? game-id)
          (string? rsa-pub)
          (string? ed-pub)
-         (string? sig)]}
+         (string? sig)
+         (string? secret-nonce)]}
   (go-try
    (log/log "➡️" game-id "Player[%s] ready" player-id)
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :client/ready
                                       (worker/get-snapshot game-worker)
-                                      {:rsa-pub rsa-pub,
-                                       :sig     sig,
-                                       :ed-pub  ed-pub}
+                                      {:rsa-pub      rsa-pub,
+                                       :sig          sig,
+                                       :ed-pub       ed-pub,
+                                       :secret-nonce secret-nonce}
                                       player-id))
      (throw (ex-info "game not exist" {:game-id game-id})))))
 
@@ -120,10 +122,10 @@
 ;; Shuffle Cards
 
 (defn shuffle-cards
-  [game-manager game-id player-id secret-id sig data]
+  [game-manager game-id player-id secret-nonce sig data]
   {:pre [(string? game-id)
          (string? player-id)
-         (string? secret-id)
+         (string? secret-nonce)
          (string? sig)
          (some? data)]}
   (go-try
@@ -132,17 +134,17 @@
      (worker/send-event game-worker
                         (m/make-event :client/shuffle-cards
                                       (worker/get-snapshot game-worker)
-                                      {:data      data,
-                                       :sig       sig,
-                                       :secret-id secret-id}
+                                      {:data         data,
+                                       :sig          sig,
+                                       :secret-nonce secret-nonce}
                                       player-id))
      (throw (ex-info "game not exist" {:game-id game-id})))))
 
 (defn encrypt-cards
-  [game-manager game-id player-id secret-id sig data]
+  [game-manager game-id player-id secret-nonce sig data]
   {:pre [(string? game-id)
          (string? player-id)
-         (string? secret-id)
+         (string? secret-nonce)
          (string? sig)
          (some? data)]}
   (go-try
@@ -151,27 +153,27 @@
      (worker/send-event game-worker
                         (m/make-event :client/encrypt-cards
                                       (worker/get-snapshot game-worker)
-                                      {:data      data,
-                                       :sig       sig,
-                                       :secret-id secret-id}
+                                      {:data         data,
+                                       :sig          sig,
+                                       :secret-nonce secret-nonce}
                                       player-id))
      (throw (ex-info "game not exist" {:game-id game-id})))))
 
 (defn share-keys
-  [game-manager game-id player-id share-keys secret-id sig]
+  [game-manager game-id player-id share-keys secret-nonce sig]
   {:pre [(string? game-id)
          (string? player-id)
          (map? share-keys)
-         (string? secret-id)]}
+         (string? secret-nonce)]}
   (go-try
    (log/log "➡️" game-id "Player[%s] share keys" player-id)
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :client/share-keys
                                       (worker/get-snapshot game-worker)
-                                      {:share-keys share-keys,
-                                       :secret-id  secret-id,
-                                       :sig        sig}
+                                      {:share-keys   share-keys,
+                                       :secret-nonce secret-nonce,
+                                       :sig          sig}
                                       player-id))
      (error-game-not-exist! game-id))))
 

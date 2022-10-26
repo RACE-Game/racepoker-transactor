@@ -175,9 +175,9 @@
                   {:state state,
                    :event event})))
 
-(defn invalid-secret-id!
+(defn invalid-secret-nonce!
   [state event]
-  (throw (ex-info "Invalid secret ID"
+  (throw (ex-info "Invalid secret nonce"
                   {:state state,
                    :event event})))
 
@@ -503,7 +503,8 @@
         :winner-id          nil,
         :after-key-share    nil,
         :chips-change-map   nil,
-        :rake-map           nil})))
+        :rake-map           nil
+        :secret-nonce-map   nil})))
 
 (defn get-player-hole-card-indices
   [{:keys [btn player-map], :as state}]

@@ -73,8 +73,6 @@
    ;; game type: cash-game, sng
    game-type
    game-id
-   ;; ID for encryption data
-   secret-id
    sb
    bb
    ante
@@ -95,6 +93,7 @@
    rsa-pub-map
    ed-pub-map
    sig-map
+   secret-nonce-map
 
    ;; ----------------------------------------------
    ;; SNG
@@ -262,8 +261,6 @@
               :base-sb            (:sb game-account-state),
               :base-bb            (:bb game-account-state),
               :base-ante          (:ante game-account-state),
-              ;; Give a initial value for secret-id
-              :secret-id          (str (random-uuid)),
               :rake               (+ (js/BigInt (:transactor-rake game-account-state))
                                      (js/BigInt (:owner-rake game-account-state))),
               :game-account-state (parse-raw-game-account-state game-account-state),
