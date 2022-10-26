@@ -34,9 +34,14 @@
             (get-in state [:game-account-state :buyin-serial]))
     (misc/state-already-merged! state event))
 
-  (-> state
-      (misc/merge-sync-state game-account-state)
-      (misc/reserve-timeout)))
+  (if (= status :game-status/init)
+    (-> state
+        (misc/merge-sync-state game-account-state)
+        ;; Wait more secs if a new player just joined.
+        (misc/dispatch-start-game c/new-player-start-delay))
+    (-> state
+        (misc/merge-sync-state game-account-state)
+        (misc/reserve-timeout))))
 
 ;; system/reset
 ;; receiving this event for reset states

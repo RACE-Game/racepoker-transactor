@@ -14,6 +14,7 @@
 (def dropout-player-action-timeout-delay 5000)
 (def sit-out-player-action-timeout-delay 1000)
 (def reset-timeout-delay 50)
+(def new-player-start-delay 5000)
 (def runner-start-delay 10000)            ; wait more secs for allin
 (def resit-start-delay 15000)
 (def sng-next-game-timeout-delay 30000)
