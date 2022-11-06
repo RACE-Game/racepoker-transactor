@@ -18,7 +18,6 @@
     (a/go-loop []
       (let [tournaments (a/<! (chain/fetch-tournament-list chain-api reg-center-address))
             now         (u/current-unix-timestamp)]
-
         (doseq [{:keys [pubkey start-time]} tournaments
                 :when (and (>= now (- start-time 600))
                            (<= now (+ start-time 600)))]

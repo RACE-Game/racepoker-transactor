@@ -71,6 +71,7 @@
 (def init-reg-accounts-ix-id 19)
 (def reg-game-ix-id 20)
 (def unreg-game-ix-id 21)
+(def unreg-tournament-ix-id 22)
 
 ;; Game Account
 

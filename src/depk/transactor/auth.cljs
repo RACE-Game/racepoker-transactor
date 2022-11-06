@@ -10,11 +10,11 @@
 (def sign-tmpl
   (str
    "Race Protocol\n"
-   "A decentralized protocol for competition games.\n"
+   "A decentralized protocol for competitive games.\n"
    "This signature will be used for authentication of encrypted data.\n\n"
-   "Player ID: \n%s\n"
-   "RSA: \n%s\n"
-   "ED25519: \n%s\n"))
+   "Player: \n%s\n"
+   "Encryption Key: \n%s\n"
+   "Verification Key: \n%s\n"))
 
 (defn user-id-fn
   [{:keys [params], :as _req}]
