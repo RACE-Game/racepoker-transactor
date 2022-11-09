@@ -5,7 +5,8 @@
    [depk.transactor.state.worker-manager]
    [depk.transactor.state.global-chain-api]
    [depk.transactor.state.reg-center]
-   [mount.core :as mount]))
+   [taoensso.timbre :as log]
+   [mount.core      :as mount]))
 
 (defn main-server
   [env]
@@ -13,8 +14,7 @@
   (.on js/process
        "uncaughtException"
        (fn [err]
-         (println err)
-         (js/console.error "There was an uncaught error, " err)))
+         (log/error err)))
 
   (when env (use-env env))
   (mount/start #'depk.transactor.state.config/config

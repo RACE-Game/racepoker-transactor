@@ -13,15 +13,18 @@
     (:type event)))
 
 (defmethod handle-event :default
-  [state _event]
-  state)
+  [state event]
+  (misc/invalid-event-type! state event))
 
-;; implementations
+;;; Implementations
 
-;; system/sync-state
-;; receiving this event when game account reflect there's an update from onchain state
+;; System event: sync-state
+;; We receive this event, when a new player joined by written
+;; itself to onchain state.  By checking `:buyin-serial`, we can avoid
+;; duplicated events.  If current game status is `:game-status/init`,
+;; the start-game events will be rescheduled.
 (defmethod handle-event :system/sync-state
-  [{:keys [status game-id dispatch-event], :as state}
+  [{:keys [status game-id], :as state}
    {{:keys [game-account-state]} :data, :as event}]
 
   (log/log "📦"
@@ -43,10 +46,19 @@
         (misc/merge-sync-state game-account-state)
         (misc/reserve-timeout))))
 
-;; system/reset
-;; receiving this event for reset states
+;; System event: reset
+;; The state will be reset after settlement or termination of each hands.
+;; Clean up will also be done during the reset, includes:
+;; - remove eliminated players
+;; - submit non-alive players(for settlement)
+;; - remove non-alive players
+;; - reset sng state
+;; - add new players
+;; After reset, a start game event will be dispatched. The delay
+;; depends on the previous winning type.
+;; NB: In tournament, this event is replaced by :system/next-game & :system/resit-table
 (defmethod handle-event :system/reset
-  [{:keys [winning-type], :as state}
+  [{:keys [winning-type joined-players], :as state}
    {:keys [timestamp], :as event}]
   (-> state
       (misc/remove-eliminated-players)
@@ -56,10 +68,13 @@
       (misc/add-joined-player)
       (misc/reset-player-map-status)
       (misc/increase-blinds timestamp)            ; For SNG & Tournament
-      (misc/dispatch-start-game :winning-type winning-type)
+      (misc/dispatch-start-game
+       (cond
+         (some some? joined-players) c/new-player-start-delay
+         (= winning-type :runner)    c/runner-start-delay))
       (misc/reset-game-state)))
 
-;; system/start-game
+;; System event: start-game
 ;; Receiving this event to trigger game start.
 ;; Unless all players are ready, kick non-ready players
 ;; When there's enough players to start:
@@ -67,7 +82,7 @@
 ;; - generate a default deck of cards
 ;; - ask the first player (BTN) to shuffle the cards.
 (defmethod handle-event :system/start-game
-  [{:keys [status player-map game-type size start-time state-id halt? game-id], :as state}
+  [{:keys [status player-map game-type size start-time halt? game-id], :as state}
    {:keys [timestamp], :as event}]
 
   (when-not (= :game-status/init status)
@@ -107,7 +122,6 @@
       (log/log "🛑" game-id "Can not start, halted.(Tournament)")
       (-> state
           (misc/dispatch-reset)))
-
 
     (and (= :tournament game-type)
          (= (count player-map) 1))
@@ -226,7 +240,7 @@
            data       (-> (<! (encrypt/encrypt-ciphers-with-default-shuffle-key ciphers))
                           (encrypt/ciphers->hex))
            start-time (if (and (nil? start-time)
-                               (#{:sng :bonus} game-type))
+                               (= :sng game-type))
                         timestamp
                         start-time)]
        (log/log "🔥" game-id "Start game, BTN position: %s" next-btn)
@@ -287,9 +301,10 @@
                  :shuffle-player-id new-shuffle-player-id)
           (misc/dispatch-shuffle-timeout)))))
 
-;; client/encrypt-cards
-;; receiving this event when player submit encrypted cards
-;; each player will remove its shuffle key, and encrypt each cards with encrypt keys respectly.
+;; Client event: encrypt-cards
+;; We receive this event when a player submits its encrypted data What
+;; this player did is removing its shuffle key, and encrypt each cards
+;; with encrypt keys respectly.
 (defmethod handle-event :client/encrypt-cards
   [{:keys [game-id ed-pub-map op-player-ids encrypt-player-id
            prepare-cards status secret-nonce-map],
@@ -349,6 +364,9 @@
     timestamp :timestamp,
     :as       event}]
 
+  (when-not (= :game-status/key-share status)
+    (misc/invalid-game-status! state event))
+
   (when-not (and secret-nonce
                  (= secret-nonce (get secret-nonce-map player-id)))
     (misc/invalid-secret-nonce! state event))
@@ -365,10 +383,6 @@
 
   (let [new-state (update state :share-key-map merge share-keys)]
     (cond
-      (not= :game-status/key-share status)
-      (-> new-state
-          (misc/reserve-timeout))
-
       (seq (misc/list-missing-key-idents new-state))
       (do
         (log/log "🔑" game-id "Wait more keys")
@@ -423,14 +437,13 @@
           (misc/mark-dropout-players timeout-player-ids)
           (misc/terminate timeout-player-ids)))))
 
-;; system/shuffle-timeout
-;; Receiving this event when shuffling is timeout
+;; System event: shuffle-timeout
+;; We receive this event when a player's shuffling is timeout.
 ;; Players who did not complete their task, will be marked as dropout.
-;; The game will turn back to init state, since it failed to start in case.
+;; The game will turn back to init state, since it failed to start.
 (defmethod handle-event :system/shuffle-timeout
   [{:keys [status shuffle-player-id game-id], :as state}
-   {player-id :player-id,
-    :as       event}]
+   {:as event}]
 
   (when-not (= :game-status/shuffle status)
     (misc/invalid-game-status! state event))
@@ -442,14 +455,13 @@
       (assoc :status :game-status/init)
       (misc/dispatch-reset)))
 
-;; system/encrypt-timeout
-;; Receiving this event when encrypting is timeout
+;; System event: encrypt-timeout
+;; We receive this event when encrypting is timeout.
 ;; Players who did not complete their task, will be marked as dropout.
-;; The game will turn back to init state, since it failed to start in case.
+;; The game will turn back to init state, since it failed to start.
 (defmethod handle-event :system/encrypt-timeout
   [{:keys [status encrypt-player-id game-id], :as state}
-   {player-id :player-id,
-    :as       event}]
+   {:as event}]
 
   (when-not (= :game-status/encrypt status)
     (misc/invalid-game-status! state event))
@@ -543,51 +555,6 @@
       (assoc-in [:secret-nonce-map player-id] secret-nonce)
       (misc/reserve-timeout)))
 
-(defmethod handle-event :client/fix-keys
-  [{:keys [player-map rsa-pub-map ed-pub-map sig-map game-id winner-id status], :as state}
-   {player-id :player-id,
-    {:keys [rsa-pub ed-pub sig]} :data,
-    :as       event}]
-
-  (when-not (= :game-status/play status)
-    (misc/invalid-game-status! state event))
-
-  (when-not rsa-pub
-    (misc/invalid-rsa-pub! state event))
-
-  (when-not ed-pub
-    (misc/invalid-ed-pub! state event))
-
-  (when-not sig
-    (misc/invalid-sig! state event))
-
-  (when (or (not player-id)
-            (not (get player-map player-id)))
-    (misc/invalid-player-id! state event))
-
-  (when (= :player-status/fold (get-in player-map [player-id :status]))
-    (misc/invalid-player-status! state event))
-
-  (let [saved-rsa-pub (get rsa-pub-map player-id)
-        saved-sig     (get sig-map player-id)
-        saved-ed-pub  (get ed-pub-map player-id)]
-    (when (or (and saved-rsa-pub (not= saved-rsa-pub rsa-pub))
-              (and saved-sig (not= saved-sig sig))
-              (and saved-ed-pub (not= saved-ed-pub ed-pub)))
-      (misc/cant-update-pub! state event)))
-
-  (when winner-id (misc/sng-finished! state event))
-
-  (log/log "💚" game-id "Player[%s] fix public keys" player-id)
-
-  (-> state
-      (assoc-in [:player-map player-id :online-status] :normal)
-      (assoc-in [:rsa-pub-map player-id] rsa-pub)
-      (assoc-in [:ed-pub-map player-id] ed-pub)
-      (assoc-in [:sig-map player-id] sig)
-      (misc/update-require-key-idents)
-      (misc/reserve-timeout)))
-
 ;; system/dropout
 ;; A event received when a client dropout its connection
 ;; All client whiout this event will be kicked when game start
@@ -607,9 +574,9 @@
         (assoc :player-map player-map)
         (misc/reserve-timeout))))
 
-;; system/alive
+;; System event: alive
 ;; A event received when a client established
-;; This command only work during the game.
+;; We only accept this event when status is play.
 (defmethod handle-event :system/alive
   [{:keys [status player-map game-id], :as state}
    {player-id :player-id,
@@ -630,12 +597,11 @@
         (misc/reserve-timeout))))
 
 ;; client/leave
-;; A event received when a player leave game
-;; 1. Current game is running
-;; The player must share all the necessary keys for current game
-;; Otherwise this event will not success.
-;; 2. Game is not running
-;; Send a claim transaction for player
+;; Client event: leave
+;; We recevie this event when a client leaves game
+;; 1. It's not allowed in a running SNG game
+;; 2. If it's current action player, fold
+;; 3. Otherwise, mark this player is left.
 (defmethod handle-event :client/leave
   [{:keys [status action-player-id game-type start-time game-id player-map], :as state}
    {{:keys [released-keys]} :data,
@@ -661,7 +627,7 @@
                            :status)))]
 
     (cond
-      (and (#{:bonus :sng} game-type)
+      (and (= :sng game-type)
            (some? start-time))
       (misc/cant-leave-game! state event)
 
@@ -779,7 +745,7 @@
       (misc/next-state timestamp)))
 
 (defmethod handle-event :player/bet
-  [{:keys [bet-map player-map bb status min-raise action-player-id street-bet state-id], :as state}
+  [{:keys [bet-map player-map bb status action-player-id street-bet], :as state}
    {{:keys [amount]} :data,
     player-id        :player-id,
     timestamp        :timestamp,
@@ -829,7 +795,7 @@
         (misc/next-state timestamp))))
 
 (defmethod handle-event :player/raise
-  [{:keys [bet-map player-map min-raise status action-player-id street-bet state-id], :as state}
+  [{:keys [bet-map player-map min-raise status action-player-id street-bet], :as state}
    {{:keys [amount]} :data,
     player-id        :player-id,
     timestamp        :timestamp,
@@ -880,10 +846,14 @@
 ;;; Tournament specific
 
 (defmethod handle-event :system/start-tournament-game
-  [{:keys [game-id], :as state}
+  [{:keys [game-id status], :as state}
    {{:keys [start-time]} :data,
     timestamp :timestamp,
-    :as       _event}]
+    :as       event}]
+
+  (when-not (= :game-status/init status)
+    (misc/invalid-game-status! state event))
+
   (log/log "🏁"
            game-id
            "Start game, after %s ms. timestamp: %s, start-time: %s"
@@ -893,13 +863,13 @@
   (-> state
       (assoc :halt?      false
              :start-time start-time)
-      (misc/dispatch-start-game :start-delay (max 0 (- start-time timestamp)))))
+      (misc/dispatch-start-game (max c/reset-timeout-delay (- start-time timestamp)))))
 
 ;; :system/next-game & :system/resit-table
 ;; are the replacements for reset in TOURNAMENT
 
 (defmethod handle-event :system/next-game
-  [{:keys [status winning-type], :as state}
+  [{:keys [winning-type joined-players], :as state}
    {{:keys [game-account-state finish?]} :data,
     timestamp :timestamp,
     :as       _event}]
@@ -913,7 +883,10 @@
       (misc/add-joined-player)
       (misc/reset-player-map-status)
       (misc/increase-blinds timestamp)            ; For SNG & Tournament
-      (misc/dispatch-start-game :winning-type winning-type)
+      (misc/dispatch-start-game
+       (cond
+         (some some? joined-players) c/resit-start-delay
+         (= winning-type :runner)    c/runner-start-delay))
       (misc/reset-game-state)
       (cond->
         finish?
@@ -939,7 +912,7 @@
       (misc/increase-blinds timestamp)            ; For SNG & Tournament
       (misc/reset-game-state)
       (misc/remove-players (keys resit-map))
-      (misc/dispatch-start-game :start-delay c/resit-start-delay)
+      (misc/dispatch-start-game c/reset-timeout-delay)
       (cond->
         finish?
         (assoc :halt? true))))

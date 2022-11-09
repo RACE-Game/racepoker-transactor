@@ -4,7 +4,7 @@
    [depk.transactor.game.encrypt :as e]
    [depk.transactor.game.evaluator :as evaluator]
    [depk.transactor.util :as    u
-                         :refer [go-try <!?]]
+                         :refer [go-try <!? bigint]]
    [depk.transactor.constant :as c]
    [cljs.core.async :as a]
    [clojure.set :as set]
@@ -18,6 +18,12 @@
        (into {})))
 
 ;; errors
+
+(defn invalid-event-type!
+  [state event]
+  (throw (ex-info "Invalid event type"
+                  {:state state,
+                   :event event})))
 
 (defn player-is-not-co-dealer!
   [state event]
@@ -33,7 +39,7 @@
 
 (defn state-already-merged!
   [state event]
-  (throw (ex-info (gstr/format "State already merged: %s" (:game-id state))
+  (throw (ex-info "State already merged"
                   {:state state,
                    :event event})))
 
@@ -162,7 +168,7 @@
 
 (defn sng-finished!
   [state event]
-  (throw (ex-info "SNG finished!" {:state state, :event event})))
+  (throw (ex-info "SNG finished" {:state state, :event event})))
 
 (defn invalid-next-state-case!
   [state]
@@ -197,7 +203,9 @@
         (update :sig-map remove-by-pids))))
 
 (defn remove-eliminated-players
-  "Remove all players who have no chips"
+  "Remove all players who have no chips and update the ranking data for SNG game.
+
+  NB: Ranking is a list of player IDs, in the opposite order of being eliminated."
   [{:keys [player-map game-type ranking winner-id game-id], :as state}]
   (let [eliminated-players (->> player-map
                                 vals
@@ -207,7 +215,7 @@
         eliminated-pids (mapv :player-id eliminated-players)
 
         ;; Build the final ranking with winner ids
-        ranking         (when (and (#{:sng :bonus} game-type)
+        ranking         (when (and (= :sng game-type)
                                    (not winner-id))
                           (into (or ranking ()) eliminated-pids))]
 
@@ -250,7 +258,7 @@
       state)))
 
 (defn remove-non-alive-players
-  "Remove all players who doesn't have live online status."
+  "Remove all players who don't have live online status."
   [{:keys [player-map game-type start-time game-id], :as state}]
   (if (or (= :cash game-type)
           (and (= :sng game-type)
@@ -270,9 +278,6 @@
         state-id-sig (-> event
                          :data
                          :state-id-sig)]
-    (js/console.log "state-id: " state-id)
-    (js/console.log "player-id: " player-id)
-    (js/console.log "state-id-sig: " state-id-sig)
     (u/verify-signature state-id state-id-sig player-id)))
 
 (defn- build-settle-map
@@ -503,7 +508,7 @@
         :winner-id          nil,
         :after-key-share    nil,
         :chips-change-map   nil,
-        :rake-map           nil
+        :rake-map           nil,
         :secret-nonce-map   nil})))
 
 (defn get-player-hole-card-indices
@@ -531,7 +536,7 @@
             ms ms
             (:winner-id state) c/sng-next-game-timeout-delay
             :else c/reset-timeout-delay)
-          (m/make-event :system/reset state {})]))
+          (m/make-event :system/reset)]))
 
 (defn dispatch-blinds-out
   "Dispatch blinds out."
@@ -539,7 +544,7 @@
   (assoc state
          :dispatch-event
          [c/blinds-out-delay
-          (m/make-event :system/blinds-out state {:winner-id winner-id})]))
+          (m/make-event :system/blinds-out {:winner-id winner-id})]))
 
 (defn next-btn
   [state]
@@ -593,16 +598,11 @@
     (assoc state :player-map player-map)))
 
 (defn dispatch-start-game
-  [state & {:keys [start-delay winning-type]}]
+  [state start-delay]
   (-> state
       (assoc :dispatch-event
-             [(cond
-                (= winning-type :runner)
-                c/runner-start-delay
-
-                :else
-                (or start-delay c/default-start-game-delay))
-              (m/make-event :system/start-game state {})])))
+             [(or start-delay c/default-start-game-delay)
+              (m/make-event :system/start-game)])))
 
 (defn mark-dropout-players
   [state player-ids]
@@ -621,14 +621,14 @@
   (assoc state
          :dispatch-event
          [c/encrypt-timeout-delay
-          (m/make-event :system/encrypt-timeout state {})]))
+          (m/make-event :system/encrypt-timeout)]))
 
 (defn dispatch-shuffle-timeout
   [state]
   (assoc state
          :dispatch-event
          [c/shuffle-timeout-delay
-          (m/make-event :system/shuffle-timeout state {})]))
+          (m/make-event :system/shuffle-timeout)]))
 
 (defn dispatch-key-share-timeout
   [state]
@@ -783,13 +783,12 @@
     (update state :require-key-idents into-set require-key-idents)))
 
 (defn update-prize-map
-  [{:keys [pots btn mint-info player-map base-sb game-id], :as state}]
+  [{:keys [pots btn player-map base-sb game-id], :as state}]
   (log/log "🏆" game-id "Update prize map, pots:")
   (doseq [p pots]
     (log/log "🏆" game-id "-%s" (prn-str p)))
 
-  (let [{:keys [decimals]} mint-info
-        min-val            (/ base-sb (js/BigInt 10))
+  (let [min-val            (/ base-sb (js/BigInt 10))
         prize-map          (->> pots
                                 (mapcat (fn [{:keys [amount winner-ids]}]
                                           (let [cnt      (js/BigInt (count winner-ids))
@@ -819,8 +818,8 @@
         prize-map          (update prize-map
                                    reminder-player-id
                                    (fnil +
-                                         (js/BigInt 0)
-                                         (js/BigInt 0))
+                                         (bigint 0)
+                                         (bigint 0))
                                    reminder)]
     (-> state
         (assoc :prize-map prize-map)
@@ -830,8 +829,10 @@
   [{:keys [game-type prize-map rake street game-id], :as state}]
   (if (and (= game-type :cash)
            (not= street :street/preflop))
+
     (let [rake-map      (update-vals* (fn [v]
-                                        (/ (* v rake) (js/BigInt 1000)))
+                                        (/ (* v (or rake (bigint 0)))
+                                           (bigint 1000)))
                                       prize-map)
           new-prize-map (merge-with - prize-map rake-map)]
       (log/log "🧾" game-id "Rake:")
@@ -958,7 +959,10 @@
   (let [new-pots (->> pots
                       (mapv (fn [pot]
                               (loop [[id-set & rest-id-sets] winner-id-sets]
-                                (let [winner-ids (set/intersection (:owner-ids pot) id-set)]
+                                (let [winner-ids (if (seq id-set) ; Avoid dead loop with the else
+                                                                  ; branch
+                                                   (set/intersection (:owner-ids pot) id-set)
+                                                   (:owner-ids pot))]
                                   (if (seq winner-ids)
                                     (assoc pot :winner-ids winner-ids)
                                     (recur rest-id-sets)))))))]

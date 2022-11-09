@@ -10,15 +10,17 @@
   (throw (ex-info "Missing state id" {})))
 
 (defrecord Event
-  [type data player-id])
+  [type data player-id timestamp])
 
 (defn make-event
-  ([type state]
-   (make-event type state {}))
-  ([type state data]
-   (make-event type state data nil))
-  ([type _state data player-id]
-   (into {} (->Event type data player-id))))
+  ([type]
+   (make-event type {}))
+  ([type data]
+   (make-event type data nil))
+  ([type data player-id]
+   (into {} (->Event type data player-id nil)))
+  ([type data player-id timestamp]
+   (into {} (->Event type data player-id timestamp))))
 
 (defrecord PlayerState
   [

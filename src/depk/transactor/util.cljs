@@ -11,6 +11,9 @@
    [taoensso.sente.packers.transit :as sente-transit]
    [goog.string          :refer [format]]))
 
+(defn bigint [x]
+  (js/BigInt x))
+
 (def request-log-ignores
   #{"/api/v1/game/state"})
 

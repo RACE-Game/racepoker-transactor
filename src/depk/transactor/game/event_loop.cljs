@@ -21,7 +21,6 @@
     :system/encrypt-timeout
     :system/player-action-timeout
     :client/ready
-    :client/fix-keys
     :system/alive
     :system/dropout
     :client/leave

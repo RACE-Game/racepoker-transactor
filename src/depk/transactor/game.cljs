@@ -46,7 +46,6 @@
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :client/leave
-                                      (worker/get-snapshot game-worker)
                                       {:released-keys released-keys}
                                       player-id))
      (throw (ex-info "game not exist" {:game-id game-id})))))
@@ -64,7 +63,6 @@
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :client/ready
-                                      (worker/get-snapshot game-worker)
                                       {:rsa-pub      rsa-pub,
                                        :sig          sig,
                                        :ed-pub       ed-pub,
@@ -84,7 +82,6 @@
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :client/fix-keys
-                                      (worker/get-snapshot game-worker)
                                       {:rsa-pub rsa-pub,
                                        :sig     sig,
                                        :ed-pub  ed-pub}
@@ -100,7 +97,6 @@
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :system/alive
-                                      (worker/get-snapshot game-worker)
                                       {}
                                       player-id))
      (throw (ex-info "game not exist" {:game-id game-id})))))
@@ -114,7 +110,6 @@
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :system/dropout
-                                      (worker/get-snapshot game-worker)
                                       {}
                                       player-id))
      (throw (ex-info "game not exist" {:game-id game-id})))))
@@ -133,7 +128,6 @@
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :client/shuffle-cards
-                                      (worker/get-snapshot game-worker)
                                       {:data         data,
                                        :sig          sig,
                                        :secret-nonce secret-nonce}
@@ -152,7 +146,6 @@
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :client/encrypt-cards
-                                      (worker/get-snapshot game-worker)
                                       {:data         data,
                                        :sig          sig,
                                        :secret-nonce secret-nonce}
@@ -170,7 +163,6 @@
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :client/share-keys
-                                      (worker/get-snapshot game-worker)
                                       {:share-keys   share-keys,
                                        :secret-nonce secret-nonce,
                                        :sig          sig}
@@ -187,7 +179,6 @@
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :client/release
-                                      (worker/get-snapshot game-worker)
                                       {:released-keys released-keys}
                                       player-id))
      (error-game-not-exist! game-id))))
@@ -202,7 +193,6 @@
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :player/bet
-                                      (worker/get-snapshot game-worker)
                                       {:amount amount}
                                       player-id))
      (error-game-not-exist! game-id))))
@@ -218,7 +208,6 @@
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :player/raise
-                                      (worker/get-snapshot game-worker)
                                       {:amount amount}
                                       player-id))
      (error-game-not-exist! game-id))))
@@ -232,7 +221,6 @@
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :player/call
-                                      (worker/get-snapshot game-worker)
                                       {}
                                       player-id))
      (error-game-not-exist! game-id))))
@@ -246,7 +234,6 @@
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :player/fold
-                                      (worker/get-snapshot game-worker)
                                       {:share-keys share-keys}
                                       player-id))
      (error-game-not-exist! game-id))))
@@ -260,7 +247,6 @@
    (if-let [game-worker (manager/find-worker game-manager game-id)]
      (worker/send-event game-worker
                         (m/make-event :player/check
-                                      (worker/get-snapshot game-worker)
                                       {}
                                       player-id))
      (error-game-not-exist! game-id))))

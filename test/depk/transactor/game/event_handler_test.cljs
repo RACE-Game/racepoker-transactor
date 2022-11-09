@@ -1,816 +1,1178 @@
 (ns depk.transactor.game.event-handler-test
+  "Tests for event handler.
+
+  The tests are based on event types:
+  - For each event type, we must make sure only expected events are accepted.
+  - For each event, we must make sure invalid events are rejected.
+  - For each event, we must make sure all branches are covered."
   (:require
-   [depk.transactor.game.event-handler :as sut]
-   [depk.transactor.game.models :as m]
-   [depk.transactor.constant :as c]
-   [depk.transactor.log :as log]
+   [depk.transactor.util :refer [bigint]]
    [cljs.core.async :refer [go <!]]
+   [depk.transactor.constant :as c]
+   [depk.transactor.game.models :as m]
+   [depk.transactor.game.event-handler :as sut]
    [cljs.test :as t
               :include-macros true]))
 
-;; (t/deftest system-sync-state
-;;   ;; (t/testing "failure when game-state is not prepare"
-;;   ;;   (let [state (-> (m/make-game-state {:btn 0} {})
-;;   ;;                   (assoc :status :game-status/play))]
-;;   ;;     (t/is (thrown-with-msg? ExceptionInfo #"Invalid game status"
-;;   ;;             (sut/handle-event state (m/make-event :system/sync-state state))))))
+;; Event type: system/sync-state
+(t/deftest test-system-sync-state
+  (t/testing "Err:"
+    (t/testing "Invalid buyin serial"
+      (let [state-before {:game-account-state {:buyin-serial 1,
+                                               :players      [{:pubkey "player-a"}
+                                                              nil
+                                                              nil
+                                                              nil
+                                                              nil
+                                                              nil
+                                                              nil
+                                                              nil
+                                                              nil]}}
+            event        (m/make-event :system/sync-state
+                                       {:game-account-state
+                                        {:buyin-serial 1,
+                                         :players      [{:pubkey "player-a"}
+                                                        nil
+                                                        nil
+                                                        nil
+                                                        nil
+                                                        nil
+                                                        nil
+                                                        nil
+                                                        nil]}})]
+        (t/is
+         (thrown-with-msg? ExceptionInfo #"State already merged"
+           (sut/handle-event state-before event))))))
 
-;;   (t/testing "success with enough players to start"
-;;     (let [state (-> (m/make-game-state {}
-;;                                        {:btn       0,
-;;                                         :mint-info {:decimals 9}})
-;;                     (assoc :status :game-status/init))
-;;           ;; expected-player-map
-;;           ;; {"100" (m/make-player-state "100" 1000 0 :player-status/wait :dropout)}
-;;           event (m/make-event
-;;                  :system/sync-state
-;;                  state
-;;                  {:players            [{:pubkey 100, :chips 1000}],
-;;                   :game-account-state {:level :nl100}})]
+  (t/testing "Ok:"
+    (t/testing "Reschedule start game"
+      (let [state-before {:status             :game-status/init,
+                          :game-account-state {:buyin-serial 2,
+                                               :players      [{:pubkey "player-a", :buyin-serial 1}
+                                                              {:pubkey "player-b", :buyin-serial 2}
+                                                              nil
+                                                              nil
+                                                              nil
+                                                              nil
+                                                              nil
+                                                              nil
+                                                              nil]}}
+            event        (m/make-event :system/sync-state
+                                       {:game-account-state
+                                        {:buyin-serial 3,
+                                         :players      [nil
+                                                        {:pubkey "player-b", :buyin-serial 2}
+                                                        nil
+                                                        nil
+                                                        {:pubkey "player-c", :buyin-serial 3}
+                                                        nil
+                                                        nil
+                                                        nil
+                                                        nil]}})
+            state-after  {:status             :game-status/init,
+                          :game-account-state {:buyin-serial 3,
+                                               :players      [nil
+                                                              {:pubkey "player-b", :buyin-serial 2}
+                                                              nil
+                                                              nil
+                                                              {:pubkey "player-c", :buyin-serial 3}
+                                                              nil
+                                                              nil
+                                                              nil
+                                                              nil]},
+                          :joined-players     [nil
+                                               nil
+                                               nil
+                                               nil
+                                               {:pubkey "player-c", :buyin-serial 3}
+                                               nil
+                                               nil
+                                               nil
+                                               nil],
+                          :dispatch-event     [c/new-player-start-delay
+                                               (m/make-event :system/start-game)]}]
+        (t/is (= state-after (sut/handle-event state-before event)))))
 
-;;       (t/is (= {;; :player-map     expected-player-map,
-;;                 :dispatch-event
-;;                 [c/default-start-game-delay (m/make-event :system/start-game state {:btn 0})]}
-;;                (-> (sut/handle-event state event)
-;;                    (select-keys [:dispatch-event]))))))
+    (t/testing "Reverse current dispatch"
+      (let [state-before {:game-account-state {:buyin-serial 2,
+                                               :players      [{:pubkey "player-a", :buyin-serial 1}
+                                                              {:pubkey "player-b", :buyin-serial 2}
+                                                              nil
+                                                              nil
+                                                              nil
+                                                              nil
+                                                              nil
+                                                              nil
+                                                              nil]}}
+            event        (m/make-event :system/sync-state
+                                       {:game-account-state
+                                        {:buyin-serial 3,
+                                         :players      [nil
+                                                        {:pubkey "player-b", :buyin-serial 2}
+                                                        nil
+                                                        nil
+                                                        {:pubkey "player-c", :buyin-serial 3}
+                                                        nil
+                                                        nil
+                                                        nil
+                                                        nil]}})
+            state-after  {:game-account-state {:buyin-serial 3,
+                                               :players      [nil
+                                                              {:pubkey "player-b", :buyin-serial 2}
+                                                              nil
+                                                              nil
+                                                              {:pubkey "player-c", :buyin-serial 3}
+                                                              nil
+                                                              nil
+                                                              nil
+                                                              nil]},
+                          :joined-players     [nil
+                                               nil
+                                               nil
+                                               nil
+                                               {:pubkey "player-c", :buyin-serial 3}
+                                               nil
+                                               nil
+                                               nil
+                                               nil],
+                          :reserve-timeout    true}]
+        (t/is (= state-after (sut/handle-event state-before event)))))))
 
-;;   (t/testing "success with enough players to start"
-;;     (let [state      (-> (m/make-game-state {:btn 0} {})
-;;                          (assoc :status :game-status/init))
-;;           player-map {"100"
-;;                       (m/make-player-state "100" (js/BigInt 1000) 0 :player-status/wait
-;;                       :dropout),
-;;                       "101"
-;;                       (m/make-player-state "101" (js/BigInt 10000) 2 :player-status/wait
-;;                       :dropout)}
-;;           event      (m/make-event
-;;                       :system/sync-state
-;;                       state
-;;                       {:players            [{:pubkey "100", :chips (js/BigInt 1000)}
-;;                                             nil
-;;                                             {:pubkey "101", :chips (js/BigInt 10000)}],
-;;                        :game-account-state {:level :nl100}})]
-;;       (t/is
-;;        (= {:player-map player-map}
-;;           (-> (sut/handle-event state event)
-;;               (select-keys [:player-map])))))))
+;; Event type: system/reset
 
-(def state-with-players
-  (-> (m/make-game-state {:btn 0} {})
-      (assoc :player-map
-             {100 (m/make-player-state 100 10000 0),
-              101 (m/make-player-state 101 10000 1),
-              102 (m/make-player-state 102 10000 2)}
-             :btn        0
-             :state-id   1)))
+(t/deftest test-system-reset
+  (t/testing "Ok"
+    (let [state-before
+          {:player-map     {"player-a"
+                            (m/make-player-state
+                             "player-a"
+                             (bigint 100)
+                             0
+                             :player-status/acted
+                             :normal),
 
-(t/deftest alive
-  (let [state-0 {:player-map {100 {:player-id     100,
-                                   :position      0,
-                                   :online-status :dropout}},
-                 :state-id   1,
-                 :status     :game-status/init}
-        state-1 {:player-map {100 {:player-id     100,
-                                   :position      0,
-                                   :online-status :dropout},
-                              200 {:player-id     200,
-                                   :position      1,
-                                   :online-status :dropout}},
-                 :state-id   1,
-                 :status     :game-status/init}
-        state-2 {:player-map {100 {:player-id     100,
-                                   :position      0,
-                                   :online-status :dropout},
-                              200 {:player-id     200,
-                                   :position      1,
-                                   :online-status :normal}},
-                 :state-id   1,
-                 :status     :game-status/init}
+                            "player-b"
+                            (m/make-player-state
+                             "player-b"
+                             (bigint 0)
+                             1
+                             :player-status/acted
+                             :normal),
 
-        event-1 (m/make-event :client/alive state-1 {} 100)
-        event-2 (m/make-event :client/alive state-1 {} 200)]
-    (t/testing "failure for already alive"
-      (t/is (thrown-with-msg? ExceptionInfo #"Player already alive"
-              (sut/handle-event state-2 event-2))))
+                            "player-c"
+                            (m/make-player-state
+                             "player-c"
+                             (bigint 100)
+                             2
+                             :player-status/acted
+                             :dropout),
 
-    (t/testing "success for the first player"
-      (t/is (= {:player-map     {100 {:player-id 100, :position 0, :online-status :normal},
-                                 200 {:player-id 200, :position 1, :online-status :dropout}},
-                :dispatch-event [c/default-start-game-delay
-                                 (m/make-event :system/start-game state-1)]}
-               (-> (sut/handle-event state-1 event-1)
-                   (select-keys [:player-map :dispatch-event])))))
+                            "player-d"
+                            (m/make-player-state
+                             "player-d"
+                             (bigint 100)
+                             3
+                             :player-status/acted
+                             :leave)},
+           :joined-players
+           [nil nil nil nil {:pubkey "player-e", :chips (bigint 100)} nil nil nil nil nil]}
 
-    ;; (t/testing "success for the second player"
-    ;;   (t/is (= {:player-map     {100 {:player-id 100, :position 0, :online-status :normal},
-    ;;                              200 {:player-id 200, :position 1, :online-status :normal}},
-    ;;             :dispatch-event [c/continue-start-game-delay
-    ;;                              (m/make-event :system/start-game state-1)]}
-    ;;            (-> (sut/handle-event state-2 event-1)
-    ;;                (select-keys [:player-map :dispatch-event])))))
+          state-after
+          {:player-map         {"player-a"
+                                (m/make-player-state
+                                 "player-a"
+                                 (bigint 100)
+                                 0
+                                 :player-status/wait
+                                 :dropout),
 
-    (t/testing "success for single player"
-      (t/is (= {:player-map     {100 {:player-id 100, :position 0, :online-status :normal}},
-                :dispatch-event [c/default-start-game-delay
-                                 (m/make-event :system/start-game state-1)]}
-               (-> (sut/handle-event state-0 event-1)
-                   (select-keys [:player-map :dispatch-event])))))))
+                                "player-e"
+                                (m/make-player-state
+                                 "player-e"
+                                 (bigint 100)
+                                 4
+                                 :player-status/wait
+                                 :dropout)},
+           :dispatch-event
+           [c/default-start-game-delay
+            {:type      :system/start-game,
+             :data      {},
+             :player-id nil,
+             :timestamp nil}],
 
-(t/deftest system-start-game
+           :status             :game-status/init,
+           :joined-players     nil,
+           :card-ciphers       [],
+           :released-keys-map  nil,
+           :chips-change-map   nil,
+           :after-key-share    nil,
+           :showdown-map       nil,
+           :share-key-map      nil,
+           :community-cards    nil,
+           :ed-pub-map         nil,
+           :logs               [],
+           :rake-map           nil,
+           :prize-map          nil,
+           :winner-id          nil,
+           :street             nil,
+           :bet-map            nil,
+           :sig-map            nil,
+           :secret-nonce-map   nil,
+           :require-key-idents nil,
+           :winning-type       nil,
+           :pots               [],
+           :ranking            nil,
+           :min-raise          nil,
+           :after-keyshare     nil,
+           :street-bet         nil,
+           :rsa-pub-map        nil}
+          event        (m/make-event :system/reset {} nil 10000000)]
+      ;; (t/is (= state-after (sut/handle-event state-before event)))
+    )))
 
-  (t/testing "failure"
-    (let [state (-> state-with-players
-                    (assoc :status :game-status/play))
-          event (m/make-event :system/start-game state {:btn 1})]
+;; Event type: system/start-game
 
-      (t/is (thrown-with-msg? ExceptionInfo #"Invalid game status"
-              (-> (sut/handle-event state event)
-                  (select-keys [:player-map :dispatch-event :shuffle-player-id]))))))
+(t/deftest test-system-start-game
+  (let [event (m/make-event :system/start-game)]
 
-  (t/async done
-    (go
-     (t/testing "success"
-       (let [state (-> state-with-players
-                       (assoc :status :game-status/init))
-             event (m/make-event :system/start-game state {:btn 1})]
+    (t/testing "Err:"
+      (t/testing "Invalid game status"
+        (t/testing "Shutdown due to game closed"
+          (let [state-before {:game-type  :tournament,
+                              :player-map {}}]
+            (t/is (thrown-with-msg? ExceptionInfo #"Invalid game status"
+                    (sut/handle-event state-before event)))))))
 
-         (t/is (= {:player-map        (:player-map state),
-                   :shuffle-player-id 101,
-                   :dispatch-event    [c/shuffle-timeout-delay
-                                       (m/make-event :system/shuffle-timeout state)]}
-                  (-> (<! (sut/handle-event state event))
-                      (select-keys [:player-map :dispatch-event :shuffle-player-id]))))))
-     (done))))
+    (t/testing "Ok:"
+      (t/testing "Can't start game:"
 
-(def state-game-started
-  (-> (m/make-game-state {:btn 0} {})
-      (assoc :player-map    {100 (m/make-player-state 100 10000 0),
-                             101 (m/make-player-state 101 10000 1),
-                             102 (m/make-player-state 102 10000 2)}
-             :btn           0
-             :status        :game-status/shuffle
-             :prepare-cards [{:data      "INIT DATA",
-                              :op        :init,
-                              :player-id nil}]
-             :shuffle-player-id 100)))
+        (t/testing "Tournament:"
+          (t/testing "Shutdown due to game closed"
+            (let [state-before {:game-type  :tournament,
+                                :status     :game-status/init,
+                                :player-map {}}
+                  state-after  {:game-type  :tournament,
+                                :status     :game-status/init,
+                                :player-map {},
+                                :shutdown?  true}]
+              (t/is (= state-after (sut/handle-event state-before event)))))
 
-(t/deftest player-shuffle-cards
+          (t/testing "Reset due to game halted"
+            (let [state-before {:game-type  :tournament,
+                                :status     :game-status/init,
+                                :player-map {"player-a"
+                                             (m/make-player-state "player-a" (bigint 100) 0),
+                                             "player-b"
+                                             (m/make-player-state "player-b" (bigint 100) 1)},
+                                :halt?      true}
+                  state-after  {:game-type      :tournament,
+                                :status         :game-status/init,
+                                :player-map     {"player-a"
+                                                 (m/make-player-state "player-a" (bigint 100) 0),
+                                                 "player-b"
+                                                 (m/make-player-state "player-b" (bigint 100) 1)},
+                                :halt?          true,
+                                :dispatch-event [c/reset-timeout-delay
+                                                 (m/make-event :system/reset)]}]
+              (t/is (= state-after (sut/handle-event state-before event)))))
 
-  (t/testing "failure"
-    (let [state state-game-started
-          event (m/make-event :client/shuffle-cards state {:data "ENCRYPTED DATA"} 101)]
-      (t/is (thrown-with-msg? ExceptionInfo #"Invalid player id"
-              (sut/handle-event state event)))))
+          ;; In this case, we need to send a settlement request which
+          ;; can trigger the reseat in tournament reconciler.
+          (t/testing "Reset due to there's only one player waiting for a seat in other tables"
+            (let [state-before {:game-type          :tournament,
+                                :status             :game-status/init,
+                                :game-account-state {:settle-serial 1},
+                                :player-map         {"player-a"
+                                                     (m/make-player-state "player-a"
+                                                                          (bigint 100)
+                                                                          0)}}
+                  state-after  {:game-type          :tournament,
+                                :status             :game-status/init,
+                                :game-account-state {:settle-serial 1},
+                                :player-map         {"player-a"
+                                                     (m/make-player-state "player-a"
+                                                                          (bigint 100)
+                                                                          0)},
+                                :api-requests
+                                [{:type :system/settle,
+                                  :data {:settle-map
+                                         {"player-a" {:settle-type   :no-update,
+                                                      :settle-status :no-update,
+                                                      :amount        (bigint 0),
+                                                      :rake          (bigint 0)}},
+                                         :settle-serial 1}}],
+                                :rake-map           nil,
+                                ;; Why we set halt? to true? Is this necessary?
+                                :halt?              true,
+                                :dispatch-event
+                                [c/reset-timeout-delay (m/make-event :system/reset)]}]
+              (t/is (= state-after (sut/handle-event state-before event)))))
 
-  (t/testing "success"
-    (let [state state-game-started
-          event (m/make-event :client/shuffle-cards state {:data "ENCRYPTED DATA"} 100)]
-      (t/is (= {:prepare-cards     [{:data      "INIT DATA",
-                                     :op        :init,
-                                     :player-id nil}
-                                    {:data      "ENCRYPTED DATA",
-                                     :op        :shuffle,
-                                     :player-id 100}],
-                :shuffle-player-id 101}
-               (-> (sut/handle-event state event)
-                   (select-keys [:prepare-cards :shuffle-player-id]))))))
+          (t/testing "Reset due to no player ready"
+            (let [state-before {:game-type          :tournament,
+                                :status             :game-status/init,
+                                :game-account-state {:settle-serial 1},
+                                :player-map         {"player-a"
+                                                     (m/make-player-state "player-a"
+                                                                          (bigint 100)
+                                                                          0
+                                                                          :player-status/acted
+                                                                          :dropout),
+                                                     "player-b"
+                                                     (m/make-player-state "player-b"
+                                                                          (bigint 100)
+                                                                          1
+                                                                          :player-status/acted
+                                                                          :dropout)}}
+                  state-after  {:game-type          :tournament,
+                                :status             :game-status/init,
+                                :game-account-state {:settle-serial 1},
+                                :player-map         {"player-a"
+                                                     (m/make-player-state "player-a"
+                                                                          (bigint 100)
+                                                                          0
+                                                                          :player-status/acted
+                                                                          :dropout),
+                                                     "player-b"
+                                                     (m/make-player-state "player-b"
+                                                                          (bigint 100)
+                                                                          1
+                                                                          :player-status/acted
+                                                                          :dropout)},
+                                :api-requests
+                                [{:type :system/settle,
+                                  :data {:settle-map
+                                         {"player-a" {:settle-type   :no-update,
+                                                      :settle-status :leave,
+                                                      :amount        (bigint 0),
+                                                      :rake          (bigint 0)},
+                                          "player-b" {:settle-type   :no-update,
+                                                      :settle-status :leave,
+                                                      :amount        (bigint 0),
+                                                      :rake          (bigint 0)}},
+                                         :settle-serial 1}}],
+                                :rake-map           nil,
+                                ;; Why we set halt? to true? Is this necessary?
+                                :halt?              true,
+                                :dispatch-event
+                                [c/reset-timeout-delay (m/make-event :system/reset)]}]
+              (t/is (= state-after (sut/handle-event state-before event)))))
 
-  (t/testing "success, all clients"
-    (let [state   state-game-started
-          event-1 (m/make-event :client/shuffle-cards
-                                state
-                                {:data "ENCRYPTED DATA 1"}
-                                100)
-          event-2 (m/make-event :client/shuffle-cards
-                                state
-                                {:data "ENCRYPTED DATA 2"}
-                                101)
-          event-3 (m/make-event :client/shuffle-cards
-                                state
-                                {:data "ENCRYPTED DATA 3"}
-                                102)]
+          ;; How the blinds out event being cancelled?
+          (t/testing "Blinds out due to there's only one player ready"
+            (let [state-before {:game-type          :tournament,
+                                :status             :game-status/init,
+                                :game-account-state {:settle-serial 1},
+                                :btn                0,
+                                :player-map         {"player-a"
+                                                     (m/make-player-state "player-a"
+                                                                          (bigint 100)
+                                                                          0),
+                                                     "player-b"
+                                                     (m/make-player-state "player-b"
+                                                                          (bigint 100)
+                                                                          1
+                                                                          :player-status/acted
+                                                                          :dropout)}}
+                  state-after  {:game-type          :tournament,
+                                :status             :game-status/init,
+                                :game-account-state {:settle-serial 1},
+                                :btn                0,
+                                :player-map         {"player-a"
+                                                     (m/make-player-state "player-a"
+                                                                          (bigint 100)
+                                                                          0),
+                                                     "player-b"
+                                                     (m/make-player-state "player-b"
+                                                                          (bigint 100)
+                                                                          1
+                                                                          :player-status/acted
+                                                                          :dropout)},
+                                :dispatch-event     [c/blinds-out-delay
+                                                     (m/make-event :system/blinds-out
+                                                                   {:winner-id "player-a"})]}]
+              (t/is (= state-after (sut/handle-event state-before event))))))
+
+        (t/testing "SNG:"
+          (t/testing "First start failed due to not all players are ready"
+            (let [state-before {:game-type  :sng,
+                                :status     :game-status/init,
+                                :player-map {"player-a"
+                                             (m/make-player-state "player-a" (bigint 100) 0),
+                                             "player-b"
+                                             (m/make-player-state "player-b"
+                                                                  (bigint 100)
+                                                                  0
+                                                                  :player-status/wait
+                                                                  :dropout)}}
+                  state-after  {:game-type      :sng,
+                                :status         :game-status/init,
+                                :player-map     {"player-a"
+                                                 (m/make-player-state "player-a" (bigint 100) 0),
+                                                 "player-b"
+                                                 (m/make-player-state "player-b"
+                                                                      (bigint 100)
+                                                                      0
+                                                                      :player-status/wait
+                                                                      :dropout)},
+                                :dispatch-event
+                                [c/reset-timeout-delay
+                                 (m/make-event :system/reset)]}]
+              (t/is (= state-after (sut/handle-event state-before event)))))
+
+          (t/testing "First start failed due to table is not full"
+            (let [state-before {:game-type  :sng,
+                                :status     :game-status/init,
+                                :size       3,
+                                :player-map {"player-a"
+                                             (m/make-player-state "player-a" (bigint 100) 0),
+                                             "player-b"
+                                             (m/make-player-state "player-b" (bigint 100) 0)}}
+                  state-after  {:game-type      :sng,
+                                :status         :game-status/init,
+                                :size           3,
+                                :player-map     {"player-a"
+                                                 (m/make-player-state "player-a" (bigint 100) 0),
+                                                 "player-b"
+                                                 (m/make-player-state "player-b" (bigint 100) 0)},
+                                :dispatch-event
+                                [c/reset-timeout-delay
+                                 (m/make-event :system/reset)]}]
+              (t/is (= state-after (sut/handle-event state-before event)))))
+
+          (t/testing "Reset due to no player ready"
+            (let [state-before {:game-type  :sng,
+                                :status     :game-status/init,
+                                :player-map {"player-a"
+                                             (m/make-player-state "player-a" (bigint 100) 0),
+                                             "player-b"
+                                             (m/make-player-state "player-b"
+                                                                  (bigint 100)
+                                                                  0
+                                                                  :player-status/wait
+                                                                  :dropout)}}
+                  state-after  {:game-type      :sng,
+                                :status         :game-status/init,
+                                :player-map     {"player-a"
+                                                 (m/make-player-state "player-a" (bigint 100) 0),
+                                                 "player-b"
+                                                 (m/make-player-state "player-b"
+                                                                      (bigint 100)
+                                                                      0
+                                                                      :player-status/wait
+                                                                      :dropout)},
+                                :dispatch-event
+                                [c/reset-timeout-delay
+                                 (m/make-event :system/reset)]}]
+              (t/is (= state-after (sut/handle-event state-before event)))))
+
+          (t/testing "Blinds out due to there's only one player ready"
+            (let [state-before {:game-type          :sng,
+                                :start-time         1000000,
+                                :status             :game-status/init,
+                                :game-account-state {:settle-serial 1},
+                                :btn                0,
+                                :player-map         {"player-a"
+                                                     (m/make-player-state "player-a"
+                                                                          (bigint 100)
+                                                                          0),
+                                                     "player-b"
+                                                     (m/make-player-state "player-b"
+                                                                          (bigint 100)
+                                                                          1
+                                                                          :player-status/acted
+                                                                          :dropout)}}
+                  state-after  {:game-type          :sng,
+                                :start-time         1000000,
+                                :status             :game-status/init,
+                                :game-account-state {:settle-serial 1},
+                                :btn                0,
+                                :player-map         {"player-a"
+                                                     (m/make-player-state "player-a"
+                                                                          (bigint 100)
+                                                                          0),
+                                                     "player-b"
+                                                     (m/make-player-state "player-b"
+                                                                          (bigint 100)
+                                                                          1
+                                                                          :player-status/acted
+                                                                          :dropout)},
+                                :dispatch-event     [c/blinds-out-delay
+                                                     (m/make-event :system/blinds-out
+                                                                   {:winner-id "player-a"})]}]
+              (t/is (= state-after (sut/handle-event state-before event))))))
+
+        (t/testing "Cash:"
+          (t/testing "Reset due to no enough players"
+            (let [state-before {:game-type  :cash,
+                                :status     :game-status/init,
+                                :player-map {"player-a"
+                                             (m/make-player-state "player-a" (bigint 100) 0)}}
+                  state-after  {:game-type      :cash,
+                                :status         :game-status/init,
+                                :player-map     {"player-a"
+                                                 (m/make-player-state "player-a" (bigint 100) 0)},
+                                :dispatch-event
+                                [c/reset-timeout-delay
+                                 (m/make-event :system/reset)]}]
+              (t/is (= state-after (sut/handle-event state-before event)))))
+
+          (t/testing "Reset due to someone is not ready"
+            (let [state-before {:game-type  :cash,
+                                :status     :game-status/init,
+                                :player-map {"player-a"
+                                             (m/make-player-state "player-a"
+                                                                  (bigint 100)
+                                                                  0),
+                                             "player-b"
+                                             (m/make-player-state "player-b"
+                                                                  (bigint 100)
+                                                                  1
+                                                                  :player-status/acted
+                                                                  :dropout)}}
+                  state-after  {:game-type      :cash,
+                                :status         :game-status/init,
+                                :player-map     {"player-a"
+                                                 (m/make-player-state "player-a"
+                                                                      (bigint 100)
+                                                                      0),
+                                                 "player-b"
+                                                 (m/make-player-state "player-b"
+                                                                      (bigint 100)
+                                                                      1
+                                                                      :player-status/acted
+                                                                      :dropout)},
+                                :dispatch-event
+                                [c/reset-timeout-delay
+                                 (m/make-event :system/reset)]}]
+              (t/is (= state-after (sut/handle-event state-before event)))))))
+
+      (let
+        [prepare-cards
+         [{:player-id nil,
+           :op        :init,
+           :data
+           "af11-af54-af57-af0b-af58-af59-af0a-af52-af55-af14-af53-af56-af01-bf11-bf54-bf57-bf0b-bf58-bf59-bf0a-bf52-bf55-bf14-bf53-bf56-bf01-b411-b454-b457-b40b-b458-b459-b40a-b452-b455-b414-b453-b456-b401-b811-b854-b857-b80b-b858-b859-b80a-b852-b855-b814-b853-b856-b801"}]]
+        (t/testing "Start cash game"
+          (let
+            [state-before {:status     :game-status/init,
+                           :game-type  :cash,
+                           :player-map {"player-a"
+                                        (m/make-player-state "player-a"
+                                                             (bigint 100)
+                                                             0),
+                                        "player-b"
+                                        (m/make-player-state "player-b"
+                                                             (bigint 100)
+                                                             1)},
+                           :btn        0}
+             state-after
+             {:status            :game-status/shuffle,
+              :start-time        nil,
+              :prepare-cards     prepare-cards,
+              :game-type         :cash,
+              :player-map        {"player-a"
+                                  (m/make-player-state "player-a"
+                                                       (bigint 100)
+                                                       0),
+                                  "player-b"
+                                  (m/make-player-state "player-b"
+                                                       (bigint 100)
+                                                       1)},
+              :btn               1,
+              :op-player-ids     ["player-a" "player-b"],
+              :encrypt-player-id nil,
+              :shuffle-player-id "player-a",
+              :dispatch-event    [c/shuffle-timeout-delay
+                                  (m/make-event :system/shuffle-timeout)]}]
+            (t/async done
+              (go
+               (t/is (= state-after (<! (sut/handle-event state-before event))))
+               (done)))))
+
+        (t/testing "Start sng game"
+          (let
+            [state-before {:status     :game-status/init,
+                           :game-type  :sng,
+                           :size       3,
+                           :start-time 1000000,
+                           :player-map {"player-a"
+                                        (m/make-player-state "player-a"
+                                                             (bigint 100)
+                                                             0),
+                                        "player-b"
+                                        (m/make-player-state "player-b"
+                                                             (bigint 100)
+                                                             1),
+                                        "player-c"
+                                        (m/make-player-state "player-)"
+                                                             (bigint 100)
+                                                             2
+                                                             :player-status/wait
+                                                             :dropout)},
+                           :btn        0}
+             state-after
+             {:status            :game-status/shuffle,
+              :start-time        1000000,
+              :prepare-cards     prepare-cards,
+              :game-type         :sng,
+              :size              3,
+              :player-map        {"player-a"
+                                  (m/make-player-state "player-a"
+                                                       (bigint 100)
+                                                       0),
+                                  "player-b"
+                                  (m/make-player-state "player-b"
+                                                       (bigint 100)
+                                                       1),
+                                  "player-c"
+                                  ;; Is it necessary to have drop-count for SNG game?
+                                  (assoc (m/make-player-state "player-)"
+                                                              (bigint 100)
+                                                              2
+                                                              :player-status/wait
+                                                              :dropout)
+                                         :drop-count
+                                         1)},
+              :btn               1,
+              :op-player-ids     ["player-a" "player-b"],
+              :encrypt-player-id nil,
+              :shuffle-player-id "player-a",
+              :dispatch-event    [c/shuffle-timeout-delay
+                                  (m/make-event :system/shuffle-timeout)]}]
+            (t/async done
+              (go
+               (t/is (= state-after (<! (sut/handle-event state-before event))))
+               (done)))))
+
+        (t/testing "Start tournament game"
+          (let
+            [state-before {:status     :game-status/init,
+                           :game-type  :tournament,
+                           :size       3,
+                           :start-time 1000000,
+                           :player-map {"player-a"
+                                        (m/make-player-state "player-a"
+                                                             (bigint 100)
+                                                             0),
+                                        "player-b"
+                                        (m/make-player-state "player-b"
+                                                             (bigint 100)
+                                                             1),
+                                        "player-c"
+                                        (m/make-player-state "player-)"
+                                                             (bigint 100)
+                                                             2
+                                                             :player-status/wait
+                                                             :dropout)},
+                           :btn        0}
+             state-after
+             {:status            :game-status/shuffle,
+              :start-time        1000000,
+              :prepare-cards     prepare-cards,
+              :game-type         :tournament,
+              :size              3,
+              :player-map        {"player-a"
+                                  (m/make-player-state "player-a"
+                                                       (bigint 100)
+                                                       0),
+                                  "player-b"
+                                  (m/make-player-state "player-b"
+                                                       (bigint 100)
+                                                       1),
+                                  "player-c"
+                                  ;; Is it necessary to have drop-count for SNG game?
+                                  (assoc (m/make-player-state "player-)"
+                                                              (bigint 100)
+                                                              2
+                                                              :player-status/wait
+                                                              :dropout)
+                                         :drop-count
+                                         1)},
+              :btn               1,
+              :op-player-ids     ["player-a" "player-b"],
+              :encrypt-player-id nil,
+              :shuffle-player-id "player-a",
+              :dispatch-event    [c/shuffle-timeout-delay
+                                  (m/make-event :system/shuffle-timeout)]}]
+            (t/async done
+              (go
+               (t/is (= state-after (<! (sut/handle-event state-before event))))
+               (done)))))))))
+
+;; Event type: system/start-tournament-game
+;; Event type: client/shuffle-cards
+;; Event type: client/encrypt-cards
+;; Event type: client/share-keys
+;; Event type: system/key-share-timeout
+
+;; Event type: system/shuffle-timeout
+(t/deftest test-shuffle-timeout
+  (t/testing "Err:"
+    (t/testing "Invalid status"
+      (let [state {}]
+        (t/is (thrown-with-msg? ExceptionInfo #"Invalid game status"
+                (sut/handle-event state (m/make-event :system/shuffle-timeout)))))))
+
+  (t/testing "Ok"
+    (let [state-before {:status            :game-status/shuffle,
+                        :player-map
+                        {"player-a" (m/make-player-state "player-a" (bigint 100) 0),
+                         "player-b" (m/make-player-state "player-b" (bigint 100) 0),
+                         "player-c" (m/make-player-state "player-c" (bigint 100) 0)},
+                        :shuffle-player-id "player-a"}
+          state-after  {:status            :game-status/init,
+                        :player-map
+                        {"player-a" (m/make-player-state "player-a"
+                                                         (bigint 100)
+                                                         0
+                                                         :player-status/fold
+                                                         :dropout),
+                         "player-b" (m/make-player-state "player-b" (bigint 100) 0),
+                         "player-c" (m/make-player-state "player-c" (bigint 100) 0)},
+                        :shuffle-player-id "player-a",
+                        :dispatch-event    [c/reset-timeout-delay (m/make-event :system/reset)]}]
+      (t/is (= state-after
+               (sut/handle-event state-before (m/make-event :system/shuffle-timeout)))))))
+
+;; Event type: system/encrypt-timeout
+
+(t/deftest test-encrypt-timeout
+  (t/testing "Err:"
+    (t/testing "Invalid status"
+      (let [state {}]
+        (t/is (thrown-with-msg? ExceptionInfo #"Invalid game status"
+                (sut/handle-event state (m/make-event :system/encrypt-timeout)))))))
+
+  (t/testing "Ok"
+    (let [state-before {:status            :game-status/encrypt,
+                        :player-map
+                        {"player-a" (m/make-player-state "player-a" (bigint 100) 0),
+                         "player-b" (m/make-player-state "player-b" (bigint 100) 0),
+                         "player-c" (m/make-player-state "player-c" (bigint 100) 0)},
+                        :encrypt-player-id "player-a"}
+          state-after  {:status            :game-status/init,
+                        :player-map
+                        {"player-a" (m/make-player-state "player-a"
+                                                         (bigint 100)
+                                                         0
+                                                         :player-status/fold
+                                                         :dropout),
+                         "player-b" (m/make-player-state "player-b" (bigint 100) 0),
+                         "player-c" (m/make-player-state "player-c" (bigint 100) 0)},
+                        :encrypt-player-id "player-a",
+                        :dispatch-event    [c/reset-timeout-delay (m/make-event :system/reset)]}]
+      (t/is (= state-after
+               (sut/handle-event state-before (m/make-event :system/encrypt-timeout)))))))
+
+;; Event type: system/player-action-timeout
+;; Event type: client/ready
+
+
+(t/deftest
+  test-client-ready
+  ;; (t/testing "Invalid rsa pub"
+  ;;   (let [state-before {:status :game-status/play}]
+  ;;     (t/is (thrown-with-msg? ExceptionInfo #"Invalid RSA public key"
+  ;;             (sut/handle-event state-before
+  ;;                               (m/make-event :client/fix-keys
+  ;;                                             {:ed-pub "ed-pub",
+  ;;                                              :sig    "sig"}))))))
+
+  ;; (t/testing "Invalid ed pub"
+  ;;   (let [state-before {:status :game-status/play}]
+  ;;     (t/is (thrown-with-msg? ExceptionInfo #"Invalid ED25519 public key"
+  ;;             (sut/handle-event state-before
+  ;;                               (m/make-event :client/fix-keys
+  ;;                                             {:rsa-pub "rsa-pub",
+  ;;                                              :sig     "sig"}))))))
+
+  ;; (t/testing "Invalid signature"
+  ;;   (let [state-before {:status :game-status/play}]
+  ;;     (t/is (thrown-with-msg? ExceptionInfo #"Invalid signature"
+  ;;             (sut/handle-event state-before
+  ;;                               (m/make-event :client/fix-keys
+  ;;                                             {:rsa-pub "rsa-pub",
+  ;;                                              :ed-pub  "ed-pub"}))))))
+
+  ;; (t/testing "Invalid player ID"
+  ;;   (let [state-before {:status :game-status/play}]
+  ;;     (t/is (thrown-with-msg? ExceptionInfo #"Invalid player id"
+  ;;             (sut/handle-event state-before
+  ;;                               (m/make-event :client/fix-keys
+  ;;                                             {:rsa-pub "rsa-pub",
+  ;;                                              :sig     "sig",
+  ;;                                              :ed-pub  "ed-pub"}
+  ;;                                             nil))))))
+
+  ;; (t/testing "Invalid player status"
+  ;;   (let [state-before {:status     :game-status/play,
+  ;;                       :player-map {"player-a" (m/make-player-state
+  ;;                                                "player-a"
+  ;;                                                (bigint 10)
+  ;;                                                0
+  ;;                                                :player-status/fold
+  ;;                                                :normal)}}]
+  ;;     (t/is (thrown-with-msg? ExceptionInfo #"Invalid player status"
+  ;;             (sut/handle-event state-before
+  ;;                               (m/make-event :client/fix-keys
+  ;;                                             {:rsa-pub "rsa-pub",
+  ;;                                              :sig     "sig",
+  ;;                                              :ed-pub  "ed-pub"}
+  ;;                                             "player-a"))))))
+
+  ;; (t/testing "Can't replace existing keys"
+  ;;   (let [state-before {:status      :game-status/play,
+  ;;                       :player-map  {"player-a" (m/make-player-state
+  ;;                                                 "player-a"
+  ;;                                                 (bigint 10)
+  ;;                                                 0)},
+  ;;                       :rsa-pub-map {"player-a" "old-rsa-pub"}}]
+  ;;     (t/is (thrown-with-msg? ExceptionInfo #"Can't update public key"
+  ;;             (sut/handle-event state-before
+  ;;                               (m/make-event :client/fix-keys
+  ;;                                             {:rsa-pub "rsa-pub",
+  ;;                                              :sig     "sig",
+  ;;                                              :ed-pub  "ed-pub"}
+  ;;                                             "player-a"))))))
+)
+
+;; Event type: client/fix-keys
+
+;; TODO: missing the ok case
+(t/deftest test-client-share-keys
+  (t/testing "Err:"
+    (t/testing "Invalid status"
+      (let [state-before {}]
+        (t/is (thrown-with-msg? ExceptionInfo #"Invalid game status"
+                (sut/handle-event state-before
+                                  (m/make-event
+                                   :client/share-keys))))))
+
+    (t/testing "Invalid secret nonce"
+      (let [state-before {:status           :game-status/key-share,
+                          :secret-nonce-map {"player-a" "nonce-a"}}]
+        (t/is (thrown-with-msg? ExceptionInfo #"Invalid secret nonce"
+                (sut/handle-event state-before
+                                  (m/make-event
+                                   :client/share-keys
+                                   {:secret-nonce "nonce-b"}
+                                   "player-a"))))))
+
+    (t/testing "Invalid share key"
+      (let [state-before {:status             :game-status/key-share,
+                          :require-key-idents #{["player-a" :community-card 0]
+                                                ["player-a" :community-card 1]
+                                                ["player-b" :community-card 3]},
+                          :secret-nonce-map   {"player-a" "nonce-a"}}]
+        (t/is (thrown-with-msg? ExceptionInfo #"Invalid share key"
+                (sut/handle-event state-before
+                                  (m/make-event
+                                   :client/share-keys
+                                   {:secret-nonce "nonce-a",
+                                    :share-keys   {["player-a" :community-card 0] "secret-0",
+                                                   ["player-a" :community-card 1] "secret-1",
+                                                   ["player-a" :community-card 2] "secret-2"}}
+                                   "player-a"))))))
+
+    (t/testing "Empty share key"
+      (let [state-before {:status             :game-status/key-share,
+                          :require-key-idents #{["player-a" :community-card 0]
+                                                ["player-a" :community-card 1]
+                                                ["player-b" :community-card 3]},
+                          :secret-nonce-map   {"player-a" "nonce-a"}}]
+        (t/is (thrown-with-msg? ExceptionInfo #"Empty share key"
+                (sut/handle-event state-before
+                                  (m/make-event
+                                   :client/share-keys
+                                   {:secret-nonce "nonce-a",
+                                    :share-keys   {}}
+                                   "player-a"))))))
+
+    ;; TODO
+    ;; (t/testing "Invalid signature"
+    ;;   (let [state-before {:status             :game-status/key-share,
+    ;;                       :require-key-idents #{["player-a" :community-card 0]
+    ;;                                             ["player-a" :community-card 1]
+    ;;                                             ["player-b" :community-card 3]},
+    ;;                       :secret-nonce-map   {"player-a" "nonce-a"}}]
+    ;;     (t/is (thrown-with-msg? ExceptionInfo #"Empty share key"
+    ;;             (sut/handle-event state-before
+    ;;                               (m/make-event
+    ;;                                :client/share-keys
+    ;;                                {:secret-nonce "nonce-a",
+    ;;                                 :share-keys   {}}
+    ;;                                "player-a"))))))
+
+
+
+    ;; (t/testing "Invalid rsa pub"
+    ;;   (let [state-before {:status :game-status/play}]
+    ;;     (t/is (thrown-with-msg? ExceptionInfo #"Invalid RSA public key"
+    ;;             (sut/handle-event state-before
+    ;;                               (m/make-event :client/fix-keys
+    ;;                                             {:ed-pub "ed-pub",
+    ;;                                              :sig    "sig"}))))))
+
+    ;; (t/testing "Invalid ed pub"
+    ;;   (let [state-before {:status :game-status/play}]
+    ;;     (t/is (thrown-with-msg? ExceptionInfo #"Invalid ED25519 public key"
+    ;;             (sut/handle-event state-before
+    ;;                               (m/make-event :client/fix-keys
+    ;;                                             {:rsa-pub "rsa-pub",
+    ;;                                              :sig     "sig"}))))))
+
+    ;; (t/testing "Invalid signature"
+    ;;   (let [state-before {:status :game-status/play}]
+    ;;     (t/is (thrown-with-msg? ExceptionInfo #"Invalid signature"
+    ;;             (sut/handle-event state-before
+    ;;                               (m/make-event :client/fix-keys
+    ;;                                             {:rsa-pub "rsa-pub",
+    ;;                                              :ed-pub  "ed-pub"}))))))
+
+    ;; (t/testing "Invalid player ID"
+    ;;   (let [state-before {:status :game-status/play}]
+    ;;     (t/is (thrown-with-msg? ExceptionInfo #"Invalid player id"
+    ;;             (sut/handle-event state-before
+    ;;                               (m/make-event :client/fix-keys
+    ;;                                             {:rsa-pub "rsa-pub",
+    ;;                                              :sig     "sig",
+    ;;                                              :ed-pub  "ed-pub"}
+    ;;                                             nil))))))
+
+    ;; (t/testing "Invalid player status"
+    ;;   (let [state-before {:status     :game-status/play,
+    ;;                       :player-map {"player-a" (m/make-player-state
+    ;;                                                "player-a"
+    ;;                                                (bigint 10)
+    ;;                                                0
+    ;;                                                :player-status/fold
+    ;;                                                :normal)}}]
+    ;;     (t/is (thrown-with-msg? ExceptionInfo #"Invalid player status"
+    ;;             (sut/handle-event state-before
+    ;;                               (m/make-event :client/fix-keys
+    ;;                                             {:rsa-pub "rsa-pub",
+    ;;                                              :sig     "sig",
+    ;;                                              :ed-pub  "ed-pub"}
+    ;;                                             "player-a"))))))
+
+    ;; (t/testing "Can't replace existing keys"
+    ;;   (let [state-before {:status      :game-status/play,
+    ;;                       :player-map  {"player-a" (m/make-player-state
+    ;;                                                 "player-a"
+    ;;                                                 (bigint 10)
+    ;;                                                 0)},
+    ;;                       :rsa-pub-map {"player-a" "old-rsa-pub"}}]
+    ;;     (t/is (thrown-with-msg? ExceptionInfo #"Can't update public key"
+    ;;             (sut/handle-event state-before
+    ;;                               (m/make-event :client/fix-keys
+    ;;                                             {:rsa-pub "rsa-pub",
+    ;;                                              :sig     "sig",
+    ;;                                              :ed-pub  "ed-pub"}
+    ;;                                             "player-a"))))))
+  ))
+
+;; Event type: system/alive
+(t/deftest test-system-alive
+  (t/testing "Err:"
+    (t/testing "Player ID is missing"
+      (let [state-before {:player-map {"player-a" (m/make-player-state
+                                                   "player-a"
+                                                   (bigint 100)
+                                                   0)}}]
+        (t/is (thrown-with-msg? ExceptionInfo #"Invalid player id"
+                (sut/handle-event state-before (m/make-event :system/alive))))))
+
+    (t/testing "Invalid player ID"
+      (let [state-before {:player-map {"player-a" (m/make-player-state
+                                                   "player-a"
+                                                   (bigint 100)
+                                                   0)}}]
+        (t/is (thrown-with-msg? ExceptionInfo #"Invalid player id"
+                (sut/handle-event state-before (m/make-event :system/alive {} "player-b"))))))
+
+    (t/testing "Invalid game status"
+      (let [state-before {:player-map {"player-a" (m/make-player-state
+                                                   "player-a"
+                                                   (bigint 100)
+                                                   0
+                                                   :player-status/wait
+                                                   :dropout)}}]
+        (t/is (thrown-with-msg? ExceptionInfo #"Invalid game status"
+                (sut/handle-event state-before (m/make-event :system/alive {} "player-a")))))))
+
+  (t/testing "Ok"
+    (let [state-before
+          {:status     :game-status/play,
+           :player-map {"player-a" (m/make-player-state
+                                    "player-a"
+                                    (bigint 100)
+                                    0
+                                    :player-status/wait
+                                    :dropout)}}
+          state-after
+          {:status          :game-status/play,
+           :player-map      {"player-a" (m/make-player-state
+                                         "player-a"
+                                         (bigint 100)
+                                         0
+                                         :player-status/wait
+                                         :normal)},
+           :reserve-timeout true}]
       (t/is
-       (= {:prepare-cards     [{:data      "INIT DATA",
-                                :op        :init,
-                                :player-id nil}
-                               {:data      "ENCRYPTED DATA 1",
-                                :op        :shuffle,
-                                :player-id 100}
-                               {:data      "ENCRYPTED DATA 2",
-                                :op        :shuffle,
-                                :player-id 101}
-                               {:data      "ENCRYPTED DATA 3",
-                                :op        :shuffle,
-                                :player-id 102}],
-           :shuffle-player-id nil,
-           :encrypt-player-id 100,
-           :status            :game-status/encrypt}
-          (-> state
-              (sut/handle-event event-1)
-              (sut/handle-event event-2)
-              (sut/handle-event event-3)
-              (select-keys [:prepare-cards :shuffle-player-id :encrypt-player-id :status])))))))
+       (= state-after
+          (sut/handle-event state-before (m/make-event :system/alive {} "player-a")))))))
 
+;; Event type: system/dropout
+(t/deftest test-system-dropout
+  (t/testing "Err:"
+    (t/testing "Player ID is missing"
+      (let [state-before {:player-map {"player-a" (m/make-player-state
+                                                   "player-a"
+                                                   (bigint 100)
+                                                   0)}}]
+        (t/is (thrown-with-msg? ExceptionInfo #"Invalid player id"
+                (sut/handle-event state-before (m/make-event :system/dropout))))))
 
-(def state-cards-shuffled
-  (-> (m/make-game-state {:btn 0} {})
-      (assoc :player-map    {100 (m/make-player-state 100 10000 0),
-                             101 (m/make-player-state 101 10000 1),
-                             102 (m/make-player-state 102 10000 2)}
-             :btn           0
-             :status        :game-status/encrypt
-             :prepare-cards []
-             :encrypt-player-id 100)))
+    (t/testing "Invalid player ID"
+      (let [state-before {:player-map {"player-a" (m/make-player-state
+                                                   "player-a"
+                                                   (bigint 100)
+                                                   0)}}]
+        (t/is (thrown-with-msg? ExceptionInfo #"Invalid player id"
+                (sut/handle-event state-before (m/make-event :system/dropout {} "player-b")))))))
 
-(t/deftest client-encrypt-cards
+  (t/testing "Ok"
+    (let [state-before {:player-map {"player-a" (m/make-player-state
+                                                 "player-a"
+                                                 (bigint 100)
+                                                 0)}}
+          state-after  {:player-map      {"player-a" (m/make-player-state
+                                                      "player-a"
+                                                      (bigint 100)
+                                                      0
+                                                      :player-status/wait
+                                                      :dropout)},
+                        :reserve-timeout true}]
+      (t/is
+       (= state-after
+          (sut/handle-event state-before (m/make-event :system/dropout {} "player-a")))))))
 
-  (t/testing "failure"
-    (let [state state-cards-shuffled
-          event (m/make-event :client/encrypt-cards state {:data "ENCRYPTED DATA"} 101)]
-      (t/is (thrown-with-msg? ExceptionInfo #"Invalid player id"
-              (sut/handle-event state event)))))
+;; Event type: client/leave
 
-  (t/testing "success"
-    (t/async done
-      (go
-       (let [state state-cards-shuffled
-             event (m/make-event :client/encrypt-cards state {:data "ENCRYPTED DATA"} 100)]
-         (t/is (= {:prepare-cards     [{:data      "ENCRYPTED DATA",
-                                        :op        :encrypt,
-                                        :player-id 100}],
-                   :encrypt-player-id 101}
-                  (-> (<! (sut/handle-event state event))
-                      (select-keys [:prepare-cards :encrypt-player-id])))))
-       (done))))
+(t/deftest test-client-leave
+  (t/testing "Err:"
+    (t/testing "Invalid player id"
+      (let [state {}
+            event (m/make-event :client/leave)]
+        (t/is (thrown-with-msg? ExceptionInfo #"Invalid player id"
+                (sut/handle-event state event))))
 
-  (t/testing "success, all clients"
-    (t/async done
-      (go
-       (let [state   state-cards-shuffled
-             event-1 (m/make-event :client/encrypt-cards
-                                   state
-                                   {:data "ENCRYPTED DATA 1"}
-                                   100)
-             event-2 (m/make-event :client/encrypt-cards
-                                   state
-                                   {:data "ENCRYPTED DATA 2"}
-                                   101)
-             event-3 (m/make-event :client/encrypt-cards
-                                   state
-                                   {:data "ENCRYPTED DATA 3"}
-                                   102)]
-         (t/is
-          (= {:prepare-cards      [{:data      "ENCRYPTED DATA 1",
-                                    :op        :encrypt,
-                                    :player-id 100}
-                                   {:data      "ENCRYPTED DATA 2",
-                                    :op        :encrypt,
-                                    :player-id 101}
-                                   {:data      "ENCRYPTED DATA 3",
-                                    :op        :encrypt,
-                                    :player-id 102}],
-              :encrypt-player-id  nil,
-              :status             :game-status/key-share,
-              :after-key-share    :init-street,
-              :require-key-idents #{[100 :hole-card 0 101]
-                                    [102 :hole-card 0 101]
-                                    [100 :hole-card 1 101]
-                                    [102 :hole-card 1 101]
-                                    [100 :hole-card 2 102]
-                                    [101 :hole-card 2 102]
-                                    [100 :hole-card 3 102]
-                                    [101 :hole-card 3 102]
-                                    [102 :hole-card 4 100]
-                                    [101 :hole-card 4 100]
-                                    [102 :hole-card 5 100]
-                                    [101 :hole-card 5 100]}}
-             (let [s1 (<! (sut/handle-event state event-1))
-                   s2 (<! (sut/handle-event s1 event-2))
-                   s3 (<! (sut/handle-event s2 event-3))]
-               (-> s3
-                   (select-keys [:require-key-idents :prepare-cards :encrypt-player-id
-                                 :encrypt-player-id
-                                 :status :after-key-share]))))))
-       (done)))))
+      (let [state {:player-map {"player-a" (m/make-player-state "player-a" (bigint 100) 0)}}
+            event (m/make-event :client/leave {} "player-b")]
+        (t/is (thrown-with-msg? ExceptionInfo #"Invalid player id"
+                (sut/handle-event state event)))))
 
-(def state-before-share-keys
-  (-> (m/make-game-state {:btn 0} {})
-      (assoc :player-map {100 (m/make-player-state 100 10000 0),
-                          101 (m/make-player-state 101 10000 1),
-                          102 (m/make-player-state 102 10000 2)}
-             :btn        2
-             :status     :game-status/key-share
-             ;; need six cards
-             :require-key-idents #{;; card 0 for 100
-                                   [101 :hole-card 0 100]
-                                   [102 :hole-card 0 100]
-                                   ;; card 1 for 100
-                                   [101 :hole-card 1 100]
-                                   [102 :hole-card 1 100]
-                                   ;; card 2 for 101
-                                   [100 :hole-card 2 101]
-                                   [102 :hole-card 2 101]
-                                   ;; card 3 for 101
-                                   [100 :hole-card 3 101]
-                                   [102 :hole-card 3 101]
-                                   ;; card 0 for 102
-                                   [100 :hole-card 4 102]
-                                   [101 :hole-card 4 102]
-                                   ;; card 1 for 102
-                                   [100 :hole-card 5 102]
-                                   [101 :hole-card 5 102]})))
+    (t/testing "Can't leave a running SNG"
+      (let [state {:game-type  :sng,
+                   ;; indicate the game is already started
+                   :start-time 1000000,
+                   :player-map {"player-a" (m/make-player-state "player-a" (bigint 100) 0),
+                                "player-b" (m/make-player-state "player-b" (bigint 100) 0)}}
+            event (m/make-event :client/leave {} "player-a")]
+        (t/is (thrown-with-msg? ExceptionInfo #"Can't leave game"
+                (sut/handle-event state event))))))
 
-(t/deftest client-share-keys
-  (t/testing "failure with invalid key ident"
-    (let [state state-before-share-keys
-          event (m/make-event :client/share-keys
-                              state
-                              {:share-keys {[100 :hole-card 5 100] "KEY"}}
-                              100)]
-      (t/is (thrown-with-msg? ExceptionInfo #"Invalid share key"
-              (sut/handle-event state event)))))
+  (t/testing "Ok:"
+    (t/testing "Game is not running, leave immediately"
+      (let [state-before  {:game-type  :cash,
+                           :player-map {"player-a" (m/make-player-state "player-a" (bigint 100) 0),
+                                        "player-b" (m/make-player-state "player-b" (bigint 100) 0)}}
 
-  (t/testing "failure with invalid player-id"
-    (let [state state-before-share-keys
-          event (m/make-event :client/share-keys
-                              state
-                              {:share-keys {[100 :hole-card 5 102] "KEY"}}
-                              101)]
-      (t/is (thrown-with-msg? ExceptionInfo #"Invalid share key"
-              (sut/handle-event state event)))))
+            state-after   {:game-type       :cash,
+                           :player-map      {"player-a" (m/make-player-state "player-a"
+                                                                             (bigint 100)
+                                                                             0
+                                                                             :player-status/fold
+                                                                             :leave),
+                                             "player-b" (m/make-player-state "player-b"
+                                                                             (bigint 100)
+                                                                             0)},
+                           :reserve-timeout true}
 
-  (t/testing "failure with duplicated key ident"
-    (let [state (-> state-before-share-keys
-                    (assoc :share-key-map {[100 :hole-card 5 102] "KEY"}))
-          event (m/make-event :client/share-keys
-                              state
-                              {:share-keys {[100 :hole-card 5 102] "KEY"}}
-                              100)]
-      (t/is (thrown-with-msg? ExceptionInfo #"Invalid share key"
-              (sut/handle-event state event)))))
+            event         (m/make-event :client/leave {} "player-a")
 
-  (t/testing "failure with invalid state"
-    (let [state (-> state-before-share-keys
-                    (assoc :status :game-status/play))
-          event (m/make-event :client/share-keys
-                              state
-                              {:share-keys {[100 :hole-card 5 102] "KEY"}}
-                              100)]
-      (t/is (thrown-with-msg? ExceptionInfo #"Invalid game status"
-              (sut/handle-event state event)))))
+            st-b-init     (assoc state-before :status :game-status/init)
+            st-a-init     (assoc state-after :status :game-status/init)
+            st-b-settle   (assoc state-before :status :game-status/settle)
+            st-a-settle   (assoc state-after :status :game-status/settle)
+            st-b-showdown (assoc state-before :status :game-status/showdown)
+            st-a-showdown (assoc state-after :status :game-status/showdown)]
+        (t/are [st-b sta]
+         (= sta (sut/handle-event st-b event))
 
-  (t/testing "success"
-    (let [state (-> state-before-share-keys)
-          event (m/make-event :client/share-keys
-                              state
-                              {:share-keys {[100 :hole-card 5 102] "KEY"}}
-                              100)]
-      (t/is (= {:share-key-map {[100 :hole-card 5 102] "KEY"},
-                :status        :game-status/key-share}
-               (-> state
-                   (sut/handle-event event)
-                   (select-keys [:share-key-map :status]))))))
+         st-b-init     st-a-init
+         st-b-settle   st-a-settle
+         st-b-showdown st-a-showdown)))
 
-  (t/testing "success all"
-    (let [state   (-> state-before-share-keys
-                      (assoc :after-key-share :init-street))
-          event-1 (m/make-event :client/share-keys
-                                state
-                                {:share-keys {[100 :hole-card 2 101] "KEY",
-                                              [100 :hole-card 3 101] "KEY",
-                                              [100 :hole-card 4 102] "KEY",
-                                              [100 :hole-card 5 102] "KEY"}}
-                                100)
-          event-2 (m/make-event :client/share-keys
-                                state
-                                {:share-keys {[101 :hole-card 0 100] "KEY",
-                                              [101 :hole-card 4 102] "KEY",
-                                              [101 :hole-card 1 100] "KEY",
-                                              [101 :hole-card 5 102] "KEY"}}
-                                101)
-          event-3 (m/make-event :client/share-keys
-                                state
-                                {:share-keys {[102 :hole-card 1 100] "KEY",
-                                              [102 :hole-card 0 100] "KEY",
-                                              [102 :hole-card 2 101] "KEY",
-                                              [102 :hole-card 3 101] "KEY"}}
-                                102)]
-      (t/is (= {:share-key-map {[101 :hole-card 0 100] "KEY",
-                                [102 :hole-card 0 100] "KEY",
-                                [101 :hole-card 1 100] "KEY",
-                                [102 :hole-card 1 100] "KEY",
-                                [100 :hole-card 2 101] "KEY",
-                                [102 :hole-card 2 101] "KEY",
-                                [100 :hole-card 3 101] "KEY",
-                                [102 :hole-card 3 101] "KEY",
-                                [100 :hole-card 4 102] "KEY",
-                                [101 :hole-card 4 102] "KEY",
-                                [100 :hole-card 5 102] "KEY",
-                                [101 :hole-card 5 102] "KEY"},
-                :status        :game-status/play}
-               (-> state
-                   (sut/handle-event event-1)
-                   (sut/handle-event event-2)
-                   (sut/handle-event event-3)
-                   (select-keys [:share-key-map :status])))))))
+    (t/testing "The last player win immediately"
+      (let [state-before {:game-type  :cash,
+                          :status     :game-status/key-share,
+                          :base-sb    (bigint 50),
+                          :sb         (bigint 50),
+                          :base-bb    (bigint 100),
+                          :bb         (bigint 100),
+                          :pots       [{:owner-ids #{"player-a" "player-b"},
+                                        :amount    (bigint 200)}],
+                          :street-bet (bigint 100),
+                          :bet-map    {"player-a" (bigint 100),
+                                       "player-b" (bigint 100)},
+                          :player-map {"player-a" (m/make-player-state "player-a"
+                                                                       (bigint 100)
+                                                                       0),
+                                       "player-b" (m/make-player-state "player-b"
+                                                                       (bigint 100)
+                                                                       1)}}
+            state-after  {:game-type        :cash,
+                          :status           :game-status/settle,
+                          :base-sb          (bigint 50),
+                          :sb               (bigint 50),
+                          :base-bb          (bigint 100),
+                          :bb               (bigint 100),
+                          :rake-map         nil,
+                          :ed-pub-map       nil,
+                          :rsa-pub-map      nil,
+                          :sig-map          nil,
+                          :prize-map        {"player-b" (bigint 400)},
+                          :pots
+                          [{:owner-ids  #{"player-a" "player-b"},
+                            :amount     (bigint 400),
+                            :winner-ids #{"player-b"}}],
+                          :street-bet
+                          (bigint 100),
+                          :bet-map
+                          nil,
+                          :chips-change-map
+                          {"player-a" (bigint -200),
+                           "player-b" (bigint 200)},
+                          :player-map
+                          {"player-b" (m/make-player-state "player-b"
+                                                           (bigint 500)
+                                                           1)},
+                          :winning-type     :last-player,
+                          :dispatch-event
+                          [c/reset-timeout-delay (m/make-event :system/reset)]}
+            event        (m/make-event :client/leave {} "player-a")]
+        (t/is (= state-after
+                 (dissoc (sut/handle-event state-before event)
+                         :display
+                         :api-requests)))))))
 
-(t/deftest client-leave
-  (t/testing "success, not the player in action"
-    (let [state (-> (m/make-game-state {:btn 0} {})
-                    (assoc :player-map       {100 {:status        :player-status/acted,
-                                                   :player-id     100,
-                                                   :online-status :normal,
-                                                   :chips         (js/BigInt 200)},
-                                              200 {:status        :player-status/in-action,
-                                                   :player-id     200,
-                                                   :online-status :normal,
-                                                   :chips         (js/BigInt 200)}}
-                           :status           :game-status/play
-                           :action-player-id 200
-                           :game-type        :cash))]
-      (t/is (= {:player-map {100 {:status        :player-status/fold,
-                                  :player-id     100,
-                                  :online-status :leave,
-                                  :chips         (js/BigInt 200)},
-                             200 {:status        :player-status/in-action,
-                                  :player-id     200,
-                                  :online-status :normal,
-                                  :chips         (js/BigInt 200)}}}
-               (-> state
-                   (sut/handle-event (m/make-event :client/leave
-                                                   state
-                                                   {}
-                                                   100))
-                   (select-keys [:player-map]))))))
-
-  (t/testing "success, the player in action"
-    (let [state (-> (m/make-game-state {:btn 0} {})
-                    (assoc
-                     :game-type        :cash
-                     :status           :game-status/play
-                     :action-player-id 100
-                     :player-map
-                     {100 {:status    :player-status/in-action,
-                           :player-id 100},
-                      200 {:status    :player-status/wait,
-                           :player-id 200},
-                      300 {:status    :player-status/wait,
-                           :player-id 300}}))]
-      (t/is (= {:player-map       {100 {:status        :player-status/fold,
-                                        :player-id     100,
-                                        :online-status :leave},
-                                   200 {:status    :player-status/in-action,
-                                        :player-id 200},
-                                   300 {:status    :player-status/wait,
-                                        :player-id 300}},
-                :action-player-id 200}
-               (-> state
-                   (sut/handle-event (m/make-event :client/leave
-                                                   state
-                                                   {}
-                                                   100))
-                   (select-keys [:player-map :action-player-id])))))))
-
-(t/deftest player-fold
-  (t/testing "success, ask next wait player for action"
-    (let [state (-> (m/make-game-state {:btn 0} {})
-                    (assoc :player-map       {100 {:status    :player-status/in-action,
-                                                   :player-id 100},
-                                              101 {:status    :player-status/acted,
-                                                   :player-id 101},
-                                              102 {:status    :player-status/wait,
-                                                   :player-id 102}}
-                           :status           :game-status/play
-                           :action-player-id 100
-                           :bet-map          {100 2000,
-                                              101 3000,
-                                              102 1000}))]
-      (t/is (= {:player-map {100 {:status    :player-status/fold,
-                                  :player-id 100},
-                             101 {:status    :player-status/acted,
-                                  :player-id 101},
-                             102 {:status    :player-status/in-action,
-                                  :player-id 102}}}
-               (-> state
-                   (sut/handle-event (m/make-event :player/fold
-                                                   state
-                                                   {}
-                                                   100))
-                   (select-keys [:player-map])))))))
-
-(t/deftest player-call
-  (t/testing "success, normal call"
-    (let [state (-> (m/make-game-state {:btn 0} {})
-                    (assoc :status           :game-status/play
-                           :player-map       {100 {:status    :player-status/in-action,
-                                                   :player-id 100,
-                                                   :chips     10000},
-                                              101 {:status    :player-status/wait,
-                                                   :player-id 101,
-                                                   :chips     10000},
-                                              102 {:status    :player-status/wait,
-                                                   :player-id 102,
-                                                   :chips     10000}}
-                           :street-bet       3000
-                           :action-player-id 100
-                           :bet-map          {100 0,
-                                              101 1500,
-                                              102 3000}))]
-      (t/is (= {:player-map {100 {:status    :player-status/acted,
-                                  :player-id 100,
-                                  :chips     7000},
-                             101 {:status    :player-status/in-action,
-                                  :player-id 101,
-                                  :chips     10000},
-                             102 {:status    :player-status/wait,
-                                  :player-id 102,
-                                  :chips     10000}},
-                :bet-map    {100 3000,
-                             101 1500,
-                             102 3000}}
-               (-> state
-                   (sut/handle-event (m/make-event :player/call
-                                                   state
-                                                   {}
-                                                   100))
-                   (select-keys [:bet-map :player-map]))))))
-
-  (t/testing "success, call allin"
-    (let [state (-> (m/make-game-state {:btn 0} {})
-                    (assoc :status           :game-status/play
-                           :player-map       {100 {:status    :player-status/in-action,
-                                                   :player-id 100,
-                                                   :chips     2000},
-                                              101 {:status    :player-status/wait,
-                                                   :player-id 101,
-                                                   :chips     10000},
-                                              102 {:status    :player-status/wait,
-                                                   :player-id 102,
-                                                   :chips     10000}}
-                           :street-bet       3000
-                           :action-player-id 100
-                           :bet-map          {100 0,
-                                              101 1500,
-                                              102 3000}))]
-      (t/is (= {:player-map {100 {:status    :player-status/allin,
-                                  :player-id 100,
-                                  :chips     0},
-                             101 {:status    :player-status/in-action,
-                                  :player-id 101,
-                                  :chips     10000},
-                             102 {:status    :player-status/wait,
-                                  :player-id 102,
-                                  :chips     10000}},
-                :bet-map    {100 2000,
-                             101 1500,
-                             102 3000}}
-               (-> state
-                   (sut/handle-event (m/make-event :player/call
-                                                   state
-                                                   {}
-                                                   100))
-                   (select-keys [:bet-map :player-map])))))))
-
-(t/deftest player-check
-  (t/testing "success, player has no bet"
-    (let [state (-> (m/make-game-state {:btn 0} {})
-                    (assoc :status           :game-status/play
-                           :player-map       {100 {:status    :player-status/in-action,
-                                                   :player-id 100,
-                                                   :chips     10000},
-                                              101 {:status    :player-status/wait,
-                                                   :player-id 101,
-                                                   :chips     10000},
-                                              102 {:status    :player-status/wait,
-                                                   :player-id 102,
-                                                   :chips     10000}}
-                           :street-bet       nil
-                           :action-player-id 100))]
-      (t/is (= {:player-map {100 {:status    :player-status/acted,
-                                  :player-id 100,
-                                  :chips     10000},
-                             101 {:status    :player-status/in-action,
-                                  :player-id 101,
-                                  :chips     10000},
-                             102 {:status    :player-status/wait,
-                                  :player-id 102,
-                                  :chips     10000}},
-                :bet-map    nil}
-               (-> state
-                   (sut/handle-event (m/make-event :player/check
-                                                   state
-                                                   {}
-                                                   100))
-                   (select-keys [:bet-map :player-map]))))))
-  (t/testing "success, player has bet"
-    (let [state (-> (m/make-game-state {:btn 0} {})
-                    (assoc :status           :game-status/play
-                           :player-map       {100 {:status    :player-status/in-action,
-                                                   :player-id 100,
-                                                   :chips     10000},
-                                              101 {:status    :player-status/wait,
-                                                   :player-id 101,
-                                                   :chips     10000},
-                                              102 {:status    :player-status/wait,
-                                                   :player-id 102,
-                                                   :chips     10000}}
-                           :street-bet       2000
-                           :action-player-id 100
-                           :bet-map          {100 2000,
-                                              101 1000,
-                                              102 2000}))]
-      (t/is (= {:player-map {100 {:status    :player-status/acted,
-                                  :player-id 100,
-                                  :chips     10000},
-                             101 {:status    :player-status/in-action,
-                                  :player-id 101,
-                                  :chips     10000},
-                             102 {:status    :player-status/wait,
-                                  :player-id 102,
-                                  :chips     10000}},
-                :bet-map    {100 2000,
-                             101 1000,
-                             102 2000}}
-               (-> state
-                   (sut/handle-event (m/make-event :player/check
-                                                   state
-                                                   {}
-                                                   100))
-                   (select-keys [:bet-map :player-map])))))))
-
-(t/deftest player-bet
-  (t/testing "fail, can't bet"
-    (let [state (-> (m/make-game-state {:btn 0} {})
-                    (assoc :status           :game-status/play
-                           :player-map       {100 {:status    :player-status/in-action,
-                                                   :player-id 100,
-                                                   :chips     (js/BigInt 10000)},
-                                              101 {:status    :player-status/wait,
-                                                   :player-id 101,
-                                                   :chips     (js/BigInt 10000)},
-                                              102 {:status    :player-status/wait,
-                                                   :player-id 102,
-                                                   :chips     (js/BigInt 10000)}}
-                           :street-bet       (js/BigInt 1000)
-                           :action-player-id 100))]
-      (t/is (thrown-with-msg? ExceptionInfo #"Player can't bet"
-              (-> state
-                  (sut/handle-event (m/make-event :player/bet
-                                                  state
-                                                  {:amount (js/BigInt 1000)}
-                                                  100)))))))
-  (t/testing "fail, invalid amount"
-    (let [state (-> (m/make-game-state {:btn 0} {})
-                    (assoc :status           :game-status/play
-                           :player-map       {100 {:status    :player-status/in-action,
-                                                   :player-id 100,
-                                                   :chips     (js/BigInt 10000)},
-                                              101 {:status    :player-status/wait,
-                                                   :player-id 101,
-                                                   :chips     (js/BigInt 10000)},
-                                              102 {:status    :player-status/wait,
-                                                   :player-id 102,
-                                                   :chips     (js/BigInt 10000)}}
-                           :street-bet       (js/BigInt 0)
-                           :action-player-id 100))]
-      (t/is (thrown-with-msg? ExceptionInfo #"Invalid amount"
-              (-> state
-                  (sut/handle-event (m/make-event :player/bet
-                                                  state
-                                                  {:amount 1.1}
-                                                  100)))))))
-  (t/testing "fail, bet too small"
-    (let [state (-> (m/make-game-state {:btn 0} {})
-                    (assoc :status           :game-status/play
-                           :player-map       {100 {:status    :player-status/in-action,
-                                                   :player-id 100,
-                                                   :chips     (js/BigInt 10000)},
-                                              101 {:status    :player-status/wait,
-                                                   :player-id 101,
-                                                   :chips     (js/BigInt 10000)},
-                                              102 {:status    :player-status/wait,
-                                                   :player-id 102,
-                                                   :chips     (js/BigInt 10000)}}
-                           :street-bet       (js/BigInt 0)
-                           :min-raise        (js/BigInt 1000)
-                           :action-player-id 100))]
-      (t/is (thrown-with-msg? ExceptionInfo #"Player bet too small"
-              (-> state
-                  (sut/handle-event (m/make-event :player/bet
-                                                  state
-                                                  {:amount (js/BigInt 500)}
-                                                  100)))))))
-  (t/testing "success"
-    (let [state (-> (m/make-game-state {:btn 0} {})
-                    (assoc :status           :game-status/play
-                           :player-map       {100 {:status    :player-status/in-action,
-                                                   :player-id 100,
-                                                   :chips     (js/BigInt 10000)},
-                                              101 {:status    :player-status/wait,
-                                                   :player-id 101,
-                                                   :chips     (js/BigInt 10000)},
-                                              102 {:status    :player-status/wait,
-                                                   :player-id 102,
-                                                   :chips     (js/BigInt 10000)}}
-                           :street-bet       (js/BigInt 0)
-                           :min-raise        (js/BigInt 1000)
-                           :action-player-id 100))]
-      (t/is (= {:player-map {100 {:status    :player-status/acted,
-                                  :player-id 100,
-                                  :chips     (js/BigInt 8000)},
-                             101 {:status    :player-status/in-action,
-                                  :player-id 101,
-                                  :chips     (js/BigInt 10000)},
-                             102 {:status    :player-status/wait,
-                                  :player-id 102,
-                                  :chips     (js/BigInt 10000)}},
-                :bet-map    {100 (js/BigInt 2000)},
-                :min-raise  (js/BigInt 2000),
-                :street-bet (js/BigInt 2000)}
-               (-> state
-                   (sut/handle-event (m/make-event :player/bet
-                                                   state
-                                                   {:amount (js/BigInt 2000)}
-                                                   100))
-                   (select-keys [:bet-map :player-map :street-bet :min-raise])))))))
-
-
-(t/deftest player-raise
-  (t/testing "fail, can't raise"
-    (let [state (-> (m/make-game-state {:btn 0} {})
-                    (assoc :status           :game-status/play
-                           :player-map       {100 {:status    :player-status/in-action,
-                                                   :player-id 100,
-                                                   :chips     (js/BigInt 10000)},
-                                              101 {:status    :player-status/wait,
-                                                   :player-id 101,
-                                                   :chips     (js/BigInt 10000)},
-                                              102 {:status    :player-status/wait,
-                                                   :player-id 102,
-                                                   :chips     (js/BigInt 10000)}}
-                           :street-bet       (js/BigInt 0)
-                           :action-player-id 100))]
-      (t/is (thrown-with-msg? ExceptionInfo #"Player can't raise"
-              (-> state
-                  (sut/handle-event (m/make-event :player/raise
-                                                  state
-                                                  {:amount (js/BigInt 1000)}
-                                                  100)))))))
-
-  (t/testing "fail, raise too small"
-    (let [state (-> (m/make-game-state {:btn 0} {})
-                    (assoc :status           :game-status/play
-                           :player-map       {100 {:status    :player-status/in-action,
-                                                   :player-id 100,
-                                                   :chips     (js/BigInt 10000)},
-                                              101 {:status    :player-status/wait,
-                                                   :player-id 101,
-                                                   :chips     (js/BigInt 10000)},
-                                              102 {:status    :player-status/wait,
-                                                   :player-id 102,
-                                                   :chips     (js/BigInt 10000)}}
-                           :street-bet       (js/BigInt 2000)
-                           :min-raise        (js/BigInt 1000)
-                           :bet-map          {100 (js/BigInt 1200)}
-                           :action-player-id 100))]
-      (t/is (thrown-with-msg? ExceptionInfo #"Player raise too small"
-              (-> state
-                  (sut/handle-event (m/make-event :player/raise
-                                                  state
-                                                  {:amount (js/BigInt 1000)}
-                                                  100))
-                  (select-keys [:bet-map :player-map]))))))
-  (t/testing "success"
-    (let [state (-> (m/make-game-state {:btn 0} {})
-                    (assoc :status           :game-status/play
-                           :player-map       {100 {:status    :player-status/in-action,
-                                                   :player-id 100,
-                                                   :chips     (js/BigInt 10000)},
-                                              101 {:status    :player-status/wait,
-                                                   :player-id 101,
-                                                   :chips     (js/BigInt 10000)},
-                                              102 {:status    :player-status/wait,
-                                                   :player-id 102,
-                                                   :chips     (js/BigInt 10000)}}
-                           :street-bet       (js/BigInt 2000)
-                           :min-raise        (js/BigInt 1000)
-                           :bet-map          {100 (js/BigInt 1200)}
-                           :action-player-id 100))]
-      (t/is (= {:player-map {100 {:status    :player-status/acted,
-                                  :player-id 100,
-                                  :chips     (js/BigInt 8200)},
-                             101 {:status    :player-status/in-action,
-                                  :player-id 101,
-                                  :chips     (js/BigInt 10000)},
-                             102 {:status    :player-status/wait,
-                                  :player-id 102,
-                                  :chips     (js/BigInt 10000)}},
-                :bet-map    {100 (js/BigInt 3000)},
-                :min-raise  (js/BigInt 1000),
-                :street-bet (js/BigInt 3000)}
-               (-> state
-                   (sut/handle-event (m/make-event :player/raise
-                                                   state
-                                                   {:amount (js/BigInt 1800)}
-                                                   100))
-                   (select-keys [:bet-map :player-map :street-bet :min-raise])))))))
+;; Event type: player/fold
+;; Event type: player/call
+;; Event type: player/check
+;; Event type: player/raise
+;; Event type: player/bet
+;; Event type: system/next-game
+;; Event type: system/resit-table
+;; Event type: system/blinds-out
