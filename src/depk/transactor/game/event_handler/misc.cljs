@@ -635,14 +635,13 @@
   (assoc state
          :dispatch-event
          [c/key-share-timeout-delay
-          (m/make-event :system/key-share-timeout state {})]))
+          (m/make-event :system/key-share-timeout {})]))
 
 (defn dispatch-player-action-timeout
   "Dispatch action timeout events."
   [{:keys [action-player-id player-map street bb bet-map], :as state}
    timestamp]
   (let [event (m/make-event :system/player-action-timeout
-                            state
                             {:action-player-id action-player-id})]
     (condp = (get-in player-map [action-player-id :online-status])
       :normal
