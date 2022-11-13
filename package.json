@@ -19,7 +19,7 @@
     "start": "node ./target/main.js",
     "watch": "shadow-cljs watch app",
     "compile": "shadow-cljs compile app",
-    "release": "shadow-cljs release app"
+    "release": "shadow-cljs release app && ncc build target/transactor.release.js -m"
   },
   "devDependencies": {
     "@vercel/ncc": "^0.33.4",
