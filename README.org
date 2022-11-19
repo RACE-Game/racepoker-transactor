@@ -1,6 +1,6 @@
 #+TITLE: RACE Poker Transactor
 
-Transactor is the server used to serve the game logic. It acts like It acts as reconciler and relay, knows nothing about the hidden game information.
+Transactor is the server used to serve the game logic. It acts as reconciler and relay, knows nothing about the hidden game information.
 
 * How to build
 #+begin_example
