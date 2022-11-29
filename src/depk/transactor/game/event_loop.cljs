@@ -166,7 +166,7 @@
   [game-id init-state input output]
 
   ;; Put initial event
-  (go (a/>! input (make-event :system/reset init-state)))
+  (go (a/>! input (make-event :system/reset)))
   (go-loop [state   init-state
             records []]
     (if-let [event (<! (take-event input state))]
